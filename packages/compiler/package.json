@@ -1,0 +1,95 @@
+{
+  "private": false,
+  "name": "@motifx/compiler",
+  "version": "1.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/motifjsdev/motifjs.git",
+    "directory": "packages/compiler"
+  },
+  "description": "Compiler and Vite plugin for MotifJS JSX: lowers JSX to fine-grained reactive bindings. Includes the motif-lint and motif-explain CLIs.",
+  "author": "Ekrem Erşahin <ekremersahin@outlook.com>",
+  "homepage": "https://motifjs.com/",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.esm.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.esm.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "tsc --watch",
+    "lint": "eslint \"src/**/*.ts\"",
+    "analyze": "cross-env ANALYZE=1 rollup -c",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "test": "jest",
+    "publishall": "npm publish",
+    "dev": "",
+    "docs": "",
+    "check:pkg": "node ../../scripts/check-package.mjs",
+    "prepublishOnly": "npm run build:clean && npm test && npm run check:pkg",
+    "build:clean": "rimraf dist && rollup -c"
+  },
+  "bin": {
+    "motif-explain": "./bin/motif-explain.cjs",
+    "motif-lint": "./bin/motif-lint.cjs"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "sideEffects": false,
+  "dependencies": {
+    "@babel/core": "^7.20.2",
+    "@babel/generator": "^7.20.2",
+    "@babel/plugin-transform-class-properties": "^7.27.1",
+    "@babel/plugin-proposal-decorators": "^7.28.0",
+    "@babel/plugin-transform-class-static-block": "^7.28.3",
+    "@babel/plugin-syntax-flow": "^7.27.1",
+    "@babel/plugin-syntax-jsx": "^7.18.6",
+    "@babel/preset-flow": "^7.27.1",
+    "@babel/preset-typescript": "^7.27.1",
+    "@babel/traverse": "^7.20.1",
+    "@babel/types": "^7.20.2",
+    "@types/babel__core": "^7.1.20",
+    "html-tags": "^3.2.0",
+    "svg-tags": "^1.0.0",
+    "typescript": ">=5.0.0 <7"
+  },
+  "peerDependencies": {
+    "@motifx/core": "^1.0.1"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.27.2",
+    "@eslint/js": "^9.39.2",
+    "@types/node": "^24.9.1",
+    "@types/svg-tags": "^1.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "eslint": "^9.39.2",
+    "globals": "^14.0.0",
+    "rimraf": "^5.0.0",
+    "rollup-plugin-visualizer": "^5.12.0"
+  },
+  "bugs": {
+    "url": "https://github.com/motifjsdev/motifjs/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

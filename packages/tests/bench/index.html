@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>motifjs — tarayıcı benchmark düzeneği (js-framework-benchmark senaryoları)</title>
+<style>
+    body { font-family: system-ui, sans-serif; margin: 16px; }
+    h1 { font-size: 18px; }
+    #toolbar button { margin: 2px; padding: 6px 10px; }
+    #results { border-collapse: collapse; margin: 12px 0; }
+    #results td, #results th { border: 1px solid #ccc; padding: 4px 10px; text-align: right; }
+    #results th:first-child, #results td:first-child { text-align: left; }
+    table.rows td { padding: 2px 8px; }
+    tr.danger { background: #ffdddd; }
+    #note { color: #666; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>motifjs tarayıcı benchmark düzeneği</h1>
+<p id="note">
+    js-framework-benchmark senaryoları: 1k/10k satır oluştur, her 10. satırı güncelle,
+    satır değiştir (swap), satır sil, temizle. Ölçüm: işlem başlangıcından çift
+    requestAnimationFrame (boyama) sonrasına kadar. dist/index.umd.js'e karşı çalışır —
+    önce <code>npm run build --workspace=@motifx/core</code>.
+</p>
+<div id="toolbar">
+    <button id="run">1.000 satır oluştur</button>
+    <button id="runlots">10.000 satır oluştur</button>
+    <button id="add">1.000 satır ekle</button>
+    <button id="update">Her 10. satırı güncelle</button>
+    <button id="swaprows">Satır 2 ↔ 999 değiştir</button>
+    <button id="select">Satır seç (satır 5)</button>
+    <button id="remove">Satır sil (satır 5)</button>
+    <button id="clear">Temizle</button>
+    <button id="runall"><b>TÜMÜNÜ KOŞ (5 tekrar, medyan)</b></button>
+</div>
+<table id="results">
+    <thead><tr><th>Senaryo</th><th>Son (ms)</th><th>Medyan (ms)</th><th>Örnekler</th></tr></thead>
+    <tbody></tbody>
+</table>
+<div id="app"></div>
+
+<script src="../../motifjs/dist/index.umd.js"></script>
+<script>
+(function () {
+    'use strict';
+    const { Component, reactive } = window.motif;
+
+    // ------------------------------------------------ veri üretimi (js-framework-benchmark ile aynı)
+    const adjectives = ["pretty", "large", "big", "small", "tall", "short", "long", "handsome", "plain", "quaint", "clean", "elegant", "easy", "angry", "crazy", "helpful", "mushy", "odd", "unsightly", "adorable", "important", "inexpensive", "cheap", "expensive", "fancy"];
+    const colours = ["red", "yellow", "blue", "green", "pink", "brown", "purple", "brown", "white", "black", "orange"];
+    const nouns = ["table", "chair", "house", "bbq", "desk", "car", "pony", "cookie", "sandwich", "burger", "pizza", "mouse", "keyboard"];
+    let nextId = 1;
+    const rnd = (max) => Math.round(Math.random() * 1000) % max;
+    function buildData(count) {
+        const data = [];
+        for (let i = 0; i < count; i++) {
+            data.push({
+                id: nextId++,
+                label: adjectives[rnd(adjectives.length)] + " " + colours[rnd(colours.length)] + " " + nouns[rnd(nouns.length)]
+            });
+        }
+        return data;
+    }
+
+    // ------------------------------------------------ uygulama
+    const state = reactive({ rows: [], selected: 0 });
+
+    function renderRow(item) {
+        const tr = new Component('tr');
+        const tdId = new Component('td');
+        tdId.element.textContent = String(item.id);
+        const tdLabel = new Component('td', {
+            initializeComponent: (s) => { s.bindings.text(() => item.label); }
+        });
+        const a = new Component('a');
+        a.element.textContent = 'sil';
+        a.element.href = '#';
+        a.motif.on('click', (_sender, ev) => {
+            ev.preventDefault();
+            const idx = state.rows.indexOf(item);
+            if (idx > -1) state.rows.splice(idx, 1);
+        });
+        const tdAction = new Component('td');
+        tdAction.controls.add(a);
+        tr.controls.add(tdId, tdLabel, tdAction);
+        return tr;
+    }
+
+    const appHost = document.getElementById('app');
+    const table = new Component('table', {
+        initializeComponent: (s) => { s.bindings.list(() => state.rows, renderRow); }
+    });
+    table.element.className = 'rows';
+    table.build();
+    appHost.appendChild(table.element);
+
+    // ------------------------------------------------ ölçüm altyapısı
+    const samples = {}; // name -> number[]
+    const tbody = document.querySelector('#results tbody');
+
+    function paintDone() {
+        return new Promise((res) => {
+            let done = false;
+            const finish = () => { if (!done) { done = true; res(); } };
+            requestAnimationFrame(() => requestAnimationFrame(finish));
+            // Headless/virtual-time ortamlarında rAF zinciri ilerlemeyebilir; güvence.
+            // Etkileşimli kullanımda rAF neredeyse her zaman önce biter.
+            setTimeout(finish, 150);
+        });
+    }
+
+    async function measure(name, fn) {
+        const t0 = performance.now();
+        fn();
+        await paintDone();
+        const dt = performance.now() - t0;
+        (samples[name] = samples[name] || []).push(dt);
+        report(name);
+        return dt;
+    }
+
+    function median(arr) {
+        const s = [...arr].sort((a, b) => a - b);
+        const m = Math.floor(s.length / 2);
+        return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+    }
+
+    function report(name) {
+        let row = document.getElementById('res-' + name);
+        if (!row) {
+            row = document.createElement('tr');
+            row.id = 'res-' + name;
+            row.innerHTML = '<td>' + name + '</td><td></td><td></td><td></td>';
+            tbody.appendChild(row);
+        }
+        const arr = samples[name];
+        row.children[1].textContent = arr[arr.length - 1].toFixed(1);
+        row.children[2].textContent = median(arr).toFixed(1);
+        row.children[3].textContent = String(arr.length);
+    }
+
+    // ------------------------------------------------ senaryolar
+    const scenarios = {
+        'create-1k': () => { state.rows = buildData(1000); },
+        'create-10k': () => { state.rows = buildData(10000); },
+        'append-1k': () => { state.rows = state.rows.concat(buildData(1000)); },
+        'update-every-10th': () => {
+            for (let i = 0; i < state.rows.length; i += 10) {
+                state.rows[i].label = state.rows[i].label + ' !!!';
+            }
+        },
+        'swap-rows': () => {
+            if (state.rows.length > 998) {
+                const a = state.rows[1], b = state.rows[998];
+                const next = state.rows.slice();
+                next[1] = b; next[998] = a;
+                state.rows = next;
+            }
+        },
+        'remove-row': () => { if (state.rows.length > 5) state.rows.splice(4, 1); },
+        'clear': () => { state.rows = []; }
+    };
+
+    document.getElementById('run').onclick = () => measure('create-1k', scenarios['create-1k']);
+    document.getElementById('runlots').onclick = () => measure('create-10k', scenarios['create-10k']);
+    document.getElementById('add').onclick = () => measure('append-1k', scenarios['append-1k']);
+    document.getElementById('update').onclick = () => measure('update-every-10th', scenarios['update-every-10th']);
+    document.getElementById('swaprows').onclick = () => measure('swap-rows', scenarios['swap-rows']);
+    document.getElementById('remove').onclick = () => measure('remove-row', scenarios['remove-row']);
+    document.getElementById('select').onclick = () => measure('select-row', () => { state.selected = state.rows[4] && state.rows[4].id; });
+    document.getElementById('clear').onclick = () => measure('clear', scenarios['clear']);
+
+    document.getElementById('runall').onclick = async () => {
+        for (let rep = 0; rep < 5; rep++) {
+            await measure('create-1k', scenarios['create-1k']);
+            await measure('update-every-10th', scenarios['update-every-10th']);
+            await measure('swap-rows', scenarios['swap-rows']);
+            await measure('remove-row', scenarios['remove-row']);
+            await measure('append-1k', scenarios['append-1k']);
+            await measure('clear', scenarios['clear']);
+        }
+        await measure('create-10k', scenarios['create-10k']);
+        await measure('clear', scenarios['clear']);
+        console.log('bench tamam', samples);
+    };
+
+    // Smoke modu (?smoke): CI/headless doğrulama — create/update/swap/remove/clear
+    // koşar ve sonucu body[data-smoke] içine yazar.
+    if (location.search.indexOf('smoke') > -1) {
+        (async () => {
+            try {
+                await measure('create-1k', scenarios['create-1k']);
+                const countAfterCreate = table.element.querySelectorAll('tr').length;
+                await measure('update-every-10th', scenarios['update-every-10th']);
+                const updatedOk = table.element.querySelector('td + td') && table.element.textContent.indexOf('!!!') > -1;
+                await measure('swap-rows', scenarios['swap-rows']);
+                await measure('remove-row', scenarios['remove-row']);
+                const countAfterRemove = table.element.querySelectorAll('tr').length;
+                await measure('clear', scenarios['clear']);
+                const countAfterClear = table.element.querySelectorAll('tr').length;
+                const ok = countAfterCreate === 1000 && !!updatedOk && countAfterRemove === 999 && countAfterClear === 0;
+                document.body.setAttribute('data-smoke', ok ? 'ok' : 'fail:' + [countAfterCreate, updatedOk, countAfterRemove, countAfterClear].join(','));
+            } catch (e) {
+                document.body.setAttribute('data-smoke', 'error:' + (e && e.message));
+            }
+        })();
+    }
+})();
+</script>
+</body>
+</html>

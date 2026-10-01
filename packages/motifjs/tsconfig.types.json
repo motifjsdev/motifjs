@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "types": [],
+        "strict": true,
+        "skipLibCheck": false,
+        "noEmit": true
+    },
+    "files": ["dist/index.d.ts", "dist/devtools.d.ts", "dist/jsx-runtime.d.ts"]
+}

@@ -1,0 +1,124 @@
+{
+  "name": "@motifx/core",
+  "version": "1.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/motifjsdev/motifjs.git",
+    "directory": "packages/motifjs"
+  },
+  "author": "Ekrem Erşahin",
+  "private": false,
+  "description": "UI framework for JavaScript and TypeScript: components written as classes, functions or options objects, fine-grained reactivity without a virtual DOM, routing and dependency injection.",
+  "keywords": [
+    "motifx",
+    "motifjs",
+    "ui",
+    "framework",
+    "reactive",
+    "components",
+    "router",
+    "typescript",
+    "jsx",
+    "spa"
+  ],
+  "homepage": "https://motifjs.com/",
+  "bugs": {
+    "url": "https://github.com/motifjsdev/motifjs/issues"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.esm.js",
+  "unpkg": "./dist/index.umd.min.js",
+  "jsdelivr": "./dist/index.umd.min.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.esm.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./devtools": {
+      "import": {
+        "types": "./dist/devtools.d.ts",
+        "default": "./dist/devtools.esm.js"
+      },
+      "require": {
+        "types": "./dist/devtools.d.cts",
+        "default": "./dist/devtools.cjs"
+      }
+    },
+    "./jsx-runtime": {
+      "import": {
+        "types": "./dist/jsx-runtime.d.ts",
+        "default": "./dist/jsx-runtime.esm.js"
+      },
+      "require": {
+        "types": "./dist/jsx-runtime.d.cts",
+        "default": "./dist/jsx-runtime.cjs"
+      }
+    },
+    "./jsx-dev-runtime": {
+      "import": {
+        "types": "./dist/jsx-runtime.d.ts",
+        "default": "./dist/jsx-runtime.esm.js"
+      },
+      "require": {
+        "types": "./dist/jsx-runtime.d.cts",
+        "default": "./dist/jsx-runtime.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.tsbuildinfo",
+    "!dist/internal.*"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "analyze": "cross-env ANALYZE=1 rollup -c",
+    "buildw": "",
+    "publishall": "",
+    "dev": "rollup -c",
+    "prepare": "npm run build",
+    "docs": "",
+    "check:types": "tsc -p tsconfig.types.json",
+    "check:pkg": "node ../../scripts/check-package.mjs",
+    "prepublishOnly": "npm run build:clean && npm --prefix ../tests test && npm run check:types && npm run check:pkg",
+    "build:clean": "rimraf dist && rollup -c"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^25.0.0",
+    "@rollup/plugin-terser": "^0.4.4",
+    "rimraf": "^5.0.0",
+    "rollup": "^4.20.0",
+    "rollup-plugin-dts": "^6.1.0",
+    "rollup-plugin-typescript2": "^0.36.0",
+    "typescript": "^5.5.0",
+    "rollup-plugin-visualizer": "^5.12.0"
+  },
+  "types": "./dist/index.d.ts",
+  "dependencies": {},
+  "typesVersions": {
+    "*": {
+      "devtools": [
+        "./dist/devtools.d.ts"
+      ],
+      "jsx-runtime": [
+        "./dist/jsx-runtime.d.ts"
+      ],
+      "jsx-dev-runtime": [
+        "./dist/jsx-runtime.d.ts"
+      ]
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

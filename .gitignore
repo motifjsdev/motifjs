@@ -1,0 +1,17 @@
+node_modules/
+
+dist/
+build/
+*.tsbuildinfo
+
+smoke/out/
+
+.vite/
+.cache/
+coverage/
+*.local
+
+.DS_Store
+Thumbs.db
+*.swp
+*~
