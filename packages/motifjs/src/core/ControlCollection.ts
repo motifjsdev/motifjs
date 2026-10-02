@@ -82,6 +82,7 @@ export class ControlCollection {
         if (index === -1) return Promise.resolve();
         this.items.splice(index, 1);
         if (control.isDisposed) return Promise.resolve();
+        (control as any)._base && ((control as any)._base._leaveContainer = this.owner);
         control.parent = null;
         return runLeaveThenDetach(control, () => { if (this.onRemove) this.onRemove(control); });
     }
@@ -105,6 +106,7 @@ export class ControlCollection {
         const index = this.items.indexOf(control);
         if (index === -1) return;
         this.items.splice(index, 1);
+        (control as any)._base && ((control as any)._base._leaveContainer = this.owner);
         control.parent = null;
     }
 

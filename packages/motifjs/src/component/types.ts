@@ -1,4 +1,5 @@
 import { CSSTransitionInfo, TransitionProps } from "../common/transition";
+import { TransitionMode } from "../common/transitionRegistry";
 
 export interface IHtmlElement extends HTMLElement { }
 export interface IElement extends Node { }
@@ -37,6 +38,7 @@ export interface ComponentBaseOptions<TProps> {
             out: CSSTransitionInfo
         },
         name: string,
+        mode?: TransitionMode,
         classes?: TransitionProps,
         activeCssCancel: (() => void) | null,
         activeCssPhase: 'enter' | 'leave' | null,

@@ -13,6 +13,7 @@ import { ComponentMotif } from "./ComponentMotif";
 import { pinServiceOwner, recordServiceOwner, retireServiceOwner, unpinServiceOwner } from "../dependencyInjection/ServiceProvider";
 import { contentBlocks as liveContentBlocks } from "./contentBlockRegistry";
 import { OPTIONS_OWNER, TRANSITION_SLOT } from "./optionsSlots";
+import { deferUntilEntered, isTransitionMode, pendingLeaves, trackEnter, trackLeave, transitionSettings, TransitionMode } from "../common/transitionRegistry";
 import { lazyBindMethods } from "../common/lazyBind";
 
 /** DI token'ını okunur biçime çevirir (dev uyarıları için). */
@@ -37,6 +38,14 @@ function clearNavDirection(c: any): void {
         try { (c.element as any)?.removeAttribute?.('data-nav-direction'); } catch { }
 }
 
+function enterModeOf(container: any): TransitionMode {
+        return peekTransition(container)?.mode ?? transitionSettings.mode;
+}
+
+function leaveModeOf(c: any): TransitionMode {
+        return enterModeOf(c.parent ?? c._base?._leaveContainer);
+}
+
 function wantsEnterTransition(c: any): boolean {
         const o = c?.motif?.options;
         const t = o?.[TRANSITION_SLOT];
@@ -54,6 +63,7 @@ function createTransitionApi(owner: ComponentBase): TransitionApi {
                         }
                 },
                 name: '',
+                mode: undefined as TransitionMode | undefined,
                 classes: undefined as TransitionProps | undefined,
                 activeCssCancel: null as (() => void) | null,
                 activeCssPhase: null as ('enter' | 'leave' | null),
@@ -88,26 +98,40 @@ function createTransitionApi(owner: ComponentBase): TransitionApi {
                         }
                         const attempt = {};
                         base._enterRun = attempt;
-                        const done = () => {
+                        const enter = trackEnter(owner.element as unknown as Node, () => {
                                 if ((owner as any)._base?._enterRun === attempt) {
                                         (owner as any)._base._enterRun = null;
                                         clearNavDirection(owner);
                                 }
                                 resolve && resolve();
-                        };
+                        }, owner.motif.options.placeholder as Node | undefined);
                         const transitionIn = owner.motif.options.transitionIn;
-                        if (transitionIn) {
-                                return s.run(transitionIn.keyframes, transitionIn.options, done);
+                        const animation = transitionIn
+                                ? s.run(transitionIn.keyframes, transitionIn.options, enter.done)
+                                : s._runCss('enter', enter.done, appear);
+                        if (animation && animation !== (shimAnimation as unknown as Animation) && typeof (animation as any).addEventListener === 'function') {
+                                (animation as any).addEventListener('cancel', enter.release);
                         }
-                        return s._runCss('enter', done, appear);
+                        return animation;
                 },
                 leaveTransition: (resolve: () => void): Animation => {
                         const s = cur();
-                        const transitionOut = owner.motif.options.transitionOut;
-                        if (transitionOut) {
-                                return s.run(transitionOut.keyframes, transitionOut.options, resolve);
+                        const node = owner.element as unknown as Node;
+                        const leave = trackLeave(node, resolve);
+                        const play = (): Animation => {
+                                const transitionOut = owner.motif.options?.transitionOut;
+                                const animation = transitionOut
+                                        ? s.run(transitionOut.keyframes, transitionOut.options, leave.done)
+                                        : s._runCss('leave', leave.done);
+                                if (animation && animation !== (shimAnimation as unknown as Animation) && typeof (animation as any).addEventListener === 'function') {
+                                        (animation as any).addEventListener('cancel', leave.release);
+                                }
+                                return animation;
+                        };
+                        if (leave.finished && leaveModeOf(owner) === 'in-out') {
+                                return deferUntilEntered(node, leave, play);
                         }
-                        return s._runCss('leave', resolve);
+                        return play();
                 },
                 _runCss: (phase: 'enter' | 'leave', resolve: () => void, appear: boolean = false): Animation => {
                         const s = cur();
@@ -644,6 +668,18 @@ const ComponentHelper = {
                                 }
                                 controlElement = ((c as any).motif.options.placeholder as unknown as Node);
                         } else {
+                                return;
+                        }
+                }
+
+                if (insertHost && enterModeOf(this) === 'out-in') {
+                        const wait = pendingLeaves(insertHost, controlElement);
+                        if (wait) {
+                                c._base._enterSeq = (c._base._enterSeq ?? 0) + 1;
+                                wait.then(() => {
+                                        if (this.isDisposed || c.isDisposed || c.parent !== this) return;
+                                        ComponentHelper.internalBuild.call(this, c);
+                                });
                                 return;
                         }
                 }
@@ -1541,6 +1577,19 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 if (this.isDisposed || !this.element) { return; }
                 if (this.isVisible) { return; }/* A*/
 
+                if (this.parent && enterModeOf(this.parent) === 'out-in') {
+                        const showHost = ((this.motif.options.placeholder as Node | undefined)?.parentNode)
+                                ?? (findAppendableComponent(this.parent)?.element as Node | undefined);
+                        const wait = pendingLeaves(showHost, this.element as unknown as Node);
+                        if (wait) {
+                                const seq = this._base._showSeq = (this._base._showSeq ?? 0) + 1;
+                                return wait.then(() => {
+                                        if (this.isDisposed || this._base._showSeq !== seq) return;
+                                        return this._show();
+                                });
+                        }
+                }
+
                 if (peekTransition(this)?.activeAnimations?.length) {
                         safeCall(async () => {
                                 await Promise.all(this.motif.options.transition.activeAnimations.map(a =>
@@ -1597,6 +1646,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         private async _hide(): Promise<any> {
 
                 if (this.isDisposed || !this.element) { return; }
+                this._base._showSeq = (this._base._showSeq ?? 0) + 1;
                 if (!this.isVisible) { return; }
 
                 const strategy = this._computeHideStrategy();
@@ -2182,7 +2232,17 @@ function setTransition(component: ComponentBase, value: any, live: boolean): voi
                 if (typeof value.name === 'string' && value.name.length > 0) {
                         transition.name = value.name;
                 }
-                transition.classes = value;
+                if (!('mode' in value)) {
+                        transition.classes = value;
+                } else {
+                        const { mode, ...classes } = value;
+                        if (isTransitionMode(mode)) {
+                                transition.mode = mode;
+                        }
+                        if (Object.keys(classes).length > 0) {
+                                transition.classes = classes;
+                        }
+                }
         } else if (live) {
                 transition.name = '';
                 transition.classes = undefined;

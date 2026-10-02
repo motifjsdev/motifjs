@@ -13,6 +13,7 @@ import { errorHandler, safeCall, safeCallSilent, setErrorConsoleLogging } from "
 import { engine, configureReactivityLeakMonitor } from "./store";
 import { MotifError, callReported, formatMotifMessage, motifError, reportError } from "./common/diagnostics";
 import { flushCompilerContractWarnings } from "./common/compilerContract";
+import { isTransitionMode, transitionSettings, TransitionMode } from "./common/transitionRegistry";
 import { ComponentBase } from "./component";
 export interface IStartup {
     configuration?: (services: any) => void;
@@ -178,7 +179,13 @@ export class Application {
                 }
             } catch { /* ignore */ }
         }, 'Application.dispose.resetUrl');
+        transitionSettings.mode = 'concurrent';
         _globalApplication = null;
+    }
+
+    public useTransitions(options: { mode?: TransitionMode }): Application {
+        if (isTransitionMode(options?.mode)) transitionSettings.mode = options.mode;
+        return this;
     }
 
     public use(callback: (ctx: RouteResolveContext, next: () => Promise<void>) => any): Application {

@@ -8,6 +8,7 @@ export * from "./Dictionary";
 export * from "./IAttribute";
 export * from "./LinkedList";
 export type { TransitionProps, CSSTransitionInfo, TransitionPhase } from "./transition";
+export type { TransitionMode } from "./transitionRegistry";
 export * from "./bind";
 export * from "./Query";
 export { MotifError } from "./diagnostics";

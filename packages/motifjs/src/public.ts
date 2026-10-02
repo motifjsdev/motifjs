@@ -134,6 +134,7 @@ export type {
     StackTransitionContext,
     ServiceDescriptor,
     ServiceLifetime,
+    TransitionMode,
     TransitionProps,
     TransportOptions,
     VirtualizationDataRequest,
