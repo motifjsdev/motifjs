@@ -74,6 +74,29 @@ describe('list rows and item identity', () => {
         await m.root.dispose();
     });
 
+    test('appending rows preserves existing nodes without per-row anchor searches', async () => {
+        const s = reactive({ items: [obj(1), obj(2), obj(3)] });
+        const m = mount(s);
+        await settle();
+        const before = m.lis();
+        const rowControls = m.root.controls.items[0].controls.items;
+        const originalIndexOf = rowControls.indexOf.bind(rowControls);
+        let indexOfCalls = 0;
+        (rowControls as any).indexOf = (...args: any[]) => {
+            indexOfCalls++;
+            return originalIndexOf(args[0], args[1]);
+        };
+
+        s.items = s.items.concat([obj(4), obj(5)]);
+        await settle();
+        delete (rowControls as any).indexOf;
+
+        expect(m.ids()).toBe('1,2,3,4,5');
+        expect(m.lis().slice(0, 3)).toEqual(before);
+        expect(indexOfCalls).toBe(0);
+        await m.root.dispose();
+    });
+
     test.each([
         ['splice with 3 arguments', (items: any[]) => items.splice(1, 0, items[0]), '1,1,2,3'],
         ['splice with 4 arguments', (items: any[]) => items.splice(1, 0, items[0], items[1]), '1,1,2,2,3'],

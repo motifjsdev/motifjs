@@ -10,10 +10,13 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
     constructor(parent: ComponentBase) {
         this._parent = parent;
     }
-    private _counts: Map<string, number> = new Map();
-    private _staticSet: Set<string> = new Set();
-    private _watchers: Map<string, { stop: () => void, binding?: IBaseBinding, set: Set<string> }> = new Map();
+    private _countsStore?: Map<string, number>;
+    private _staticSetStore?: Set<string>;
+    private _watchersStore?: Map<string, { stop: () => void, binding?: IBaseBinding, set: Set<string> }>;
     private _watcherSeq = 0;
+    private get _counts(): Map<string, number> { return this._countsStore ??= new Map(); }
+    private get _staticSet(): Set<string> { return this._staticSetStore ??= new Set(); }
+    private get _watchers(): Map<string, { stop: () => void, binding?: IBaseBinding, set: Set<string> }> { return this._watchersStore ??= new Map(); }
 
     add(...values: (string | any[] | {} | Function)[]): ComponentBase {
         for (const value of values) {

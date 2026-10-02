@@ -1,4 +1,5 @@
 // import { dom } from "../browser";
+import { TRANSITION_SLOT } from "../component/optionsSlots";
 // import { effect } from "../store";
 import { dom } from "../";
 import { Component, ComponentBase, resolveComponent, notifyDeactivated } from "../";
@@ -13,8 +14,14 @@ export class ControlCollection {
     add(...control: ComponentBase[]): ComponentBase[]
     add(index?: number, ...control: ComponentBase[]): ComponentBase[]
     add(): ComponentBase[] {
+        const count = arguments.length;
+        if (count === 0) return [] as ComponentBase[];
+        const first = arguments[0];
+        if (count === 1 && first instanceof ComponentBase) {
+            if (first.isDisposed) return [] as ComponentBase[];
+            return [this._insertOne(undefined, first)];
+        }
         const args = Array.from(arguments) as any[];
-        if (args.length === 0) return [] as ComponentBase[];
         if (typeof args[0] === 'number' && args.length > 1) {
             const index = args[0] as number;
             const children = ([] as ComponentBase[]).concat(...args.slice(1));
@@ -26,42 +33,42 @@ export class ControlCollection {
     }
     insert(index?: number, ...controls: ComponentBase[]): ComponentBase[] {
         const flat: ComponentBase[] = ([] as any[]).concat(...controls as any);
-        return flat.filter(x => x != undefined && !x.isDisposed).map(control => {
+        return flat.filter(x => x != undefined && !x.isDisposed).map(control => this._insertOne(index, control));
+    }
+    private _insertOne(index: number | undefined, control: ComponentBase): ComponentBase {
+        control = resolveComponent(control);
+        if (typeof control == 'string' || typeof control == 'number' || typeof control == 'boolean' || typeof control == 'bigint') {
+            control = new Component(dom.createTextNode(control), null as any);
+        }
+        if (control.parent) { control.parent.controls.detach(control); }
 
-            control = resolveComponent(control);
-            if (typeof control == 'string' || typeof control == 'number' || typeof control == 'boolean' || typeof control == 'bigint') {
-                control = new Component(dom.createTextNode(control), null as any);
-            }
-            if (control.parent) { control.parent.controls.detach(control); }
+        if (index != undefined && index >= 0) {
+            this.items.splice(index, 0, control);
+        } else {
+            this.items.push(control);
+        }
+        control.parent = this.owner;
 
-            if (index != undefined && index >= 0) {
-                this.items.splice(index, 0, control);
-            } else {
-                this.items.push(control);
-            }
-            control.parent = this.owner;
-
-            const pendingLeave = (control as any).__pendingLeave as PendingLeave | undefined;
-            if (pendingLeave) {
-                if (this.onAddBeforeBuild && !this.owner.isBuilt) {
-                    this.onAddBeforeBuild(control);
-                }
-                pendingLeave.promise.then(() => {
-                    if (control.isDisposed || this.owner.isDisposed || control.parent !== this.owner) return;
-                    if (this.onAdd && this.owner.isBuilt) this.onAdd(control);
-                });
-                return control;
-            }
-
-            if (this.onAdd && this.owner.isBuilt) {
-                this.onAdd(control);
-            }
-
+        const pendingLeave = (control as any).__pendingLeave as PendingLeave | undefined;
+        if (pendingLeave) {
             if (this.onAddBeforeBuild && !this.owner.isBuilt) {
                 this.onAddBeforeBuild(control);
             }
+            pendingLeave.promise.then(() => {
+                if (control.isDisposed || this.owner.isDisposed || control.parent !== this.owner) return;
+                if (this.onAdd && this.owner.isBuilt) this.onAdd(control);
+            });
             return control;
-        });
+        }
+
+        if (this.onAdd && this.owner.isBuilt) {
+            this.onAdd(control);
+        }
+
+        if (this.onAddBeforeBuild && !this.owner.isBuilt) {
+            this.onAddBeforeBuild(control);
+        }
+        return control;
     }
     remove(control: ComponentBase) {
         var index = this.items.indexOf(control);
@@ -331,7 +338,12 @@ function runLeaveThenDetach(control: ComponentBase, notify: () => void): Promise
             arrive();
         };
         try {
-            c.motif.options.transition.leaveTransition(once);
+            const opts: any = c.motif.options;
+            if (!opts[TRANSITION_SLOT] && !opts.transitionOut) {
+                once();
+                return;
+            }
+            opts.transition.leaveTransition(once);
         } catch {
             once();
         }

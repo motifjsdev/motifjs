@@ -3,22 +3,19 @@ import { disposableCore, IDisposable } from "../disposable";
 import { ComponentBase } from "../";
 import { EventArgs } from "./types";
 import { callReported } from "../common/diagnostics";
+import { lazyBindMethods } from "../common/lazyBind";
 
 export class ComponentEmiter {
 
-    private _emitters: Map<string, Emitter<EventArgs>> = new Map();
-    private _sourceDisposables: Map<string, Set<IDisposable>> = new Map();
-    private _listenerDisposables: Map<string, Map<Function, IDisposable[]>> = new Map();
+    private _emitters?: Map<string, Emitter<EventArgs>>;
+    private _sourceDisposables?: Map<string, Set<IDisposable>>;
+    private _listenerDisposables?: Map<string, Map<Function, IDisposable[]>>;
 
     constructor(private component: ComponentBase) {
-        this.fire = this.fire.bind(this);
-        this.on = this.on.bind(this);
-        this.off = this.off.bind(this);
-        this.createEvent = this.createEvent.bind(this);
-        this.getOrCreateEmitter = this.getOrCreateEmitter.bind(this);
-        this.addSource = this.addSource.bind(this);
-        this.clear = this.clear.bind(this);
+    }
 
+    public hasListeners(eventName: string): boolean {
+        return this._emitters !== undefined && this._emitters.has(eventName);
     }
 
     public fire(eventName: string, args: EventArgs) {
@@ -40,7 +37,7 @@ export class ComponentEmiter {
     }
     public off(event: any, cb: (sender: ComponentBase | this, ev: any) => any) {
         const lower = String(event).toLowerCase();
-        const map = this._listenerDisposables.get(lower);
+        const map = this._listenerDisposables?.get(lower);
         if (!map) return this;
         const list = map.get(cb);
         map.delete(cb);
@@ -48,12 +45,13 @@ export class ComponentEmiter {
         return this;
     }
     private getOrCreateEmitter(name: string): Emitter<EventArgs> {
-        let e = this._emitters.get(name);
+        const emitters = this._emitters ??= new Map();
+        let e = emitters.get(name);
         if (!e) {
-            this._emitters.set(name, new Emitter<EventArgs>());
-            e = this._emitters.get(name);
+            e = new Emitter<EventArgs>();
+            emitters.set(name, e);
         }
-        return e!;
+        return e;
     }
 
     private createEvent(event: any, cb: (sender: ComponentBase | this, ev: any) => any) {
@@ -72,8 +70,9 @@ export class ComponentEmiter {
         const emitter = this.getOrCreateEmitter(lowerFull);
         const disp = emitter.event((e) => invoke(e));
 
-        let map = this._listenerDisposables.get(lowerFull);
-        if (!map) { map = new Map(); this._listenerDisposables.set(lowerFull, map); }
+        const listeners = this._listenerDisposables ??= new Map();
+        let map = listeners.get(lowerFull);
+        if (!map) { map = new Map(); listeners.set(lowerFull, map); }
         const list = map.get(cb);
         if (list) { list.push(disp); } else { map.set(cb, [disp]); }
         return this;
@@ -92,8 +91,9 @@ export class ComponentEmiter {
             }
         } catch { }
         if (disp) {
-            let set = this._sourceDisposables.get(lower);
-            if (!set) { set = new Set(); this._sourceDisposables.set(lower, set); }
+            const sources = this._sourceDisposables ??= new Map();
+            let set = sources.get(lower);
+            if (!set) { set = new Set(); sources.set(lower, set); }
             set.add(disp);
             this.component.motif.register(disposableCore.toDisposable(() => {
                 try { disp?.dispose(); } catch { }
@@ -106,16 +106,18 @@ export class ComponentEmiter {
     public clear(event?: string) {
         if (event) {
             const lower = event.toLowerCase();
-            const srcs = this._sourceDisposables.get(lower);
+            const srcs = this._sourceDisposables?.get(lower);
             srcs?.forEach(d => { try { d.dispose(); } catch { } });
-            this._sourceDisposables.delete(lower);
-            const agg = this._emitters.get(lower);
+            this._sourceDisposables?.delete(lower);
+            const agg = this._emitters?.get(lower);
             try { agg?.dispose(); } catch { }
-            this._emitters.delete(lower);
-            this._listenerDisposables.delete(lower);
-        } else {
+            this._emitters?.delete(lower);
+            this._listenerDisposables?.delete(lower);
+        } else if (this._emitters) {
             for (const key of Array.from(this._emitters.keys())) { this.clear(key); }
         }
         return this;
     }
 }
+
+lazyBindMethods(ComponentEmiter.prototype, ['fire', 'on', 'off', 'createEvent', 'getOrCreateEmitter', 'addSource', 'clear']);

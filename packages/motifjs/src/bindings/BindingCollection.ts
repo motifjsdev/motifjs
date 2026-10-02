@@ -5,6 +5,7 @@ import { dom } from "../";
 import { effect, untracked } from "../";
 import { Binding, BindingFormatInfo, IBaseBinding, IBindingCollection, ListBinding, ListBindingOptions, readModelValue } from "./";
 import { reportError } from "../common/diagnostics";
+import { lazyBindMethods } from "../common/lazyBind";
 
 
 export class BindingCollection implements IBindingCollection {
@@ -14,21 +15,6 @@ export class BindingCollection implements IBindingCollection {
 
     constructor(component: ComponentBase) {
         this._component = component;
-        this.add = this.add.bind(this);
-        this.remove = this.remove.bind(this);
-        this.clear = this.clear.bind(this);
-        this.activateAll = this.activateAll.bind(this);
-        this.deactivateAll = this.deactivateAll.bind(this);
-        this.reActivateAll = this.reActivateAll.bind(this);
-        this.when = this.when.bind(this);
-        this.text = this.text.bind(this);
-        this.value = this.value.bind(this);
-        this.list = this.list.bind(this);
-        this.loop = this.loop.bind(this);
-        this.method = this.method.bind(this);
-        this.watch = this.watch.bind(this);
-        this.display = this.display.bind(this);
-        this.wait = this.wait.bind(this);
     }
     private _own(stop: () => void) {
         if (this._branchScope) {
@@ -234,12 +220,12 @@ export class BindingCollection implements IBindingCollection {
             stopInner();
         });
     }
-    private ternaryCall = (condFn: () => any, onTrue: () => void, onFalse: () => void) => {
+    private ternaryCall(condFn: () => any, onTrue: () => void, onFalse: () => void) {
         this._ternarySchedule(condFn, onTrue, onFalse, (run) => queueMicrotask(run));
-    };
-    private _ternaryCallTop = (condFn: () => any, onTrue: () => void, onFalse: () => void) => {
+    }
+    private _ternaryCallTop(condFn: () => any, onTrue: () => void, onFalse: () => void) {
         this._ternarySchedule(condFn, onTrue, onFalse, (run) => setTimeout(run, 0));
-    };
+    }
 
     watch(cb: () => any) {
         const ef = effect(() => {
@@ -408,3 +394,9 @@ export class BindingCollection implements IBindingCollection {
         return null as any;
     }
 }
+
+lazyBindMethods(BindingCollection.prototype, [
+    'add', 'remove', 'clear', 'activateAll', 'deactivateAll', 'reActivateAll',
+    'when', 'text', 'value', 'list', 'loop', 'method', 'watch', 'display', 'wait',
+    'ternaryCall', '_ternaryCallTop'
+]);

@@ -12,7 +12,7 @@ export class Transporter {
         if (!child || !newParent) return;
         if (child.parent === newParent && newParent.controls.items.includes(child)) return;
         if (child.parent && child.parent !== newParent) {
-            child.parent.controls.remove(child);
+            child.parent.controls.silentDetach(child, true);
         }
         if (options.owner) {
             (child.motif.options as any).ownerTransporter = options.owner;

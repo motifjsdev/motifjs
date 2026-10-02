@@ -184,4 +184,81 @@ describe('Transport / TransportTo', () => {
         await tick();
         expect(html(host.querySelector('.slot'))).toBe('<b>late</b>');
     });
+
+    const item = (tag: string, text: string) => {
+        const c = new Component(tag);
+        c.element!.textContent = text;
+        return c;
+    };
+
+    const sendMany = (name: string, ...children: Component[]) => {
+        const sender = new TransportTo({ name });
+        sender.controls.add(...children);
+        root.controls.add(sender);
+        return sender;
+    };
+
+    test('replace: a sender with several children replaces every child of the previous sender', async () => {
+        root.controls.add(Slot({ name: 'm1' }));
+        await tick();
+        const a = [item('i', 'a1'), item('i', 'a2'), item('i', 'a3')];
+        const senderA = sendMany('m1', ...a);
+        await tick();
+        const lateA = item('i', 'a4');
+        senderA.controls.add(lateA);
+        await tick();
+        expect(html(host.querySelector('.slot'))).toBe('<i>a1</i><i>a2</i><i>a3</i><i>a4</i>');
+        sendMany('m1', item('b', 'b1'), item('b', 'b2'));
+        await tick();
+        expect(html(host.querySelector('.slot'))).toBe('<b>b1</b><b>b2</b>');
+        expect([...a, lateA].every(c => c.isDisposed)).toBe(true);
+    });
+
+    test('merge: several children per sender, closing one sender removes only its own content', async () => {
+        root.controls.add(Slot({ name: 'm2', mode: 'merge' }));
+        await tick();
+        const senderA = sendMany('m2', item('i', 'a1'), item('i', 'a2'));
+        const b = [item('b', 'b1'), item('b', 'b2')];
+        sendMany('m2', ...b);
+        await tick();
+        const lateA = item('i', 'a3');
+        senderA.controls.add(lateA);
+        await tick();
+        expect(html(host.querySelector('.slot'))).toBe('<i>a1</i><i>a2</i><b>b1</b><b>b2</b><i>a3</i>');
+        await senderA.dispose();
+        await tick();
+        expect(html(host.querySelector('.slot'))).toBe('<b>b1</b><b>b2</b>');
+        expect(lateA.isDisposed).toBe(true);
+        expect(b.every(c => !c.isDisposed)).toBe(true);
+    });
+
+    test('a child added later stays alive in the slot and goes away with its sender', async () => {
+        root.controls.add(Slot({ name: 'm3' }));
+        await tick();
+        const sender = sendMany('m3', item('i', 'x'));
+        await tick();
+        const late = item('b', 'late');
+        sender.controls.add(late);
+        await tick();
+        expect(late.isDisposed).toBe(false);
+        expect(html(host.querySelector('.slot'))).toBe('<i>x</i><b>late</b>');
+        await sender.dispose();
+        await tick();
+        expect(late.isDisposed).toBe(true);
+        expect(html(host.querySelector('.slot'))).toBe('');
+    });
+
+    test('clearSlot removes every child of a multi-child sender', async () => {
+        const slot = new Transport({ name: 'm4' });
+        root.controls.add(slot);
+        await tick();
+        const children = [item('i', '1'), item('i', '2'), item('i', '3'), item('i', '4')];
+        sendMany('m4', ...children);
+        await tick();
+        expect(slot.controls.items.length).toBe(4);
+        slot.clearSlot();
+        await tick();
+        expect(slot.controls.items.length).toBe(0);
+        expect(children.every(c => c.isDisposed)).toBe(true);
+    });
 });

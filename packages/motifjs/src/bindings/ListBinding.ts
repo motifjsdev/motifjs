@@ -111,12 +111,24 @@ export class ListBinding implements IBaseBinding {
 
     private _setupBinding() {
         const update = () => {
-            const items = this._toArray(this.itemsFn());
+            const source = this._toArray(this.itemsFn());
+            const rawSource = getRaw(source);
+            const count = source.length;
+            let items: any[];
+            if (rawSource === source) {
+                items = source;
+            } else {
+                items = new Array(count);
+                for (let i = 0; i < count; i++) {
+                    if (i in rawSource) items[i] = source[i];
+                    else void source[i];
+                }
+            }
             const prevItems = this.olditems;
             const prevComponents = this._rendered;
             if (this.olditems.length > 0) {
                 const currentRaws = new Set<any>();
-                for (const it of items) currentRaws.add(getRaw(it));
+                for (let i = 0; i < count; i++) currentRaws.add(getRaw(items[i]));
                 for (const old of this.olditems) {
                     const raw = getRaw(old);
                     if (!currentRaws.has(raw)) {
@@ -226,8 +238,8 @@ export class ListBinding implements IBaseBinding {
             this._syncContainer(newComponents);
 
             this._rendered = newComponents;
-            this.olditems = items.slice();
-            return items.length;
+            this.olditems = items === source ? source.slice() : items;
+            return count;
         };
         this._effectCleanup = effect(() => update());
     }
@@ -241,6 +253,34 @@ export class ListBinding implements IBaseBinding {
                 try { controls.add(comp); } catch { }
             }
             return;
+        }
+
+        if (newComponents.length >= items.length) {
+            let appendOnly = true;
+            for (let i = 0; i < items.length; i++) {
+                if (newComponents[i] !== items[i]) {
+                    appendOnly = false;
+                    break;
+                }
+            }
+
+            if (appendOnly && newComponents.length > items.length) {
+                const existing = new Set(items);
+                for (let i = items.length; i < newComponents.length; i++) {
+                    if (existing.has(newComponents[i])) {
+                        appendOnly = false;
+                        break;
+                    }
+                    existing.add(newComponents[i]);
+                }
+            }
+
+            if (appendOnly) {
+                for (let i = items.length; i < newComponents.length; i++) {
+                    try { controls.add(newComponents[i]); } catch { }
+                }
+                return;
+            }
         }
 
         const oldIndex = new Map<ComponentBase, number>();

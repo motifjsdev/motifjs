@@ -11,7 +11,7 @@ export class Transport extends Component<any, { name: string, mode?: 'replace' |
     initializeComponent(sender: ComponentBase) {
         TransportRegistry.registerSlot(this.props.name, this);
         this.onDisposing = () => {
-            (this.controls.items || []).forEach(child => {
+            [...(this.controls.items || [])].forEach(child => {
                 this.controls.remove(child);
                 child.dispose?.();
             });
@@ -20,7 +20,7 @@ export class Transport extends Component<any, { name: string, mode?: 'replace' |
     }
 
     clearSlot() {
-        (this.controls.items || []).forEach(child => {
+        [...(this.controls.items || [])].forEach(child => {
             this.controls.remove(child);
             child.dispose?.();
         });

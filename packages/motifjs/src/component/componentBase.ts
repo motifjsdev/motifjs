@@ -11,6 +11,9 @@ import { getTransitionInfo, runCssTransition, TransitionProps } from "../common/
 import { callReported, motifError, reportError, reportWarning } from "../common/diagnostics";
 import { ComponentMotif } from "./ComponentMotif";
 import { pinServiceOwner, recordServiceOwner, retireServiceOwner, unpinServiceOwner } from "../dependencyInjection/ServiceProvider";
+import { contentBlocks as liveContentBlocks } from "./contentBlockRegistry";
+import { OPTIONS_OWNER, TRANSITION_SLOT } from "./optionsSlots";
+import { lazyBindMethods } from "../common/lazyBind";
 
 /** DI token'ını okunur biçime çevirir (dev uyarıları için). */
 function describeServiceToken(t: any): string {
@@ -20,18 +23,212 @@ function describeServiceToken(t: any): string {
         return String(t);
 }
 
+type TransitionApi = ComponentBaseOptions<any>['transition'];
+
+function peekTransition(c: any): TransitionApi | undefined {
+        return c?.motif?.options?.[TRANSITION_SLOT];
+}
+
 /**WAAPI keyframe (transitionIn) YA DA CSS class transition (name/classes) tanımlı olarak enter animasyonu varmı */
 function clearNavDirection(c: any): void {
-        const t = c?.motif?.options?.transition;
+        const t = peekTransition(c);
         if (!t?._markedDirection) return;
         t._markedDirection = false;
         try { (c.element as any)?.removeAttribute?.('data-nav-direction'); } catch { }
 }
 
 function wantsEnterTransition(c: any): boolean {
-        const t = c?.motif.options?.transition;
-        return !!(c?.motif.options?.transitionIn || (t && (t.classes || (t.name && t.name.length > 0))));
+        const o = c?.motif?.options;
+        const t = o?.[TRANSITION_SLOT];
+        return !!(o?.transitionIn || (t && (t.classes || (t.name && t.name.length > 0))));
 }
+
+function createTransitionApi(owner: ComponentBase): TransitionApi {
+        const cur = (): TransitionApi => (owner.motif.options as any)?.[TRANSITION_SLOT] ?? t;
+        const t: TransitionApi = {
+                transitionInfo: () => {
+                        const s = cur();
+                        return {
+                                in: getTransitionInfo(owner.element as Element, `${s.name}-enter ${s.name}-enter-start`),
+                                out: getTransitionInfo(owner.element as Element, `${s.name}-leave ${s.name}-leave-start`),
+                        }
+                },
+                name: '',
+                classes: undefined as TransitionProps | undefined,
+                activeCssCancel: null as (() => void) | null,
+                activeCssPhase: null as ('enter' | 'leave' | null),
+                cssProps: (): TransitionProps | null => {
+                        const s = cur();
+                        if (s.classes) {
+                                return { name: s.classes.name || s.name || '', ...s.classes };
+                        }
+                        if (s.name && s.name.length > 0) {
+                                return { name: s.name };
+                        }
+                        return null;
+                },
+                skipNextLeave: false,
+                _suppressEnter: false,
+                _markedDirection: false,
+                in: (op) => {
+                        owner.motif.options.transitionIn = op;
+                },
+                out: (op) => {
+                        owner.motif.options.transitionOut = op;
+                },
+                enterTransition: (resolve: () => void): Animation => {
+                        const s = cur();
+                        const base = (owner as any)._base;
+                        const appear = !base._enterPlayed;
+                        base._enterPlayed = true;
+                        base._enterSeq = (base._enterSeq ?? 0) + 1;
+                        if (s._suppressEnter) {
+                                resolve && resolve();
+                                return shimAnimation as Animation;
+                        }
+                        const attempt = {};
+                        base._enterRun = attempt;
+                        const done = () => {
+                                if ((owner as any)._base?._enterRun === attempt) {
+                                        (owner as any)._base._enterRun = null;
+                                        clearNavDirection(owner);
+                                }
+                                resolve && resolve();
+                        };
+                        const transitionIn = owner.motif.options.transitionIn;
+                        if (transitionIn) {
+                                return s.run(transitionIn.keyframes, transitionIn.options, done);
+                        }
+                        return s._runCss('enter', done, appear);
+                },
+                leaveTransition: (resolve: () => void): Animation => {
+                        const s = cur();
+                        const transitionOut = owner.motif.options.transitionOut;
+                        if (transitionOut) {
+                                return s.run(transitionOut.keyframes, transitionOut.options, resolve);
+                        }
+                        return s._runCss('leave', resolve);
+                },
+                _runCss: (phase: 'enter' | 'leave', resolve: () => void, appear: boolean = false): Animation => {
+                        const s = cur();
+                        if (phase === 'enter' && s.activeCssPhase === 'leave') {
+                                resolve && resolve();
+                                return shimAnimation as Animation;
+                        }
+                        const cssProps = s.cssProps();
+                        const el = owner.element as unknown as Element | null;
+                        if (cssProps && el && (el as any).nodeType === 1 && (el as any).classList) {
+                                try { s.activeCssCancel?.(); } catch { }
+                                const cancel = runCssTransition(el, cssProps, phase, () => {
+                                        s.activeCssCancel = null;
+                                        s.activeCssPhase = null;
+                                        resolve && resolve();
+                                }, appear);
+                                s.activeCssCancel = cancel;
+                                s.activeCssPhase = phase;
+                                return shimAnimation as Animation;
+                        }
+                        resolve && resolve();
+                        return shimAnimation as Animation;
+                },
+                activeAnimations: [] as Animation[],
+                run: (keyframes, options, resolve) => {
+                        const s = cur();
+                        owner.motif.stopAnimations();
+
+                        const element = owner.element as unknown as HTMLElement;
+
+                        if (element.animate) {
+                                var x = element.animate(keyframes, options);
+                                s.activeAnimations.push(x);
+
+                                let cleanedUp = false;
+                                const safeCleanup = () => {
+                                        if (cleanedUp) return;
+                                        cleanedUp = true;
+                                        try {
+                                                if (s.activeAnimations) {
+                                                        s.activeAnimations = s.activeAnimations.filter(a => a !== x);
+                                                }
+                                        } catch { }
+                                };
+
+                                x.addEventListener('finish', () => {
+                                        resolve && resolve();
+                                        safeCleanup();
+                                });
+
+                                x.oncancel = () => {
+                                        safeCleanup();
+                                };
+                                return x;
+                        }
+                        else {
+                                resolve && resolve();
+                                const g: any = (globalThis as any);
+                                if (typeof g.Animation === 'function') {
+                                        try { return new g.Animation(); } catch { /* ignore */ }
+                                }
+
+                                return shimAnimation as Animation;
+                        }
+                }
+        };
+        return t;
+}
+
+class ComponentOptionsImpl {
+        [OPTIONS_OWNER]: ComponentBase;
+        [TRANSITION_SLOT]?: TransitionApi;
+
+        constructor(owner: ComponentBase) {
+                this[OPTIONS_OWNER] = owner;
+        }
+
+        get transition(): TransitionApi {
+                return this[TRANSITION_SLOT] ??= createTransitionApi(this[OPTIONS_OWNER]);
+        }
+
+        set transition(value: TransitionApi) {
+                this[TRANSITION_SLOT] = value;
+        }
+
+        set enableRouterClassing(value: RouterClassingSettings) {
+                try {
+                        const ins = this[OPTIONS_OWNER];
+                        const callback = ins.context.onRouterChanged(() => {
+                                ComponentHelper.routerClassing.call(ins, value);
+                        });
+                        ins.motif.register(disposableCore.toDisposable(() => {
+                                callback();
+                        }));
+                        ComponentHelper.routerClassing.call(ins, value);
+                } catch (error) {
+                        reportError('MJX105', error);
+                }
+        }
+
+        getInstance(): ComponentBase {
+                return this[OPTIONS_OWNER];
+        }
+
+        get display(): boolean {
+                return this[OPTIONS_OWNER].isVisible;
+        }
+
+        set display(value: boolean) {
+                if (value) {
+                        this[OPTIONS_OWNER].motif.show();
+                } else {
+                        this[OPTIONS_OWNER].motif.hide();
+                }
+        }
+
+        hasEvent(name: string): boolean {
+                return !!(this[OPTIONS_OWNER] as any)._eventHandlers?.has(name);
+        }
+}
+lazyBindMethods(ComponentOptionsImpl.prototype, ['getInstance', 'hasEvent']);
 
 
 
@@ -77,6 +274,8 @@ interface LifecycleStorage {
         _onDisposedHandlers?: LifecycleHandler[];
 }
 interface BaseCtx extends LifecycleStorage {
+        owner: ComponentBase;
+        prebinding_Activated: boolean;
         _offAll: () => void;
         _deactivateBindings: () => void;
         _activateBindings: () => void;
@@ -89,6 +288,19 @@ interface BaseCtx extends LifecycleStorage {
         emiters: ComponentEmiter;
         itemRef?: any;
         [key: string]: any;
+}
+
+function fireLifecycle(component: any, name: string, ev: EventArgs): void {
+        const base = component._base;
+        if (base) base.emiters.fire(name, ev);
+}
+
+function hasLifecycleHook(component: any, hook: string, listName: keyof LifecycleStorage, lowerName: string, legacyProp?: string): boolean {
+        if (component[hook]) return true;
+        const list = component._base[listName];
+        if (Array.isArray(list) && list.length > 0) return true;
+        if (legacyProp && component[legacyProp]) return true;
+        return component._base.emiters.hasListeners(lowerName);
 }
 
 const ComponentHelper = {
@@ -117,23 +329,22 @@ const ComponentHelper = {
                         }
                 }
         },
-        async callDisposing(component: ComponentBase | any) {
-                ComponentHelper.backgroundCallback(() => {
-                        if (!component || component.isDisposed) { return; }
-                        const sender = component, ev = { cancel: false } as EventArgs;
-                        if (component.onDisposing) {
-                                callReported(() => component.onDisposing(sender, ev), 'MJX122', 'onDisposing');
+        callDisposing(component: ComponentBase | any) {
+                if (!component || component.isDisposed) { return; }
+                if (!hasLifecycleHook(component, 'onDisposing', '_onDisposingHandlers', 'ondisposing', 'ondisposing')) { return; }
+                const sender = component, ev = { cancel: false } as EventArgs;
+                if (component.onDisposing) {
+                        callReported(() => component.onDisposing(sender, ev), 'MJX122', 'onDisposing');
+                }
+                if (Array.isArray(component._base._onDisposingHandlers)) {
+                        for (const fn of component._base._onDisposingHandlers) {
+                                callReported(() => fn(sender, ev), 'MJX122', 'onDisposing');
                         }
-                        if (Array.isArray(component._base._onDisposingHandlers)) {
-                                for (const fn of component._base._onDisposingHandlers) {
-                                        callReported(() => fn(sender, ev), 'MJX122', 'onDisposing');
-                                }
-                        }
-                        if (component.ondisposing) {
-                                callReported(() => component.ondisposing(sender, ev), 'MJX122', 'ondisposing');
-                        }
-                        component._base.emiters.fire('ondisposing', ev);
-                });
+                }
+                if (component.ondisposing) {
+                        callReported(() => component.ondisposing(sender, ev), 'MJX122', 'ondisposing');
+                }
+                fireLifecycle(component,'ondisposing', ev);
         },
         callActivated(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
@@ -144,7 +355,7 @@ const ComponentHelper = {
                                 callReported(() => fn(sender, ev), 'MJX122', 'onActivated');
                         }
                 }
-                component._base.emiters.fire('onactivated', ev);
+                fireLifecycle(component,'onactivated', ev);
         },
         callDeactivated(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
@@ -155,13 +366,13 @@ const ComponentHelper = {
                                 callReported(() => fn(sender, ev), 'MJX122', 'onDeactivated');
                         }
                 }
-                component._base.emiters.fire('ondeactivated', ev);
+                fireLifecycle(component,'ondeactivated', ev);
         },
         deactivateTree(component: ComponentBase | any, deep: boolean = true) {
                 if (!component || component.isDisposed || !component.isBuilt || !component._base || component._base._inactive) { return; }
                 component._base._inactive = true;
                 ComponentHelper.callDeactivated(component);
-                if (!deep) { return; }
+                if (!deep || component.isDisposed) { return; }
                 for (const c of component.controls.items.slice()) {
                         if (c && !c.isDisposed && c.isVisible && !c.isWait) {
                                 ComponentHelper.deactivateTree(c, true);
@@ -172,31 +383,32 @@ const ComponentHelper = {
                 if (!component || component.isDisposed || !component._base || !component._base._inactive) { return; }
                 component._base._inactive = false;
                 ComponentHelper.callActivated(component);
-                if (!deep) { return; }
+                if (!deep || component.isDisposed) { return; }
                 for (const c of component.controls.items.slice()) {
                         if (c && !c.isDisposed && c.isVisible && !c.isWait) {
                                 ComponentHelper.activateTree(c, true);
                         }
                 }
         },
-        async callDisposed(component: ComponentBase | any) {
+        callDisposed(component: ComponentBase | any) {
                 if (!component || !component._base || component._base._disposedFired) { return; }
                 component._base._disposedFired = true;
-                const sender = component, ev = { cancel: false } as EventArgs;
-                if (component.onDisposed) { callReported(() => component.onDisposed(sender, ev), 'MJX122', 'onDisposed'); }
-                if (Array.isArray(component._base._onDisposedHandlers)) {
-                        for (const fn of component._base._onDisposedHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onDisposed');
+                if (hasLifecycleHook(component, 'onDisposed', '_onDisposedHandlers', 'ondisposed', 'ondisposed')) {
+                        const sender = component, ev = { cancel: false } as EventArgs;
+                        if (component.onDisposed) { callReported(() => component.onDisposed(sender, ev), 'MJX122', 'onDisposed'); }
+                        if (Array.isArray(component._base._onDisposedHandlers)) {
+                                for (const fn of component._base._onDisposedHandlers) {
+                                        callReported(() => fn(sender, ev), 'MJX122', 'onDisposed');
+                                }
                         }
+                        if (component.ondisposed) { callReported(() => component.ondisposed(sender, ev), 'MJX122', 'ondisposed'); }
+                        fireLifecycle(component,'ondisposed', ev);
                 }
-                if (component.ondisposed) { callReported(() => component.ondisposed(sender, ev), 'MJX122', 'ondisposed'); }
-                component._base.emiters.fire('ondisposed', ev);
                 try { (globalThis as any).__MOTIF_DEVTOOLS_BUS__?.publish?.('component:disposed', { id: (component as any).id, type: component.constructor?.name }); } catch { }
         },
-        async callBuilt(component: ComponentBase | any) {
-
-                ComponentHelper.backgroundCallback(() => {
-                        if (!component || component.isDisposed) { return; }
+        callBuilt(component: ComponentBase | any) {
+                if (!component || component.isDisposed) { return; }
+                if (hasLifecycleHook(component, 'onBuilt', '_onBuiltHandlers', 'onbuilt', 'onbuilt')) {
                         const sender = component, ev = { cancel: false } as EventArgs;
                         if (component.onBuilt) { callReported(() => component.onBuilt(sender, ev), 'MJX122', 'onBuilt'); }
                         if (Array.isArray(component._base._onBuiltHandlers)) {
@@ -205,9 +417,9 @@ const ComponentHelper = {
                                 }
                         }
                         if (component.onbuilt) { callReported(() => component.onbuilt(sender, ev), 'MJX122', 'onbuilt'); }
-                        component._base.emiters.fire('onbuilt', ev);
-                        try { (globalThis as any).__MOTIF_DEVTOOLS_BUS__?.publish?.('component:mounted', { id: (component as any).id, type: component.constructor?.name }); } catch { }
-                });
+                        fireLifecycle(component,'onbuilt', ev);
+                }
+                try { (globalThis as any).__MOTIF_DEVTOOLS_BUS__?.publish?.('component:mounted', { id: (component as any).id, type: component.constructor?.name }); } catch { }
         },
         scheduleMounted(component: ComponentBase | any) {
                 if (!component || component.isDisposed || component._base._mountedScheduled) { return; }
@@ -237,42 +449,39 @@ const ComponentHelper = {
                         }
                 }
                 if (component.onmounted) { callReported(() => component.onmounted(sender, ev), 'MJX122', 'onmounted'); }
-                component._base.emiters.fire('onmounted', ev);
+                fireLifecycle(component,'onmounted', ev);
         },
-        async callBuilding(component: ComponentBase | any) {
-                ComponentHelper.backgroundCallback(() => {
-                        if (!component || component.isDisposed) { return; }
-                        const sender = component, ev = { cancel: false } as EventArgs;
-                        if (component.onBuilding) { callReported(() => component.onBuilding(sender, ev), 'MJX122', 'onBuilding'); }
-                        if (Array.isArray(component._base._onBuildingHandlers)) {
-                                for (const fn of component._base._onBuildingHandlers) {
-                                        callReported(() => fn(sender, ev), 'MJX122', 'onBuilding');
-                                }
+        callBuilding(component: ComponentBase | any) {
+                if (!component || component.isDisposed) { return; }
+                if (!hasLifecycleHook(component, 'onBuilding', '_onBuildingHandlers', 'onbuilding')) { return; }
+                const sender = component, ev = { cancel: false } as EventArgs;
+                if (component.onBuilding) { callReported(() => component.onBuilding(sender, ev), 'MJX122', 'onBuilding'); }
+                if (Array.isArray(component._base._onBuildingHandlers)) {
+                        for (const fn of component._base._onBuildingHandlers) {
+                                callReported(() => fn(sender, ev), 'MJX122', 'onBuilding');
                         }
-                        component._base.emiters.fire('onbuilding', ev);
-                });
+                }
+                fireLifecycle(component,'onbuilding', ev);
         },
-        async callConfig(component: ComponentBase | any) {
-                ComponentHelper.backgroundCallback(() => {
+        callConfig(component: ComponentBase | any) {
+                if (!component || component.isDisposed || component.isConfigured) { return; }
+                component.isConfigured = true;
 
-                        if (!component || component.isDisposed || component.isConfigured) { return; }
-                        component.isConfigured = true;
+                if (component.motif.options._preconfig) {
+                        safeCallSilent(() => component.motif.options._preconfig(component), 'Component._preconfig');
+                }
 
-                        if (component.motif.options._preconfig) {
-                                safeCallSilent(() => component.motif.options._preconfig(component), 'Component._preconfig');
+                if (!hasLifecycleHook(component, 'onConfig', '_onConfigHandlers', 'onconfig')) { return; }
+                const sender = component, ev = { cancel: false } as EventArgs;
+                if (component.onConfig) { callReported(() => component.onConfig(sender, ev), 'MJX122', 'onConfig'); }
+                if (Array.isArray(component._base._onConfigHandlers)) {
+                        for (const fn of component._base._onConfigHandlers) {
+                                callReported(() => fn(sender, ev), 'MJX122', 'onConfig');
                         }
-
-                        const sender = component, ev = { cancel: false } as EventArgs;
-                        if (component.onConfig) { callReported(() => component.onConfig(sender, ev), 'MJX122', 'onConfig'); }
-                        if (Array.isArray(component._base._onConfigHandlers)) {
-                                for (const fn of component._base._onConfigHandlers) {
-                                        callReported(() => fn(sender, ev), 'MJX122', 'onConfig');
-                                }
-                        }
-                        component._base.emiters.fire('onconfig', ev);
-                });
+                }
+                fireLifecycle(component,'onconfig', ev);
         },
-        async callConfigured(component: ComponentBase | any) {
+        callConfigured(component: ComponentBase | any) {
                 if (component.motif.options && component.motif.options._postconfigdone) {
                         return;
                 }
@@ -280,57 +489,53 @@ const ComponentHelper = {
                         ComponentHelper.callConfig(component);
                 }
                 component.motif.options._postconfigdone = true;
-                ComponentHelper.backgroundCallback(() => {
-                        if (!component || component.isDisposed) { return; }
-                        const sender = component, ev = { cancel: false } as EventArgs;
-                        if (component.onConfigured) { callReported(() => component.onConfigured(sender, ev), 'MJX122', 'onConfigured'); }
-                        if (Array.isArray(component._base._onConfiguredHandlers)) {
-                                for (const fn of component._base._onConfiguredHandlers) {
-                                        callReported(() => fn(sender, ev), 'MJX122', 'onConfigured');
-                                }
+                if (!component || component.isDisposed) { return; }
+                if (!hasLifecycleHook(component, 'onConfigured', '_onConfiguredHandlers', 'onconfigured')) { return; }
+                const sender = component, ev = { cancel: false } as EventArgs;
+                if (component.onConfigured) { callReported(() => component.onConfigured(sender, ev), 'MJX122', 'onConfigured'); }
+                if (Array.isArray(component._base._onConfiguredHandlers)) {
+                        for (const fn of component._base._onConfiguredHandlers) {
+                                callReported(() => fn(sender, ev), 'MJX122', 'onConfigured');
                         }
-                        component._base.emiters.fire('onconfigured', ev);
-                });
+                }
+                fireLifecycle(component,'onconfigured', ev);
         },
-        async callOnInitialized(component: ComponentBase | any) {
-                ComponentHelper.backgroundCallback(() => {
-                        if (!component || component.isDisposed) { return; }
-                        component.isInitialized = true;
-                        const sender = component, ev = { cancel: false } as EventArgs;
-                        if (component.onInitialized) { callReported(() => component.onInitialized(sender, ev), 'MJX122', 'onInitialized'); }
-                        if (Array.isArray(component._base._onInitializedHandlers)) {
-                                for (const fn of component._base._onInitializedHandlers) {
-                                        callReported(() => fn(sender, ev), 'MJX122', 'onInitialized');
-                                }
+        callOnInitialized(component: ComponentBase | any) {
+                if (!component || component.isDisposed) { return; }
+                component.isInitialized = true;
+                if (!hasLifecycleHook(component, 'onInitialized', '_onInitializedHandlers', 'oninitialized')) { return; }
+                const sender = component, ev = { cancel: false } as EventArgs;
+                if (component.onInitialized) { callReported(() => component.onInitialized(sender, ev), 'MJX122', 'onInitialized'); }
+                if (Array.isArray(component._base._onInitializedHandlers)) {
+                        for (const fn of component._base._onInitializedHandlers) {
+                                callReported(() => fn(sender, ev), 'MJX122', 'onInitialized');
                         }
-                        component._base.emiters.fire('oninitialized', ev);
-                });
+                }
+                fireLifecycle(component,'oninitialized', ev);
         },
-        async callOnInitializing(component: ComponentBase | any) {
-                ComponentHelper.backgroundCallback(() => {
-                        if (!component || component.isDisposed) { return; }
-                        const sender = component, ev = { cancel: false } as EventArgs;
-                        if (component.onInitializing) { callReported(() => component.onInitializing(sender, ev), 'MJX122', 'onInitializing'); }
-                        if (Array.isArray(component._base._onInitializingHandlers)) {
-                                for (const fn of component._base._onInitializingHandlers) {
-                                        callReported(() => fn(sender, ev), 'MJX122', 'onInitializing');
-                                }
+        callOnInitializing(component: ComponentBase | any) {
+                if (!component || component.isDisposed) { return; }
+                if (!hasLifecycleHook(component, 'onInitializing', '_onInitializingHandlers', 'oninitializing')) { return; }
+                const sender = component, ev = { cancel: false } as EventArgs;
+                if (component.onInitializing) { callReported(() => component.onInitializing(sender, ev), 'MJX122', 'onInitializing'); }
+                if (Array.isArray(component._base._onInitializingHandlers)) {
+                        for (const fn of component._base._onInitializingHandlers) {
+                                callReported(() => fn(sender, ev), 'MJX122', 'onInitializing');
                         }
-                        component._base.emiters.fire('oninitializing', ev);
-                });
+                }
+                fireLifecycle(component,'oninitializing', ev);
         },
-        async callVisibilityChanged(component: ComponentBase | any) {
-                ComponentHelper.backgroundCallback(() => {
-                        if (!component || component.isDisposed) { return; }
-                        const sender = component, ev = { cancel: false } as EventArgs;
-                        if (component.onVisibilityChanged) { callReported(() => component.onVisibilityChanged(sender, ev), 'MJX122', 'onVisibilityChanged'); }
-                        if (Array.isArray(component._base._onVisibilityChangedHandlers)) {
-                                for (const fn of component._base._onVisibilityChangedHandlers) {
-                                        callReported(() => fn(sender, ev), 'MJX122', 'onVisibilityChanged');
-                                }
+        callVisibilityChanged(component: ComponentBase | any) {
+                if (!component || component.isDisposed) { return; }
+                if (!hasLifecycleHook(component, 'onVisibilityChanged', '_onVisibilityChangedHandlers', 'onvisibilitychanged')) { return; }
+                const sender = component, ev = { cancel: false } as EventArgs;
+                if (component.onVisibilityChanged) { callReported(() => component.onVisibilityChanged(sender, ev), 'MJX122', 'onVisibilityChanged'); }
+                if (Array.isArray(component._base._onVisibilityChangedHandlers)) {
+                        for (const fn of component._base._onVisibilityChangedHandlers) {
+                                callReported(() => fn(sender, ev), 'MJX122', 'onVisibilityChanged');
                         }
-                        component._base.emiters.fire('onvisibilitychanged', ev);
-                });
+                }
+                fireLifecycle(component,'onvisibilitychanged', ev);
         },
         findFragmentContent(c: ComponentBase) {
                 const controlElement = c.element.nodeType == Node.COMMENT_NODE
@@ -356,6 +561,7 @@ const ComponentHelper = {
         internalBuild(this: ComponentBase, c: ComponentBase) {
                 if (this.isDisposed || c?.isDisposed) { return; }
                 ComponentHelper.callConfigured(c);
+                if (c.isDisposed) return;
                 c._base._activatePreBindings();
                 if (c.isWait) return;
                 const cisBuilt = c.isBuilt;
@@ -382,9 +588,11 @@ const ComponentHelper = {
                 }
 
 
+                if (c.isDisposed || this.isDisposed) return;
                 c.parent = this;
 
-                const currentIndex = this.controls.items.indexOf(c);
+                const ownItems = this.controls.items;
+                const currentIndex = ownItems.length > 0 && ownItems[ownItems.length - 1] === c ? ownItems.length - 1 : ownItems.indexOf(c);
 
                 const appendableElement = findAppendableComponent(this);
                 var controlElement = (c.element as Node).nodeType == Node.COMMENT_NODE
@@ -523,6 +731,374 @@ const ComponentHelper = {
         }
 }
 
+function removeComponentDom(c: any, node: Node, alsoPlaceholder: boolean): void {
+        const opts = c.motif?.options;
+        const parent = node.parentNode;
+        if (node.nodeType === Node.COMMENT_NODE) {
+                if (!parent) return;
+                const close = (opts?.closeFragment as unknown as Node | undefined) || null;
+                if (close) {
+                        let current: Node | null = node;
+                        while (current) {
+                                const after: Node | null = current.nextSibling;
+                                try { parent.removeChild(current); } catch { }
+                                if (current === close) break;
+                                current = after;
+                        }
+                } else {
+                        try { parent.removeChild(node); } catch { }
+                }
+                if (!alsoPlaceholder) return;
+        } else if (parent) {
+                try { parent.removeChild(node); } catch { }
+                if (!alsoPlaceholder) return;
+        }
+        const placeholder = opts?.placeholder as Node | undefined;
+        if (placeholder && placeholder.parentNode) {
+                try { placeholder.parentNode.removeChild(placeholder); } catch { }
+        }
+}
+
+function detachDomWithAnimation(c: any): void {
+        const node = c.element as unknown as Node | null;
+        if (!node) return;
+        const opts = c.motif.options;
+        const t = opts?.[TRANSITION_SLOT] as TransitionApi | undefined;
+        try {
+                const skip = t?.skipNextLeave === true || c._forceInstantDetach === true;
+                if (skip) {
+                        if (t) t.skipNextLeave = false;
+                        c._forceInstantDetach = false;
+                        removeComponentDom(c, node, true);
+                        return;
+                }
+        } catch { }
+        if (!t && !opts?.transitionOut) {
+                removeComponentDom(c, node, false);
+                return;
+        }
+        try {
+                opts.transition.leaveTransition(() => {
+                        removeComponentDom(c, node, false);
+                });
+        } catch {
+                removeComponentDom(c, node, false);
+        }
+}
+
+async function detachDomWithAnimationAsync(c: any): Promise<void> {
+        const node = c.element as unknown as Node | null;
+        if (!node) return;
+        const opts = c.motif.options;
+        const t = opts?.[TRANSITION_SLOT] as TransitionApi | undefined;
+        try {
+                const skip = t?.skipNextLeave === true || c._forceInstantDetach === true;
+                if (skip) {
+                        if (t) t.skipNextLeave = false;
+                        c._forceInstantDetach = false;
+                        removeComponentDom(c, node, true);
+                        return;
+                }
+        } catch { }
+        if (!t && !opts?.transitionOut) {
+                removeComponentDom(c, node, false);
+                return;
+        }
+        return new Promise<void>((resolve) => {
+                try {
+                        opts.transition.leaveTransition(() => {
+                                removeComponentDom(c, node, false);
+                                resolve();
+                        });
+                } catch {
+                        removeComponentDom(c, node, false);
+                        resolve();
+                }
+        });
+}
+
+function disposeShallow(c: any): void {
+        if (c.isDisposed) return;
+        ComponentHelper.callDisposing.call(c, c);
+        try {
+                c._base._offAll();
+        } catch {
+
+        }
+        c.motif.stopAnimations();
+
+        c._base._deactivateBindings();
+        if (c.controls?.items?.length) {
+                for (const child of c.controls.items) {
+                        try {
+                                (child as any)._base._disposeShallow();
+                        } catch {
+
+                        }
+                }
+        }
+        ComponentHelper.callDisposed.call(c, c);
+        safeCall(() => { c._base.emiters.clear(); }, 'disposeShallow.emiters');
+        c.isDisposed = true;
+        Disposable.prototype.dispose.call(c);
+}
+
+function deepCleanup(c: any): void {
+        try { c.parent = null; } catch { }
+
+        try {
+                c._eventHandlers?.clear();
+        } catch {
+
+        }
+        c._eventHandlers = undefined;
+
+        try { c.class?._countsStore?.clear(); } catch { }
+        try { c.class?._watchersStore?.clear(); } catch { }
+        try { c.attr?._attrMapStore?.clear(); } catch { }
+        try { c.attr?._watchersStore?.clear(); } catch { }
+        try {
+                if (c.motif.options) {
+                        c.motif.options.cache = undefined;
+                        c.motif.options.closeFragment = undefined;
+                        c.motif.options.placeholder = undefined;
+                }
+        } catch {
+
+        }
+        try { c.element = null; } catch { }
+        try { c.props = undefined; } catch { }
+        try { c.childs = undefined; } catch { }
+        try { c.class = undefined; } catch { }
+        try { c.attr = undefined; } catch { }
+        try { c.parent = null; } catch { }
+
+        try { c.motif.options = undefined; } catch { }
+        const keys = Object.keys(c);
+        for (let i = 0; i < keys.length; i++) {
+                const key = keys[i];
+                if (key === 'motif') continue;
+                try { c[key] = undefined; } catch { }
+        }
+        c.isDisposed = true;
+}
+
+const DISPOSE_STARTED = Promise.resolve();
+
+function subtreeDisposesSync(c: any, root: boolean): boolean {
+        if (!root && c._disposing && !c.isDisposed) return false;
+        if (c.disposeAsync !== ComponentBase.prototype.disposeAsync) return false;
+        const opts = c.motif?.options;
+        if (opts) {
+                if (opts.transitionOut) return false;
+                const t = opts[TRANSITION_SLOT] as TransitionApi | undefined;
+                if (t) {
+                        if (t.activeAnimations && t.activeAnimations.length > 0) return false;
+                        if (t.activeCssCancel) return false;
+                        if (t.classes || (t.name && t.name.length > 0)) return false;
+                }
+        }
+        const items = c.controls?.items;
+        if (items) {
+                for (let i = 0; i < items.length; i++) {
+                        const child = items[i];
+                        if (child && !child.isDisposed && !subtreeDisposesSync(child, false)) return false;
+                }
+        }
+        return true;
+}
+
+function disposePrefix(c: any, options: IDisposeOptions, asChild: boolean): void {
+        const ctx = asChild ? 'disposeAsync' : 'dispose';
+        if (!asChild && options?.skipLeaveTransition) {
+                c.motif.options.transition.skipNextLeave = true;
+        }
+        safeCall(() => { ComponentHelper.callDisposing.call(c, c); }, ctx + '.callDisposing');
+        c._base._offAll();
+        c._base._deactivateBindings();
+        safeCall(() => { c.parent?.controls?.silentDetach?.(c, true); }, ctx + '.silentDetach');
+}
+
+function disposeFinish(c: any, options: IDisposeOptions, asChild: boolean): void {
+        c.isDisposed = true;
+        Disposable.prototype.dispose.call(c);
+        if (asChild) {
+                c.controls.items = [];
+                safeCall(() => { ComponentHelper.callDisposed.call(c, c); }, 'disposeAsync.callDisposed');
+                safeCall(() => { c._base.emiters.clear(); }, 'disposeAsync.emiters');
+                if (options?.deep) {
+                        c._base._deepCleanup();
+                }
+                return;
+        }
+        c.element = null;
+        safeCall(() => { ComponentHelper.callDisposed.call(c, c); }, 'dispose.callDisposed');
+        safeCall(() => { c._base.emiters.clear(); }, 'dispose.emiters');
+        c._base._offAll();
+        c._base._deepCleanup();
+}
+
+async function disposeRemainderAsync(c: any, options: IDisposeOptions, asChild: boolean, leave: Promise<void> | undefined): Promise<void> {
+        if (leave) {
+                await leave;
+        } else {
+                if (asChild) {
+                        await c.motif.stopAnimations();
+                } else if (peekTransition(c)?.skipNextLeave) {
+                        await c.motif.stopAnimations();
+                }
+                await c._base._detachDomWithAnimationAsync();
+        }
+        if (!asChild && c.constructor.name !== 'TransportTo') {
+                await disposeContentBlocks(c);
+        }
+        const childOptions: IDisposeOptions = { deep: options?.deep };
+        await safeCallAsync(async () => {
+                if (c.isDisposed) { return; }
+                const ctrls = Array.from(c.controls.items) as any[];
+                if (ctrls.length) {
+                        await Promise.all(ctrls.map(child => asChild
+                                ? safeCallAsync(async () => { await child.disposeAsync(childOptions); }, 'disposeAsync.disposeAsyncChildren.handler')
+                                : (async () => {
+                                        try {
+                                                await child.disposeAsync(childOptions);
+                                        } catch (error) {
+                                                reportError('MJX107', error);
+                                        }
+                                })()));
+                }
+        }, asChild ? 'disposeAsync.disposeAsyncChildren' : 'dispose.disposeAsync');
+        if (!asChild && c.isDisposed) { return; }
+        disposeFinish(c, options, asChild);
+}
+
+function disposeRemainderSync(root: any, options: IDisposeOptions, asChild: boolean, rootDetached: boolean): Promise<void>[] | null {
+        const childOptions: IDisposeOptions = { deep: options?.deep };
+        const nodes: any[] = [root];
+        const parents: number[] = [-1];
+        let pending: Promise<void>[] | null = null;
+        if (!rootDetached) detachDomWithAnimation(root);
+        for (let n = 0; n < nodes.length; n++) {
+                const node = nodes[n];
+                if (node.isDisposed) continue;
+                const items = node.controls?.items;
+                if (!items || items.length === 0) continue;
+                const ctrls = Array.from(items) as any[];
+                for (let j = 0; j < ctrls.length; j++) {
+                        const child = ctrls[j];
+                        if (child.isDisposed) continue;
+                        if (child._disposing) {
+                                (pending ??= []).push(child._disposing);
+                                continue;
+                        }
+                        try {
+                                retireServiceOwner(child);
+                                child._disposing = root._disposing;
+                                disposePrefix(child, childOptions, true);
+                                detachDomWithAnimation(child);
+                                nodes.push(child);
+                                parents.push(n);
+                        } catch (error) {
+                                reportError('MJX107', error);
+                        }
+                }
+        }
+        const count = nodes.length;
+        if (count > 1) {
+                const heights = new Array<number>(count).fill(0);
+                for (let i = count - 1; i >= 1; i--) {
+                        const p = parents[i];
+                        if (heights[i] + 1 > heights[p]) heights[p] = heights[i] + 1;
+                }
+                const order: number[] = [];
+                for (let i = 1; i < count; i++) order.push(i);
+                order.sort((a, b) => heights[a] - heights[b] || a - b);
+                for (let k = 0; k < order.length; k++) {
+                        try {
+                                disposeFinish(nodes[order[k]], childOptions, true);
+                        } catch (error) {
+                                reportError('MJX107', error);
+                        }
+                }
+        }
+        if (pending) return pending;
+        if (!asChild && root.isDisposed) { return null; }
+        disposeFinish(root, options, asChild);
+        return null;
+}
+
+const BASE_PROTO = {
+        _offAll(this: BaseCtx): void {
+                const c: any = this.owner;
+                if (!c._eventHandlers) return;
+                for (const [full, set] of c._eventHandlers) {
+                        const name = full.split(":")[0];
+                        const evt = name.startsWith("on") ? name.slice(2).toLowerCase() : name.toLowerCase();
+                        for (const rec of set) {
+                                if (!rec || !rec.wrapped) { continue; }
+
+                                if ((rec as any).domEvent === false) { continue; }
+                                const cap = (rec as any).capture === true;
+                                try {
+                                        (c.element as any).removeEventListener(evt, rec.wrapped as EventListener, cap);
+                                } catch { }
+
+                                try {
+                                        if ((rec as any).capture === undefined) {
+                                                (c.element as any).removeEventListener(evt, rec.wrapped as EventListener, !cap);
+                                        }
+                                } catch { }
+                        }
+                }
+                c._eventHandlers.clear();
+                c._eventHandlers = undefined;
+        },
+        _deactivateBindings(this: BaseCtx): void {
+                const c: any = this.owner;
+                try { c.bindings?.deactivateAll(); } catch { }
+        },
+        _activateBindings(this: BaseCtx): void {
+                const c: any = this.owner;
+                try { c.bindings?.activateAll(); } catch { }
+        },
+        _reactivateBindings(this: BaseCtx): void {
+                const c: any = this.owner;
+                try { c.bindings?.reActivateAll(); } catch { }
+        },
+        _activatePreBindings(this: BaseCtx): void {
+                if (this.prebinding_Activated) return;
+                const c: any = this.owner;
+                const registered = c.bindings?._items as IBaseBinding[] | undefined;
+                if (registered && registered.length > 0) {
+                        c.bindings.items.filter((x: IBaseBinding) => x.propertyName == "isWait" || x.propertyName == "display").forEach((b: IBaseBinding) => {
+                                b.activate();
+                        }
+                        );
+                }
+                this.prebinding_Activated = true;
+        },
+        _detachDomWithAnimation(this: BaseCtx): void {
+                detachDomWithAnimation(this.owner);
+        },
+        _detachDomWithAnimationAsync(this: BaseCtx): Promise<void> {
+                return detachDomWithAnimationAsync(this.owner);
+        },
+        _disposeShallow(this: BaseCtx): void {
+                disposeShallow(this.owner);
+        },
+        _deepCleanup(this: BaseCtx): void {
+                deepCleanup(this.owner);
+        },
+};
+
+function createBaseCtx(owner: ComponentBase): BaseCtx {
+        const base: BaseCtx = Object.create(BASE_PROTO);
+        base.owner = owner;
+        base.prebinding_Activated = false;
+        base.emiters = new ComponentEmiter(owner);
+        return base;
+}
+
 const fragmentCloseMarkers = new WeakMap<Comment, Comment>();
 
 var globalId = 0;
@@ -535,6 +1111,14 @@ const LIFECYCLE_X_EVENTS = new Set([
 export interface IDisposeOptions {
         deep?: boolean;
         skipLeaveTransition?: boolean;
+}
+
+export interface SiblingsApi {
+        all: () => ComponentBase[] | undefined;
+        next: () => ComponentBase | undefined;
+        prev: () => ComponentBase | undefined;
+        nextAll: () => any;
+        prevAll: () => any;
 }
 
 const RAW_APPLICATION = Symbol('motif.rawApplication');
@@ -567,167 +1151,7 @@ function createScopedContext(app: Application, owner: ComponentBase): Applicatio
 
 export abstract class ComponentBase<TElement extends ElementType = any, TProps extends object = any> extends Disposable {
 
-        public readonly motif: ComponentMotif<this, TProps> = new ComponentMotif<this, TProps>(this, {
-                transition: {
-                        transitionInfo: () => {
-                                return {
-                                        in: getTransitionInfo(this.element as Element, `${this.motif.options.transition.name}-enter ${this.motif.options.transition.name}-enter-start`),
-                                        out: getTransitionInfo(this.element as Element, `${this.motif.options.transition.name}-leave ${this.motif.options.transition.name}-leave-start`),
-                                }
-                        },
-                        name: '',
-                        classes: undefined as TransitionProps | undefined,
-                        activeCssCancel: null as (() => void) | null,
-                        activeCssPhase: null as ('enter' | 'leave' | null),
-                        cssProps: (): TransitionProps | null => {
-                                const t = this.motif.options.transition;
-                                if (t.classes) {
-                                        return { name: t.classes.name || t.name || '', ...t.classes };
-                                }
-                                if (t.name && t.name.length > 0) {
-                                        return { name: t.name };
-                                }
-                                return null;
-                        },
-                        skipNextLeave: false,
-                        _suppressEnter: false,
-                        _markedDirection: false,
-                        in: (op: { keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions }) => {
-                                this.motif.options.transitionIn = op;
-                        },
-                        out: (op: { keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions }) => {
-                                this.motif.options.transitionOut = op;
-                        },
-                        enterTransition: (resolve: () => void): Animation => {
-                                const t = this.motif.options.transition;
-                                const appear = !this._base._enterPlayed;
-                                this._base._enterPlayed = true;
-                                this._base._enterSeq = (this._base._enterSeq ?? 0) + 1;
-                                if (t._suppressEnter) {
-                                        resolve && resolve();
-                                        return shimAnimation as Animation;
-                                }
-                                const attempt = {};
-                                this._base._enterRun = attempt;
-                                const done = () => {
-                                        if (this._base?._enterRun === attempt) {
-                                                this._base._enterRun = null;
-                                                clearNavDirection(this);
-                                        }
-                                        resolve && resolve();
-                                };
-                                if (this.motif.options.transitionIn) {
-                                        return t.run(this.motif.options.transitionIn.keyframes, this.motif.options.transitionIn.options, done);
-                                }
-                                return t._runCss('enter', done, appear);
-                        },
-                        leaveTransition: (resolve: () => void): Animation => {
-                                if (this.motif.options.transitionOut) {
-                                        return this.motif.options.transition.run(this.motif.options.transitionOut.keyframes, this.motif.options.transitionOut.options, resolve);
-                                }
-                                return this.motif.options.transition._runCss('leave', resolve);
-                        },
-                        _runCss: (phase: 'enter' | 'leave', resolve: () => void, appear: boolean = false): Animation => {
-                                const t = this.motif.options.transition;
-                                if (phase === 'enter' && t.activeCssPhase === 'leave') {
-                                        resolve && resolve();
-                                        return shimAnimation as Animation;
-                                }
-                                const cssProps = t.cssProps();
-                                const el = this.element as unknown as Element | null;
-                                if (cssProps && el && (el as any).nodeType === 1 && (el as any).classList) {
-                                        try { t.activeCssCancel?.(); } catch { }
-                                        const cancel = runCssTransition(el, cssProps, phase, () => {
-                                                if (this.motif.options?.transition) {
-                                                        this.motif.options.transition.activeCssCancel = null;
-                                                        this.motif.options.transition.activeCssPhase = null;
-                                                }
-                                                resolve && resolve();
-                                        }, appear);
-                                        t.activeCssCancel = cancel;
-                                        t.activeCssPhase = phase;
-                                        return shimAnimation as Animation;
-                                }
-                                resolve && resolve();
-                                return shimAnimation as Animation;
-                        },
-                        activeAnimations: [] as Animation[],
-                        run: (keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions, resolve?: () => void): Animation => {
-                                this.motif.stopAnimations();
-
-                                const element = this.element as unknown as HTMLElement;
-
-                                if (element.animate) {
-                                        var x = element.animate(keyframes, options);
-                                        this.motif.options.transition.activeAnimations.push(x);
-
-                                        let cleanedUp = false;
-                                        const safeCleanup = () => {
-                                                if (cleanedUp) return;
-                                                cleanedUp = true;
-                                                try {
-                                                        if (this?.motif.options?.transition?.activeAnimations) {
-                                                                this.motif.options.transition.activeAnimations = this.motif.options.transition.activeAnimations.filter(a => a !== x);
-                                                        }
-                                                } catch { }
-                                        };
-
-                                        x.addEventListener('finish', () => {
-                                                resolve && resolve();
-                                                safeCleanup();
-                                        });
-
-                                        x.oncancel = () => {
-                                                safeCleanup();
-                                        };
-                                        return x;
-                                }
-                                else {
-                                        resolve && resolve();
-                                        const g: any = (globalThis as any);
-                                        if (typeof g.Animation === 'function') {
-                                                try { return new g.Animation(); } catch { /* ignore */ }
-                                        }
-
-                                        return shimAnimation as Animation;
-                                }
-                        }
-                },
-                set enableRouterClassing(value: RouterClassingSettings) {
-                        try {
-
-                                var ins = (this.getInstance() as ComponentBase);
-                                const callback = ins.context.onRouterChanged(() => {
-                                        ComponentHelper.routerClassing.call(ins, value);
-                                });
-                                ins.motif.register(disposableCore.toDisposable(() => {
-                                        callback();
-                                }));
-                                ComponentHelper.routerClassing.call(ins, value);
-                        } catch (error) {
-                                reportError('MJX105', error);
-                        }
-
-                },
-                getInstance: (): ComponentBase => {
-                        return this;
-                },
-                get display(): boolean {
-                        return this.getInstance().isVisible;
-                },
-                set display(value: boolean) {
-                        if (value) {
-                                this.getInstance().motif.show();
-                        } else {
-                                this.getInstance().motif.hide();
-                        }
-                },
-                hasEvent: (name: string): boolean => {
-                        const ins = this._eventHandlers?.has(name);
-                        if (ins) return true;
-                        return false;
-                }
-        });
+        public readonly motif: ComponentMotif<this, TProps> = new ComponentMotif<this, TProps>(this, new ComponentOptionsImpl(this) as unknown as ComponentMotif<this, TProps>['options']);
 
         public element: TElement;
         public props: TProps;
@@ -810,8 +1234,11 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 }
 
                 if (props) {
-                        for (const fn of takePendingRefs(this, extractRefs(props, this))) {
-                                callReported(() => fn(this), 'MJX122', 'ref');
+                        const refs = extractRefs(props, this);
+                        if (refs.length > 0) {
+                                for (const fn of takePendingRefs(this, refs)) {
+                                        callReported(() => fn(this), 'MJX122', 'ref');
+                                }
                         }
                 }
 
@@ -829,20 +1256,21 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
 
                 ComponentHelper.callOnInitializing(this);
+                if (this.isDisposed) return;
                 this.controls.onAdd = (c) => {
-                        this.motif.trigger('controladded', { control: c });
+                        if (this._eventHandlers?.has('controladded')) this.motif.trigger('controladded', { control: c });
                         if (this.isWait || this.parent?.isWait) return;
                         ComponentHelper.internalBuild.call(this, c);
 
                 }
 
                 this.controls.onAddBeforeBuild = (c) => {
-                        this.motif.trigger('controladded', { control: c });
+                        if (this._eventHandlers?.has('controladded')) this.motif.trigger('controladded', { control: c });
                 }
 
 
                 this.controls.onRemove = (c) => {
-                        this.motif.trigger('controlremoved', { control: c });
+                        if (this._eventHandlers?.has('controlremoved')) this.motif.trigger('controlremoved', { control: c });
                 }
                 ComponentHelper.callOnInitialized(this);
 
@@ -862,299 +1290,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
 
         public childs?: any[];
-        protected _base: BaseCtx = {
-                prebinding_Activated: false,
-                _offAll: () => {
-                        if (!this._eventHandlers) return;
-                        for (const [full, set] of this._eventHandlers) {
-                                const name = full.split(":")[0];
-                                const evt = name.startsWith("on") ? name.slice(2).toLowerCase() : name.toLowerCase();
-                                for (const rec of set) {
-                                        if (!rec || !rec.wrapped) { continue; }
-
-                                        if ((rec as any).domEvent === false) { continue; }
-                                        const cap = (rec as any).capture === true;
-                                        try {
-                                                (this.element as any).removeEventListener(evt, rec.wrapped as EventListener, cap);
-                                        } catch { }
-
-                                        try {
-                                                if ((rec as any).capture === undefined) {
-                                                        (this.element as any).removeEventListener(evt, rec.wrapped as EventListener, !cap);
-                                                }
-                                        } catch { }
-                                }
-                        }
-                        this._eventHandlers.clear();
-                        this._eventHandlers = undefined as any;
-                },
-                _deactivateBindings: () => {
-                        try { this.bindings?.deactivateAll(); } catch { }
-
-                },
-                _activateBindings: () => {
-                        try { this.bindings?.activateAll(); } catch { }
-
-                },
-                _reactivateBindings: () => {
-
-                        try { this.bindings?.reActivateAll(); } catch { }
-
-                },
-                _activatePreBindings: () => {
-                        if (this._base.prebinding_Activated) return;
-                        this.bindings.items.filter(x => x.propertyName == "isWait" || x.propertyName == "display").forEach(b => {
-                                b.activate();
-                        }
-                        );
-                        this._base.prebinding_Activated = true;
-                },
-
-                _detachDomWithAnimation: () => {
-                        const node = this.element as unknown as Node | null;
-                        if (!node) return;
-
-                        try {
-
-                                const skip = this.motif.options.transition.skipNextLeave === true || (this as any)?._forceInstantDetach === true;
-                                if (skip) {
-                                        if (this?.motif.options?.transition) (this as any).motif.options.transition.skipNextLeave = false;
-                                        (this as any)._forceInstantDetach = false;
-                                        const immediate = () => {
-                                                const parent = node.parentNode;
-                                                if (node.nodeType === Node.COMMENT_NODE) {
-                                                        const open = node;
-                                                        const close = (this.motif.options?.closeFragment as unknown as Node | undefined) || null;
-                                                        if (!parent) return;
-                                                        if (close) {
-                                                                let current: Node | null = open;
-                                                                while (current) {
-                                                                        const after: Node | null = current.nextSibling;
-                                                                        try { parent.removeChild(current); } catch { }
-                                                                        if (current === close) break;
-                                                                        current = after;
-                                                                }
-                                                        } else {
-                                                                try { parent.removeChild(open); } catch { }
-                                                        }
-                                                } else if (parent) {
-                                                        try { parent.removeChild(node); } catch { }
-                                                }
-                                                const placeholder = (this.motif.options as any)?.placeholder as Node | undefined;
-                                                if (placeholder && placeholder.parentNode) {
-                                                        try { placeholder.parentNode.removeChild(placeholder); } catch { }
-                                                }
-                                        };
-                                        immediate();
-                                        return;
-                                }
-                        } catch { }
-
-                        const removeNow = () => {
-                                if (node.nodeType === Node.COMMENT_NODE) {
-                                        const open = node;
-                                        const close = (this.motif.options?.closeFragment as unknown as Node | undefined) || null;
-                                        const parent = open.parentNode;
-                                        if (!parent) return;
-                                        if (close) {
-                                                let current: Node | null = open;
-                                                while (current) {
-                                                        const after: Node | null = current.nextSibling;
-                                                        try { parent.removeChild(current); } catch { }
-                                                        if (current === close) break;
-                                                        current = after;
-                                                }
-                                        } else {
-                                                try { parent.removeChild(open); } catch { }
-                                        }
-                                        return;
-                                }
-
-                                const parent = node.parentNode;
-                                if (parent) {
-                                        try { parent.removeChild(node); } catch { }
-                                        return;
-                                }
-
-                                const placeholder = (this.motif.options as any)?.placeholder as Node | undefined;
-                                if (placeholder && placeholder.parentNode) {
-                                        try { placeholder.parentNode.removeChild(placeholder); } catch { }
-                                }
-                        };
-
-                        try {
-                                this.motif.options.transition.leaveTransition(() => {
-                                        removeNow();
-                                });
-                        } catch {
-                                removeNow();
-                        }
-                }
-                ,
-                _detachDomWithAnimationAsync: async () => {
-                        const node = this.element as unknown as Node | null;
-                        if (!node) return Promise.resolve();
-
-                        try {
-
-                                const skip = this.motif.options.transition.skipNextLeave === true || (this as any)?._forceInstantDetach === true;
-                                if (skip) {
-                                        if (this.motif.options.transition) this.motif.options.transition.skipNextLeave = false;
-                                        (this as any)._forceInstantDetach = false;
-                                        const immediateRemove = () => {
-                                                if (node.nodeType === Node.COMMENT_NODE) {
-                                                        const open = node;
-                                                        const close = (this.motif.options?.closeFragment as unknown as Node | undefined) || null;
-                                                        const parent = open.parentNode;
-                                                        if (!parent) return;
-                                                        if (close) {
-                                                                let current: Node | null = open;
-                                                                while (current) {
-                                                                        const after: Node | null = current.nextSibling;
-                                                                        try { parent.removeChild(current); } catch { }
-                                                                        if (current === close) break;
-                                                                        current = after;
-                                                                }
-                                                        } else {
-                                                                try { parent.removeChild(open); } catch { }
-                                                        }
-                                                } else {
-                                                        const parent = node.parentNode;
-                                                        if (parent) { try { parent.removeChild(node); } catch { } }
-                                                }
-                                                const placeholder = (this.motif.options as any)?.placeholder as Node | undefined;
-                                                if (placeholder && placeholder.parentNode) {
-                                                        try { placeholder.parentNode.removeChild(placeholder); } catch { }
-                                                }
-                                        };
-                                        immediateRemove();
-                                        return Promise.resolve();
-                                }
-                        } catch { }
-
-                        const removeNow = () => {
-                                if (node.nodeType === Node.COMMENT_NODE) {
-                                        const open = node;
-                                        const close = (this.motif.options?.closeFragment as unknown as Node | undefined) || null;
-                                        const parent = open.parentNode;
-                                        if (!parent) return;
-                                        if (close) {
-                                                let current: Node | null = open;
-                                                while (current) {
-                                                        const after: Node | null = current.nextSibling;
-                                                        try { parent.removeChild(current); } catch { }
-                                                        if (current === close) break;
-                                                        current = after;
-                                                }
-                                        } else {
-                                                try { parent.removeChild(open); } catch { }
-                                        }
-                                        return;
-                                }
-
-                                const parent = node.parentNode;
-                                if (parent) {
-                                        try { parent.removeChild(node); } catch { }
-                                        return;
-                                }
-
-                                const placeholder = (this.motif.options as any)?.placeholder as Node | undefined;
-                                if (placeholder && placeholder.parentNode) {
-                                        try { placeholder.parentNode.removeChild(placeholder); } catch { }
-                                }
-                        };
-
-                        return new Promise<void>((resolve) => {
-                                try {
-                                        this.motif.options.transition.leaveTransition(() => {
-                                                removeNow();
-                                                resolve();
-                                        });
-                                } catch {
-                                        removeNow();
-                                        resolve();
-                                }
-                        });
-                }
-                ,
-                _disposeShallow: () => {
-                        if (this.isDisposed) return;
-                        ComponentHelper.callDisposing.call(this, this);
-                        try {
-                                this._base._offAll();
-
-                        } catch {
-
-                        }
-                        this.motif.stopAnimations();
-
-                        this._base._deactivateBindings();
-                        if (this.controls?.items?.length) {
-                                for (const c of this.controls.items) {
-                                        try {
-                                                (c as ComponentBase)._base._disposeShallow();
-                                        } catch {
-
-                                        }
-                                }
-                        }
-                        ComponentHelper.callDisposed.call(this, this);
-                        safeCall(() => { this._base.emiters.clear(); }, 'disposeShallow.emiters');
-                        this.isDisposed = true;
-                        super.dispose();
-
-                },
-                _deepCleanup: () => {
-                        try { (this as any).parent = null; } catch { }
-
-                        try {
-                                this._eventHandlers?.clear();
-                        } catch {
-
-                        }
-                        // for (const c of this.controls.items) {
-                        //         try {
-                        //         } catch {
-
-
-
-
-                        (this as any)._eventHandlers = undefined;
-
-                        try { (this.class as any)?._counts?.clear(); } catch { }
-                        try { (this.class as any)?._watchers?.clear(); } catch { }
-                        try { (this.attr as any)?._attrMap?.clear(); } catch { }
-                        try { (this.attr as any)?._watchers?.clear(); } catch { }
-                        try {
-                                if (this.motif.options) {
-                                        this.motif.options.cache = undefined as any;
-                                        this.motif.options.closeFragment = undefined as any;
-                                        (this.motif.options as any).placeholder = undefined;
-                                }
-                        } catch {
-
-                        }
-                        try { (this as any).element = null; } catch { }
-                        try { (this as any).props = undefined; } catch { }
-                        try { (this as any).childs = undefined; } catch { }
-                        try { (this as any).class = undefined; } catch { }
-                        try { (this as any).attr = undefined; } catch { }
-                        try { (this as any).parent = null; } catch { }
-
-                        try { this.motif.options = undefined as any; } catch { }
-                        Object.entries(this).forEach(([key, value]) => {
-                                if (key === 'motif') return;
-                                try {
-                                        (this as any)[key] = null;
-                                        delete (this as any)[key];
-                                } catch {
-
-                                }
-                        });
-                        this.isDisposed = true;
-                },
-                emiters: new ComponentEmiter(this)
-        }
+        protected _base: BaseCtx = createBaseCtx(this);
         public parent: ComponentBase | null = null;
         public onElementCreating?(): TElement;
         public initializeComponent?(sender: ComponentBase): void;
@@ -1201,6 +1337,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 }
 
                 ComponentHelper.callBuilding(this);
+                if (this.isDisposed) { return; }
                 var ph: any = this.element;
                 if (building) {
                         ph = dom.createDocumentFragment();
@@ -1217,10 +1354,12 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
 
                 ComponentHelper.callInitializeComponent(this);
+                if (this.isDisposed) { return; }
 
                 if (this.view) {
                         const templ = this.view();
                         this.controls.add(templ);
+                        if (this.isDisposed) { return; }
                 }
 
                 const deferredSelectValue = (this.element as any)?.nodeName === 'SELECT'
@@ -1260,6 +1399,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
                 }
 
+                if (this.isDisposed) { return; }
                 if (wantsEnterTransition(this)) {
                         const node = this.element as unknown as Node | null;
                         if (node && (node as any).isConnected) {
@@ -1401,7 +1541,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 if (this.isDisposed || !this.element) { return; }
                 if (this.isVisible) { return; }/* A*/
 
-                if (this.motif.options?.transition?.activeAnimations?.length) {
+                if (peekTransition(this)?.activeAnimations?.length) {
                         safeCall(async () => {
                                 await Promise.all(this.motif.options.transition.activeAnimations.map(a =>
                                         a.finished?.catch(() => { })
@@ -1413,6 +1553,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 if (strategy === 'detach') {
 
                         ComponentHelper.callVisibilityChanged(this);
+                        if (this.isDisposed) { return; }
                         const needAttach = !this._isInDom() && this.parent && this.parent.isBuilt && !this.isWait;
                         this.isVisible = true;
                         if (needAttach) {
@@ -1436,6 +1577,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         /** A*/
                         wantsEnterTransition(this) && this.motif.options.transition.enterTransition(() => { });
                         ComponentHelper.callVisibilityChanged(this);
+                        if (this.isDisposed) { return; }
                         if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
                                 this.controls.forEach(c => {
                                         c.motif.show();
@@ -1460,6 +1602,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 const strategy = this._computeHideStrategy();
                 if (strategy === 'detach') {
                         ComponentHelper.callVisibilityChanged(this);
+                        if (this.isDisposed) { return; }
                         await this._base._detachDomWithAnimationAsync();
                         this.isVisible = false;
                         ComponentHelper.deactivateTree(this);
@@ -1470,6 +1613,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         if (skip) transition.skipNextLeave = false;
                         const finish = () => {
                                 ComponentHelper.callVisibilityChanged(this);
+                                if (this.isDisposed) { return; }
                                 if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
                                         this.controls.forEach(c => {
                                                 if (skip && c.isVisible && c.element && !c.isDisposed && c.motif.options?.transition) {
@@ -1663,123 +1807,37 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
         public override dispose(options: IDisposeOptions = { deep: true }): Promise<void> {
                 if (this.isDisposed) { return Promise.resolve(); }
-                if (!this._disposing) { retireServiceOwner(this); }
-                return this._disposing ??= this._disposeCore(options);
+                if (this._disposing) { return this._disposing; }
+                retireServiceOwner(this);
+                this._disposing = DISPOSE_STARTED;
+                return this._disposing = this._disposeCore(options, false);
         }
 
-        private async _disposeCore(options: IDisposeOptions): Promise<void> {
-                if (options?.skipLeaveTransition) {
-                        this.motif.options.transition.skipNextLeave = true;
+        private async _disposeCore(options: IDisposeOptions, asChild: boolean): Promise<void> {
+                disposePrefix(this, options, asChild);
+                let leave: Promise<void> | undefined;
+                if (!asChild && !peekTransition(this)?.skipNextLeave) {
+                        leave = this._base._detachDomWithAnimationAsync();
                 }
-                safeCall(() => {
-                        ComponentHelper.callDisposing.call(this, this);
-                }, 'dispose.callDisposing');
-
-                // DOM dinleyicileri hemen sökülür, aşağıda isDisposed true olunca off() boşa döner,
-                // element null'lanınca da _offAll dom'dan sökülemez — DOM'dan çıkmış öğeye sonradan gelen 
-                this._base._offAll();
-                this._base._deactivateBindings();
-
-                safeCall(() => {
-                        (this.parent?.controls as any)?.silentDetach?.(this, true);
-                }, 'dispose.silentDetach');
-
-                this.motif.options.transition.skipNextLeave && await this.motif.stopAnimations();
-
-                await this._base._detachDomWithAnimationAsync();
-
-                if (this.constructor.name !== 'TransportTo') {
-                        await disposeContentBlocks(this);
-                }
-                await safeCallAsync(async () => {
-                        if (this.isDisposed) { return; }
-                        const ctrls = Array.from(this.controls.items);
-                        if (ctrls.length) {
-                                await Promise.all(ctrls.map(async c => {
-                                        try {
-                                                await c.disposeAsync({ deep: options?.deep });
-                                        } catch (error) {
-                                                reportError('MJX107', error);
-                                        }
-                                }));
+                await undefined;
+                if (liveContentBlocks.live === 0 && subtreeDisposesSync(this, true)) {
+                        const pending = disposeRemainderSync(this, options, asChild, leave !== undefined);
+                        if (pending) {
+                                await Promise.all(pending);
+                                if (!asChild && this.isDisposed) { return; }
+                                disposeFinish(this, options, asChild);
                         }
-                }, 'dispose.disposeAsync');
-
-                if (this.isDisposed) { return; }
-
-                this.isDisposed = true;
-                super.dispose();
-                (this.element as any) = null;
-
-
-                //if (options?.deep) {
-
-
-
-
-                safeCall(() => {
-                        ComponentHelper.callDisposed.call(this, this);
-                }, 'dispose.callDisposed');
-                safeCall(() => { this._base.emiters.clear(); }, 'dispose.emiters');
-
-                this._base._offAll();
-                this._base._deepCleanup();
-                // var k = Object.keys(this);
-                // for (var i = 0; i < k.length; i++) {
-                //         try {
-                //         } catch {
-
+                        return;
+                }
+                await disposeRemainderAsync(this, options, asChild, leave);
         }
+
         public disposeAsync(options: IDisposeOptions = { deep: true }): Promise<void> {
                 if (this.isDisposed) { return Promise.resolve(); }
-                if (!this._disposing) { retireServiceOwner(this); }
-                return this._disposing ??= this._disposeAsyncCore(options);
-        }
-
-        private async _disposeAsyncCore(options: IDisposeOptions): Promise<void> {
-
- 
-                safeCall(() => {
-                        ComponentHelper.callDisposing.call(this, this);
-                }, 'disposeAsync.callDisposing');
-                this._base._offAll();
-                this._base._deactivateBindings();
-                safeCall(() => {
-
-                        (this.parent?.controls as any)?.silentDetach?.(this, true);
-                }, 'disposeAsync.silentDetach');
-                await this.motif.stopAnimations();
-                await this._base._detachDomWithAnimationAsync();
-                await safeCallAsync(async () => {
-                        if (this.isDisposed) { return; }
-                        const ctrls = Array.from(this.controls.items);
-                        if (ctrls.length) {
-                                await Promise.all(ctrls.map(c =>
-                                        safeCallAsync(async () => {
-                                                await c.disposeAsync({ deep: options?.deep });
-                                        }, 'disposeAsync.disposeAsyncChildren.handler')
-                                ));
-                        }
-                }, 'disposeAsync.disposeAsyncChildren');
-
-
-
-                this.isDisposed = true;
-                super.dispose();
-
-                this.controls.items = [];
-                safeCall(() => {
-                        ComponentHelper.callDisposed.call(this, this);
-                }, 'disposeAsync.callDisposed');
-                safeCall(() => { this._base.emiters.clear(); }, 'disposeAsync.emiters');
-
-                if (options?.deep) {
-                        this._base._deepCleanup();
-                }
-                // var k = Object.keys(this);
-                // for (var i = 0; i < k.length; i++) {
-                //         try {
-                //         } catch { }
+                if (this._disposing) { return this._disposing; }
+                retireServiceOwner(this);
+                this._disposing = DISPOSE_STARTED;
+                return this._disposing = this._disposeCore(options, true);
         }
 
 
@@ -1810,29 +1868,45 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 }) as Promise<T>;
         }
 
-        siblings = {
-                all: () => { return this.parent?.controls.items },
-                next: () => {
-                        if (!this.parent) return undefined;
-                        const idx = this.parent.controls.items.indexOf(this);
-                        return this.parent.controls.items[idx + 1];
-                },
-                prev: () => {
-                        if (!this.parent) return undefined;
-                        const idx = this.parent.controls.items.indexOf(this);
-                        return this.parent.controls.items[idx - 1];
-                },
-                nextAll: () => {
-                        if (!this.parent) return undefined as any;
-                        const idx = this.parent.controls.items.indexOf(this);
-                        return this.parent.controls.items.slice(idx + 1);
-                },
-                prevAll: () => {
-                        if (!this.parent) return undefined as any;
-                        const idx = this.parent.controls.items.indexOf(this);
-                        return this.parent.controls.items.slice(0, idx);
-                }
-        };
+        private _siblingsApi?: SiblingsApi;
+        private _siblingsSet?: boolean;
+
+        get siblings(): SiblingsApi {
+                if (this._siblingsSet) { return this._siblingsApi as SiblingsApi; }
+                if (this.isDisposed && !this.motif?.options) { return this._siblingsApi as SiblingsApi; }
+                return this._siblingsApi ??= this._createSiblingsApi();
+        }
+
+        set siblings(value: SiblingsApi) {
+                this._siblingsApi = value;
+                this._siblingsSet = true;
+        }
+
+        private _createSiblingsApi(): SiblingsApi {
+                return {
+                        all: () => { return this.parent?.controls.items },
+                        next: () => {
+                                if (!this.parent) return undefined;
+                                const idx = this.parent.controls.items.indexOf(this);
+                                return this.parent.controls.items[idx + 1];
+                        },
+                        prev: () => {
+                                if (!this.parent) return undefined;
+                                const idx = this.parent.controls.items.indexOf(this);
+                                return this.parent.controls.items[idx - 1];
+                        },
+                        nextAll: () => {
+                                if (!this.parent) return undefined as any;
+                                const idx = this.parent.controls.items.indexOf(this);
+                                return this.parent.controls.items.slice(idx + 1);
+                        },
+                        prevAll: () => {
+                                if (!this.parent) return undefined as any;
+                                const idx = this.parent.controls.items.indexOf(this);
+                                return this.parent.controls.items.slice(0, idx);
+                        }
+                };
+        }
 
         public get serviceProvider(): ServiceProvider | null {
                 let c: ComponentBase | null = this as unknown as ComponentBase;
@@ -1904,12 +1978,12 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         }
 
         private async _stopAnimations() {
-
-                try { this.motif.options?.transition?.activeCssCancel?.(); } catch { }
+                const t = peekTransition(this);
+                try { t?.activeCssCancel?.(); } catch { }
                 try {
-                        if (this.motif.options?.transition?.activeAnimations?.length) {
+                        if (t?.activeAnimations?.length) {
                                 try {
-                                        await Promise.all(this.motif.options.transition.activeAnimations.map(a =>
+                                        await Promise.all(t.activeAnimations.map(a =>
                                                 a.finished?.catch(() => { })
                                         ));
                                 } catch { /* ignore */ }
@@ -1919,7 +1993,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
                 }
                 if (this.isDisposed) return;
-                this.motif.options.transition.activeAnimations = [];
+                if (t) t.activeAnimations = [];
         }
         //         return this;
 
@@ -1940,6 +2014,7 @@ function findContentBlocks(root: ComponentBase, results: ComponentBase[] = []): 
 }
 
 async function disposeContentBlocks(root: ComponentBase): Promise<any> {
+        if (liveContentBlocks.live === 0) return;
         const contentBlocks = findContentBlocks(root);
         return await Promise.all(contentBlocks.map(async (block) => {
                 block.motif.options.transition.skipNextLeave = root.motif.options.transition.skipNextLeave;
@@ -1995,7 +2070,7 @@ export function extractRefs(props: any, component?: ComponentBase): any[] {
                         runover.ref = component;
                 }
         }
-        return ([] as any[]).concat(...refs);
+        return refs.length === 0 ? refs : ([] as any[]).concat(...refs);
 }
 
 const LIFECYCLE_HANDLER_LISTS: Record<string, keyof LifecycleStorage> = {
@@ -2037,6 +2112,7 @@ export function ParseProps(props: any, component: ComponentBase): any {
                         Object.assign(component.motif.options.props, props);
                 }
                 var keys = Object.keys(props);
+                if (keys.length === 0) return;
                 keys.forEach(key => {
                         if (key == 'initializeComponent' || key == 'oninitializeComponent' || key.startsWith('on')) {
                                 if (collectLifecycleHandlers(component, key.toLowerCase(), props[key])) {
@@ -2159,9 +2235,11 @@ const PLAIN_ELEMENT_SKIP = new Set([
 
 export function applyPlainElementProps(props: any, component: ComponentBase): void {
         if (!props || typeof props !== 'object' || component.isDisposed) return;
-        const attrs: Record<string, any> = {};
-        const applied = appliedDomProps(component);
-        for (const key of Object.keys(props)) {
+        const keys = Object.keys(props);
+        if (keys.length === 0) return;
+        let attrs: Record<string, any> | null = null;
+        let applied: Map<string, any> | null = null;
+        for (const key of keys) {
                 if (PLAIN_ELEMENT_SKIP.has(key)) continue;
                 if (key.startsWith('x-') || key.startsWith('x:') || key.startsWith('__')) continue;
                 const v = props[key];
@@ -2171,7 +2249,7 @@ export function applyPlainElementProps(props: any, component: ComponentBase): vo
                         continue;
                 }
                 if (typeof v === 'function' && v.length > 0) continue;
-                applied.set(key, v);
+                (applied ??= appliedDomProps(component)).set(key, v);
                 if (key === 'class' || key === 'className') {
                         component.class.add(v && typeof v === 'object' && !Array.isArray(v) ? [v] : v);
                 } else if (key === 'style') {
@@ -2179,10 +2257,10 @@ export function applyPlainElementProps(props: any, component: ComponentBase): vo
                 } else if (key === 'value' || key === 'checked' || key === 'selected') {
                         component.bindings.add(key, v);
                 } else {
-                        attrs[key] = v;
+                        (attrs ??= {})[key] = v;
                 }
         }
-        if (Object.keys(attrs).length > 0) component.attr.add(attrs);
+        if (attrs) component.attr.add(attrs);
 }
 
 const _appliedDomProps = new WeakMap<ComponentBase, Map<string, any>>();
@@ -2200,17 +2278,17 @@ function isFallthroughKey(key: string): boolean {
 
 export function applyFallthroughProps(props: any, component: ComponentBase): void {
         if (!props || typeof props !== 'object' || component.isDisposed) return;
-        const applied = appliedDomProps(component);
-        const subset: Record<string, any> = {};
+        const applied = _appliedDomProps.get(component);
+        let subset: Record<string, any> | null = null;
         for (const key of Object.keys(props)) {
                 if (!isFallthroughKey(key)) continue;
                 const v = props[key];
                 if (v === undefined || v === null) continue;
                 if (typeof v === 'function' && v.length > 0) continue;
-                if (applied.has(key) && Object.is(applied.get(key), v)) continue;
-                subset[key] = v;
+                if (applied && applied.has(key) && Object.is(applied.get(key), v)) continue;
+                (subset ??= {})[key] = v;
         }
-        if (Object.keys(subset).length > 0) applyPlainElementProps(subset, component);
+        if (subset) applyPlainElementProps(subset, component);
 }
 
 const componentMethods: Record<string, unknown> = {

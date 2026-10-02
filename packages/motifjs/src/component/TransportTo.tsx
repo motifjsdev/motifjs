@@ -3,6 +3,7 @@ import { TransportRegistry, SLOT_REGISTERED_EVENT, SLOT_UNREGISTERED_EVENT } fro
 import { Transporter } from "./Transporter";
 import { ComponentBase } from "./componentBase";
 import { Application, EventArgs, Transport, Component } from "../";
+import { contentBlocks } from "./contentBlockRegistry";
 
 export class TransportTo extends Component<any, { name: string }> {
     private _onAddRef?: (c: ComponentBase) => void;
@@ -10,9 +11,11 @@ export class TransportTo extends Component<any, { name: string }> {
     private _slotRegisteredListener?: () => void;
     private _slotUnregisteredListener?: () => void;
     private _transported: ComponentBase[] = [];
+    private _countedLive = false;
     constructor(props: { name: string }) {
         super('div', props);
-
+        contentBlocks.live++;
+        this._countedLive = true;
     }
 
     private _handleSlotChange = (eventArgs: { name: string, slot: Transport }) => {
@@ -23,9 +26,17 @@ export class TransportTo extends Component<any, { name: string }> {
             }
             const all = [...(this.childs || []), ...this.controls.items];
             Transporter.transportMany(all, slot);
-            this._transported = all;
+            this._rememberTransported(all);
         }
     };
+
+    private _rememberTransported(children: ComponentBase[]) {
+        const kept = this._transported.filter(c => !c.isDisposed);
+        for (const child of children) {
+            if (!kept.includes(child)) kept.push(child);
+        }
+        this._transported = kept;
+    }
 
     private _clearChildrenFromSlot = (slot: ComponentBase) => {
         (this.childs || []).forEach(child => {
@@ -46,7 +57,7 @@ export class TransportTo extends Component<any, { name: string }> {
             }
             const all = [...(this.childs || []), ...this.controls.items];
             Transporter.transportMany(all, slot);
-            this._transported = all;
+            this._rememberTransported(all);
         }
 
         this._slotRegisteredListener = Application.main.on(SLOT_REGISTERED_EVENT, this._handleSlotChange as any);
@@ -60,6 +71,7 @@ export class TransportTo extends Component<any, { name: string }> {
             const currentSlot = TransportRegistry.getSlot(this.props.name);
             if (currentSlot) {
                 Transporter.transport(child, currentSlot);
+                this._rememberTransported([child]);
             }
         };
         this._onRemoveRef = (child: ComponentBase) => {
@@ -67,6 +79,7 @@ export class TransportTo extends Component<any, { name: string }> {
             if (currentSlot) {
                 currentSlot.controls.remove(child);
             }
+            this._transported = this._transported.filter(c => c !== child);
         };
         this.controls.onAdd = this._onAddRef;
         this.controls.onRemove = this._onRemoveRef;
@@ -75,12 +88,14 @@ export class TransportTo extends Component<any, { name: string }> {
     }
 
     public onDisposing(sender: ComponentBase, e: EventArgs): void {
+        if (this._countedLive) {
+            this._countedLive = false;
+            contentBlocks.live--;
+        }
         const currentSlot = TransportRegistry.getSlot(this.props.name);
-        if (currentSlot) {
-            (this._transported || []).forEach(child => {
-                currentSlot.controls.remove(child);
-                child.dispose();
-            });
+        for (const child of this._transported || []) {
+            currentSlot?.controls.remove(child);
+            child.dispose();
         }
 
         if (this._slotRegisteredListener) {

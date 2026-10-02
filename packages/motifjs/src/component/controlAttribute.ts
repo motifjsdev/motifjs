@@ -25,11 +25,13 @@ const PROPERTY_FIRST = new Set<string>(['checked', 'selected', 'muted', 'indeter
 
 export class controlAttribute<ElementType extends ElementTypes> implements IAttribute<ComponentBase<ElementType, any>> {
     private _parent: ComponentBase<ElementType, any>;
-    private _attrMap: Map<string | symbol, any> = new Map();
-    private _watchers: Map<string | symbol, { stop: () => void, binding?: IBaseBinding }> = new Map();
+    private _attrMapStore?: Map<string | symbol, any>;
+    private _watchersStore?: Map<string | symbol, { stop: () => void, binding?: IBaseBinding }>;
     constructor(parent: ComponentBase<ElementType, any>) {
         this._parent = parent;
     }
+    private get _attrMap(): Map<string | symbol, any> { return this._attrMapStore ??= new Map(); }
+    private get _watchers(): Map<string | symbol, { stop: () => void, binding?: IBaseBinding }> { return this._watchersStore ??= new Map(); }
 
     /** @deprecated Tek kaynak `_attrMap`; geriye dönük okuma için türetilmiş görünüm. */
     get attributes(): { name: string, value: any }[] {

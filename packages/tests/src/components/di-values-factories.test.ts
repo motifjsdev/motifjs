@@ -97,9 +97,10 @@ describe('router and registered route components', () => {
         await tick(200);
         unbind();
         consoleError.mockRestore();
+        const shownDep = (shown as any)?.dep;
         app.dispose();
         host.remove();
-        return { received, shown };
+        return { received, shown, shownDep };
     };
 
     test('a registered page that cannot be resolved fails the navigation instead of being built without DI', async () => {
@@ -135,13 +136,13 @@ describe('router and registered route components', () => {
         class Page extends Component {
             constructor(public dep: Dep) { super('section'); }
         }
-        const { shown } = await run((builder: any) => {
+        const { shown, shownDep } = await run((builder: any) => {
             builder.services.addSingleton(Dep, Dep);
             builder.services.addTransient(Page, { useClass: Page, deps: [Dep] });
         }, Page);
 
         expect(shown).toBeInstanceOf(Page);
-        expect(shown.dep).toBeInstanceOf(Dep);
+        expect(shownDep).toBeInstanceOf(Dep);
     });
 });
 
