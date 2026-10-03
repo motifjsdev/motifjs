@@ -7,6 +7,11 @@ import { Binding, BindingFormatInfo, IBaseBinding, IBindingCollection, ListBindi
 import { reportError } from "../common/diagnostics";
 import { lazyBindMethods } from "../common/lazyBind";
 
+function isWritablePathKey(target: object, key: string): boolean {
+    if (key === '__proto__') return false;
+    if (key === 'constructor' || key === 'prototype') return Object.prototype.hasOwnProperty.call(target, key);
+    return true;
+}
 
 export class BindingCollection implements IBindingCollection {
     private _items: IBaseBinding[] = [];
@@ -322,10 +327,15 @@ export class BindingCollection implements IBindingCollection {
 
                         const path = member.split('.');
                         let target: any = source;
-                        for (let i = 0; i < path.length - 1 && target != null; i++) {
-                            target = target[path[i]];
+                        for (let i = 0; i < path.length && target != null; i++) {
+                            const key = path[i];
+                            if (!isWritablePathKey(target, key)) return;
+                            if (i === path.length - 1) {
+                                target[key] = value;
+                            } else {
+                                target = target[key];
+                            }
                         }
-                        if (target != null) target[path[path.length - 1]] = value;
                     } else if (source != null && typeof source === 'object' && 'value' in source) {
 
                         source.value = value;
