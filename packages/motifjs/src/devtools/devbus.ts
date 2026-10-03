@@ -13,25 +13,33 @@ export function isDevLike(): boolean {
     return state.enabled || (globalThis as any).__MOTIF_DEV__ === true;
 }
 
-function detectEnabled(): boolean {
+export function isRequestedByFlag(): boolean {
     try {
         if (typeof window === 'undefined') return false;
         const w = window as any;
         if (w.__motif_DEVTOOLS === true) return true;
         if ((globalThis as any).__MOTIF_DEVTOOLS__ === true) return true;
         if ((globalThis as any).__MOTIF_DEVTOOLS_FLAG === true) return true;
-        const qs = (w.location && w.location.search) || '';
-        if (qs && /(?:[?&])devtools=1(?:&|$)/i.test(qs)) return true;
         return false;
     } catch { return false; }
 }
 
+function exposeBus(visible: boolean) {
+    try {
+        if (visible) (window as any).__motifDevBus = { on, emit, warn, getWarnings, isEnabled, setRoutes, getRoutes };
+        else delete (window as any).__motifDevBus;
+    } catch { }
+}
+
 export function ensureDevtoolsFlagInitialized() {
     if (state.enabled) return;
-    state.enabled = detectEnabled();
-    if (state.enabled) {
-        try { (window as any).__motifDevBus = { on, emit, warn, getWarnings, isEnabled, setRoutes, getRoutes }; } catch { }
-    }
+    state.enabled = isRequestedByFlag();
+    if (state.enabled) exposeBus(true);
+}
+
+export function setDevtoolsEnabled(enabled: boolean) {
+    state.enabled = enabled || isRequestedByFlag();
+    exposeBus(state.enabled);
 }
 
 export function isEnabled(): boolean { return state.enabled; }

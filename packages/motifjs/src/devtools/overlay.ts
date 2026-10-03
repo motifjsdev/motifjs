@@ -1,5 +1,5 @@
 import { Application, Component } from '..';
-import { getWarnings, on, ensureDevtoolsFlagInitialized, isEnabled, getRoutes } from './devbus';
+import { getWarnings, on, ensureDevtoolsFlagInitialized, isRequestedByFlag, getRoutes } from './devbus';
 import { lintRoutes } from './routeLinter';
 import { reportWarning } from '../common/diagnostics';
 let overlayHost: HTMLDivElement | null = null;
@@ -40,7 +40,7 @@ export function toggle(force?: boolean) {
 
 export function initOverlayIfEnabled() {
     ensureDevtoolsFlagInitialized();
-    if (!isEnabled()) return;
+    if (!isRequestedByFlag()) return;
     try {
         if (!overlayHost) {
             overlayHost = document.createElement('div');
@@ -55,8 +55,6 @@ export function initOverlayIfEnabled() {
                 } catch { }
             });
             on((ev) => { if (ev.type === 'warning' && visible) render(); });
-            const qs = location.search || '';
-            if (Application.main.isDevelopmentModeEnabled) toggle(true);
         }
     } catch { }
 }

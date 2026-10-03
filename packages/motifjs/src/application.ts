@@ -2,7 +2,7 @@ import { ServiceCollection } from "./dependencyInjection/ServiceCollection";
 import { ServiceProvider } from "./dependencyInjection/ServiceProvider";
 import { Component } from "./component/Component";
 import { RouteItem } from "./routing/RouteItem";
-import { ensureDevtoolsFlagInitialized, setRoutes, isEnabled as isDevtoolsEnabled } from "./devtools/devbus";
+import { ensureDevtoolsFlagInitialized, setRoutes, setDevtoolsEnabled, isEnabled as isDevtoolsEnabled } from "./devtools/devbus";
 import { lintRoutes } from "./devtools/routeLinter";
 import { initOverlayIfEnabled, initDevtoolsButton } from "./devtools/overlay";
 import { RouterView } from "./routing/RouterView";
@@ -420,6 +420,7 @@ export class Application {
         this._isDevelopment = isDev;
         errorHandler.setDevelopmentMode(isDev);
         safeCallSilent(() => { (globalThis as any).__MOTIF_DEV__ = isDev; }, 'Application.useDevelopment.flag');
+        safeCallSilent(() => { setDevtoolsEnabled(isDev); }, 'Application.useDevelopment.devtools');
         if (isDev) flushCompilerContractWarnings();
         return this;
     }
