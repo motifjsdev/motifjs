@@ -294,10 +294,8 @@ export default class Compiler {
                 },
                 function devOnlyStrip() {
                     let isDev = true;
-                    try {
-                        const flag = (0, eval)('typeof __MOTIF_DEV__ !== "undefined" ? __MOTIF_DEV__ : undefined');
-                        if (typeof flag === 'boolean') isDev = flag;
-                    } catch { /* ignore */ }
+                    const flag = (globalThis as any).__MOTIF_DEV__;
+                    if (typeof flag === 'boolean') isDev = flag;
                     if (typeof process !== 'undefined' && process?.env?.MOTIF_DEV === 'false') isDev = false;
                     const consumed = new WeakSet<object>();
                     const hasMarker = (node: any, pattern: RegExp) => {
