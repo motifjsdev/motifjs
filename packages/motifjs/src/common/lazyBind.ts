@@ -1,4 +1,6 @@
-const RAW_KEY = '[__raw__]';
+import { Flags } from "../store/common";
+
+const RAW_KEY = Flags.RAW;
 
 function isPrototypeObject(o: any): boolean {
     return Object.prototype.hasOwnProperty.call(o, 'constructor') && typeof o.constructor === 'function' && o.constructor.prototype === o;

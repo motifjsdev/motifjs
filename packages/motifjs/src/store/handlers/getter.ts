@@ -7,7 +7,7 @@ const ARRAY_MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 're
 const NOT_META = Symbol('')
 type MetaReader = (engine: ReactiveEngine, target: any, receiver: any) => unknown
 
-const metaReaders = new Map<string, MetaReader>([
+const metaReaders = new Map<symbol, MetaReader>([
     [Flags.IS_REACTIVE, () => true],
     [Flags.IS_READONLY, engine => engine.isReadonly],
     [Flags.IS_SUPERFICIAL, engine => engine.superficial],
@@ -16,7 +16,7 @@ const metaReaders = new Map<string, MetaReader>([
 ])
 
 function readMeta(engine: ReactiveEngine, target: any, key: unknown, receiver: any): unknown {
-    if (typeof key !== 'string' || key.charCodeAt(0) !== 91) return NOT_META
+    if (typeof key !== 'symbol') return NOT_META
     const reader = metaReaders.get(key)
     return reader === undefined ? NOT_META : reader(engine, target, receiver)
 }

@@ -1,14 +1,12 @@
 
 
-export const enum Flags {
-    SKIP = '[__skip__]',
-    IS_REACTIVE = '[__isReactive__]',
-    IS_READONLY = '[__isReadonly__]',
-    IS_SUPERFICIAL = '[__issuperficial__]',
-    RAW = '[__raw__]',
-    CONTEXT = 'context',
-    GET_SETUP = '[__get_setup__]'
-}
+export const Flags = {
+    IS_REACTIVE: Symbol.for('motif.isReactive'),
+    IS_READONLY: Symbol.for('motif.isReadonly'),
+    IS_SUPERFICIAL: Symbol.for('motif.isSuperficial'),
+    RAW: Symbol.for('motif.raw'),
+    GET_SETUP: Symbol.for('motif.getSetup'),
+} as const;
 
 export const enum TargetType {
     SYSTEM = 0,
