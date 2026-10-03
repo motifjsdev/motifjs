@@ -2293,6 +2293,25 @@ const PLAIN_ELEMENT_SKIP = new Set([
         'childs', 'initializeComponent', 'runover', 'transition', 'preconfig', 'nodes', 'onElementCreating'
 ]);
 
+const SPREAD_URL_ATTRIBUTES = new Set(['href', 'src', 'action', 'formaction', 'xlink:href']);
+const JAVASCRIPT_URL = /^[\u0000-\u001F ]*j[\r\n\t]*a[\r\n\t]*v[\r\n\t]*a[\r\n\t]*s[\r\n\t]*c[\r\n\t]*r[\r\n\t]*i[\r\n\t]*p[\r\n\t]*t[\r\n\t]*:/i;
+
+function isJavascriptUrl(value: unknown): boolean {
+        if (value === undefined || value === null || typeof value === 'boolean') return false;
+        try { return JAVASCRIPT_URL.test(String(value)); } catch { return false; }
+}
+
+function guardSpreadUrl(key: string, read: () => any): () => any {
+        return () => {
+                let value = read();
+                if (typeof value === 'function') value = value();
+                if (typeof value === 'function') value = value();
+                if (!isJavascriptUrl(value)) return value;
+                reportWarning('MJX125', [key]);
+                return null;
+        };
+}
+
 export function applyPlainElementProps(props: any, component: ComponentBase): void {
         if (!props || typeof props !== 'object' || component.isDisposed) return;
         const keys = Object.keys(props);
@@ -2302,13 +2321,25 @@ export function applyPlainElementProps(props: any, component: ComponentBase): vo
         for (const key of keys) {
                 if (PLAIN_ELEMENT_SKIP.has(key)) continue;
                 if (key.startsWith('x-') || key.startsWith('x:') || key.startsWith('__')) continue;
-                const v = props[key];
+                let v = props[key];
                 if (v === undefined) continue;
                 if (/^on/i.test(key)) {
                         if (typeof v === 'function') component.motif.on(key as any, v as any);
                         continue;
                 }
                 if (typeof v === 'function' && v.length > 0) continue;
+                if (key === 'innerHTML') {
+                        reportWarning('MJX124', []);
+                        continue;
+                }
+                if (SPREAD_URL_ATTRIBUTES.has(key.toLowerCase())) {
+                        if (typeof v === 'function') {
+                                v = guardSpreadUrl(key, v);
+                        } else if (isJavascriptUrl(v)) {
+                                reportWarning('MJX125', [key]);
+                                continue;
+                        }
+                }
                 (applied ??= appliedDomProps(component)).set(key, v);
                 if (key === 'class' || key === 'className') {
                         component.class.add(v && typeof v === 'object' && !Array.isArray(v) ? [v] : v);
