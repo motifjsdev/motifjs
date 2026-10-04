@@ -4,6 +4,7 @@ import { createGetter } from "./handlers/getter";
 import { createSetter } from "./handlers/setter";
 import { createDelete, createHas, createOwn } from "./handlers/orhers";
 import { ArrayMethods } from "./handlers/ArrayMethods";
+import { createCollectionHandler } from "./handlers/collections";
 import { LinkedList } from "../common/LinkedList";
 import { track, trigger } from "./reactivity-core";
 export const ReactiveEngineMapper = new WeakSet<ReactiveEngine>();
@@ -42,6 +43,7 @@ export class ReactiveEngine {
         deleteProperty: createDelete(this),
         ownKeys: createOwn(this)
     } as ProxyHandler<any>
+    collectionHandler = createCollectionHandler(this) as ProxyHandler<any>
     reactive<T>(model: T): UnwrapValueRefs<T> {
 
         var self = this;
@@ -49,7 +51,7 @@ export class ReactiveEngine {
             model = { value: model } as any;
         }
         const targetType = getTargetType(model);
-        if (targetType === TargetType.SYSTEM || targetType === TargetType.COLLECTION || TargetType.INVALID) {
+        if (targetType === TargetType.SYSTEM || TargetType.INVALID) {
             return model as any
         }
 
@@ -62,7 +64,11 @@ export class ReactiveEngine {
             return existingProxy as any
         }
         // if (targetType === TargetType.INVALID) {
-        if (Array.isArray(model)) {
+        if (targetType === TargetType.COLLECTION) {
+            var proxy = new Proxy(model, this.collectionHandler);
+            AllreactiveMap.set(model, proxy);
+            return proxy;
+        } else if (Array.isArray(model)) {
             var proxy = new Proxy(model, this.arrayHandler);
             // var original = Object.getPrototypeOf(proxy);
             // original["copy"] = () => { return model; }

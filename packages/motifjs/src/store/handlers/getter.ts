@@ -4,7 +4,7 @@ import { track } from "../reactivity-core"
 
 const ARRAY_MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 'reverse', 'sort'])
 
-const NOT_META = Symbol('')
+export const NOT_META = Symbol('')
 type MetaReader = (engine: ReactiveEngine, target: any, receiver: any) => unknown
 
 const metaReaders = new Map<symbol, MetaReader>([
@@ -15,7 +15,7 @@ const metaReaders = new Map<symbol, MetaReader>([
     [Flags.RAW, (engine, target, receiver) => engine.ReactiveMap().get(target) === receiver ? target : NOT_META],
 ])
 
-function readMeta(engine: ReactiveEngine, target: any, key: unknown, receiver: any): unknown {
+export function readMeta(engine: ReactiveEngine, target: any, key: unknown, receiver: any): unknown {
     if (typeof key !== 'symbol') return NOT_META
     const reader = metaReaders.get(key)
     return reader === undefined ? NOT_META : reader(engine, target, receiver)
