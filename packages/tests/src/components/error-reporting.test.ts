@@ -131,7 +131,7 @@ describe('custom events with a data object', () => {
         try {
             const c = new Component('div');
             const seen: string[] = [];
-            c.motif.on('saved' as any, () => { seen.push('plain'); return false; });
+            c.motif.on('saved' as any, () => { seen.push('plain'); return { cancel: true }; });
             c.motif.on('saved:prevent:stop' as any, () => { seen.push('mods'); });
             const root = mount(c);
             await c.motif.trigger('saved' as any, { id: 1 } as any);

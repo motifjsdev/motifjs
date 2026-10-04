@@ -1774,7 +1774,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         const stop = () => { if (typeof (ev as any)?.stopPropagation === 'function') ev.stopPropagation(); };
                         if (mods.includes("prevent")) { prevent(); }
                         if (mods.includes("stop")) { stop(); }
-                        if (res === false || (res && (res as any).cancel === true)) {
+                        if (res && (res as any).cancel === true) {
                                 prevent();
                                 stop();
                         }
