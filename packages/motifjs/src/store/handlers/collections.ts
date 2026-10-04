@@ -29,6 +29,14 @@ const collectionMethods: Record<string, Function> = {
         if (!existed || !Object.is(previous, value)) changed(target, key);
         return this;
     },
+    add(this: Set<any>, value: unknown) {
+        const target = getRaw(this);
+        if (!target.has(value)) {
+            target.add(value);
+            changed(target, value);
+        }
+        return this;
+    },
     delete(this: AnyCollection, key: unknown) {
         const target = getRaw(this);
         const removed = target.delete(key);
