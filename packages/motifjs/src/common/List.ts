@@ -46,10 +46,10 @@ export class List<T>{
     };
 
     public remove(item: T): T[] {
+        const index = this.__list.indexOf(item);
+        if (index === -1) return [];
         this._map.delete(item);
-        this.__list.splice(this.__list.indexOf(item), 1);
-        (item as any) = null
-        return [];
+        return this.__list.splice(index, 1);
     };
 
     public indexOf(item: T): number {
@@ -82,7 +82,7 @@ export class List<T>{
     }
 
     public ReverseClone(): Array<T> {
-        return this.__list.reverse();
+        return this.__list.slice().reverse();
     }
 
     public filter(callbackfn: (value: T, index: number, array: T[]) => boolean ): Array<T> {

@@ -24,8 +24,7 @@ export class Dictionary<KType, VType> {
     }
     public OnItemAdded!: (key: KType, value: VType) => any;
     public removeIndex(index: number): NameValuePair<KType, VType>[] {
-        var i = this.__values.removeIndex(index - 1);
-        return i;
+        return this.__values.removeIndex(index);
     };
     public remove(Key: KType) {
         var item = this.__values.filter(x => x.Key == Key);
