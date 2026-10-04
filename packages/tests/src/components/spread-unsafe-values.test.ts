@@ -32,8 +32,9 @@ function mount(child: any): { host: HTMLElement; root: Component } {
 
 const Anchor = () => evalJsx(`function A(p){ return <a {...p}>link</a>; }`, 'A');
 const Box = () => evalJsx(`function A(p){ return <div {...p} />; }`, 'A');
+const Frame = () => evalJsx(`function A(p){ return <iframe {...p} />; }`, 'A');
 
-describe('spread on a DOM tag: innerHTML and javascript: URLs', () => {
+describe('spread on a DOM tag: innerHTML, srcdoc and javascript: URLs', () => {
     let warn: jest.SpyInstance;
 
     beforeEach(() => {
@@ -67,6 +68,34 @@ describe('spread on a DOM tag: innerHTML and javascript: URLs', () => {
         state.html = '<i>y</i>';
         await tick();
         expect(el.innerHTML).toBe('');
+        await root.dispose();
+    });
+
+    test.each(['srcdoc', 'srcDoc', 'SRCDOC'])('%s in a spread object is not written', async (key) => {
+        const { host, root } = mount(Frame()({ [key]: '<script>parent.__pwned=1</script>', title: 'f' }));
+        const el = host.firstElementChild as HTMLIFrameElement;
+        expect(el.hasAttribute('srcdoc')).toBe(false);
+        expect(el.getAttribute('title')).toBe('f');
+        expect(warn.mock.calls.some(c => String(c[0]).includes('MJX124') && String(c[0]).includes(key))).toBe(true);
+        await root.dispose();
+    });
+
+    test('a srcdoc getter in a spread object is not written', async () => {
+        const state = reactive({ html: '<b>x</b>' });
+        const { host, root } = mount(Frame()({ srcdoc: () => state.html }));
+        const el = host.firstElementChild as HTMLIFrameElement;
+        expect(el.hasAttribute('srcdoc')).toBe(false);
+        state.html = '<i>y</i>';
+        await tick();
+        expect(el.hasAttribute('srcdoc')).toBe(false);
+        await root.dispose();
+    });
+
+    test('srcdoc written on the tag is kept', async () => {
+        const F = evalJsx(`function F(){ return <iframe srcdoc="<p>ok</p>" />; }`, 'F');
+        const { host, root } = mount(F());
+        expect(host.firstElementChild!.getAttribute('srcdoc')).toBe('<p>ok</p>');
+        expect(warned('MJX124')).toBe(false);
         await root.dispose();
     });
 

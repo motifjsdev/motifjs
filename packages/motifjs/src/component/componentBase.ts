@@ -2301,6 +2301,7 @@ const PLAIN_ELEMENT_SKIP = new Set([
         'childs', 'initializeComponent', 'runover', 'transition', 'preconfig', 'nodes', 'onElementCreating'
 ]);
 
+const SPREAD_HTML_KEYS = new Set(['innerhtml', 'srcdoc']);
 const SPREAD_URL_ATTRIBUTES = new Set(['href', 'src', 'action', 'formaction', 'xlink:href']);
 const JAVASCRIPT_URL = /^[\u0000-\u001F ]*j[\r\n\t]*a[\r\n\t]*v[\r\n\t]*a[\r\n\t]*s[\r\n\t]*c[\r\n\t]*r[\r\n\t]*i[\r\n\t]*p[\r\n\t]*t[\r\n\t]*:/i;
 
@@ -2336,11 +2337,12 @@ export function applyPlainElementProps(props: any, component: ComponentBase): vo
                         continue;
                 }
                 if (typeof v === 'function' && v.length > 0) continue;
-                if (key === 'innerHTML') {
-                        reportWarning('MJX124', []);
+                const lowerKey = key.toLowerCase();
+                if (SPREAD_HTML_KEYS.has(lowerKey)) {
+                        reportWarning('MJX124', [key]);
                         continue;
                 }
-                if (SPREAD_URL_ATTRIBUTES.has(key.toLowerCase())) {
+                if (SPREAD_URL_ATTRIBUTES.has(lowerKey)) {
                         if (typeof v === 'function') {
                                 v = guardSpreadUrl(key, v);
                         } else if (isJavascriptUrl(v)) {

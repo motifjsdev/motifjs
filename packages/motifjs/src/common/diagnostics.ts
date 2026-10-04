@@ -25,7 +25,7 @@ export const motifMessages = {
     MJX121: (compiled: number, runtime: number) => `This code was compiled for compiler contract ${compiled}, but the @motifx/core runtime implements contract ${runtime}. Install matching versions of @motifx/compiler and @motifx/core, and rebuild packages that ship compiled JSX.`,
     MJX122: (hook: string) => `The component ${hook} hook threw.`,
     MJX123: (event: string) => `The '${event}' event handler threw.`,
-    MJX124: () => `A spread object on a DOM tag cannot set innerHTML; the key was ignored. Use x-html for trusted HTML.`,
+    MJX124: (key: string) => `A spread object on a DOM tag cannot set ${key}; the key was ignored. Write it on the tag, or use x-html, for HTML you trust.`,
     MJX125: (key: string) => `A spread object on a DOM tag cannot set a javascript: URL on '${key}'; the value was ignored. Write the attribute on the tag if it is intended.`,
     MJX126: () => `Lazy: loading the component failed and no Fallbackview is set; the host was cleared.`,
 
