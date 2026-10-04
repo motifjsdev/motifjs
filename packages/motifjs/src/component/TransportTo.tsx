@@ -68,6 +68,7 @@ export class TransportTo extends Component<any, { name: string }> {
         });;
 
         this._onAddRef = (child: ComponentBase) => {
+            this.motif.trigger('controladded', { control: child });
             const currentSlot = TransportRegistry.getSlot(this.props.name);
             if (currentSlot) {
                 Transporter.transport(child, currentSlot);

@@ -21,20 +21,16 @@ export class ContentBlock extends Component<any, ContentBlockProps> {
         // } else {
         //         var cb = ContentBodyCollectionHandable.get(props.target);
         //         if (cb) {
-        this.controls.onAdd = (control) => {
+        const forward = (control: ComponentBase) => {
+            this.motif.trigger('controladded', { control });
             var cb = ContentBodyCollectionHandable.get(this.props.target);
             if (cb) {
                 control.motif.options["ownerContentBlock"] = this;
                 cb.controls.add(control);
             }
         };
-        this.controls.onAddBeforeBuild = (control) => {
-            var cb = ContentBodyCollectionHandable.get(this.props.target);
-            if (cb) {
-                control.motif.options["ownerContentBlock"] = this;
-                cb.controls.add(control);
-            }
-        };
+        this.controls.onAdd = forward;
+        this.controls.onAddBeforeBuild = forward;
         if (this.childs) {
             this.controls.add(...this.childs);
         }
@@ -85,7 +81,8 @@ export class ContentBody extends Component<any, ContentBodyProps> {
         this.context.fire(changeBodyCollectionHandler);
     }
     ondisposing(sender: Component<any, ContentBodyProps>) {
-
-        ContentBodyCollectionHandable.delete(this.props.name);
+        if (ContentBodyCollectionHandable.get(this.props.name) === this) {
+            ContentBodyCollectionHandable.delete(this.props.name);
+        }
     }
 }
