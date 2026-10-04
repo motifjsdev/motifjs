@@ -89,7 +89,7 @@ describe('reactive Map', () => {
         expect(raw.get('c')).toBe(3);
     });
 
-    it('still supports the methods it does not track yet', () => {
+    it('returns the same results as a plain Map from forEach, entries and spread', () => {
         const s = reactive({ map: new Map([['a', 1], ['b', 2]]) });
         const keys: string[] = [];
         s.map.forEach((_v, k) => keys.push(k));

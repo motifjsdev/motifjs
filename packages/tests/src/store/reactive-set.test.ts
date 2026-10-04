@@ -75,7 +75,7 @@ describe('reactive Set', () => {
         expect(seen).toEqual([false, true, false]);
     });
 
-    it('still supports the methods it does not track yet', () => {
+    it('returns the same results as a plain Set from forEach, spread and values', () => {
         const s = reactive({ tags: new Set(['a', 'b']) });
         const out: string[] = [];
         s.tags.forEach(v => out.push(v));
