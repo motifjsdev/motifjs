@@ -14,12 +14,6 @@ export const makeHtmlAttr = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttribut
     } else if (t.isBooleanLiteral(value)) {
         return t.objectProperty(t.stringLiteral(name), value || t.booleanLiteral(true));
     } else if (t.isArrowFunctionExpression(value) && value !== null) {
-        var el;
-        if (t.isBlockStatement(value.body)) {
-            el = t.functionExpression(null, value.params, value.body);
-        } else {
-            el = t.functionExpression(null, value.params, t.blockStatement([t.returnStatement(value.body)]));
-        }
         return t.objectProperty(t.stringLiteral(name), value);
     } else if (t.isFunctionExpression(value)) {
         return t.objectProperty(t.stringLiteral(name), value);
@@ -269,62 +263,9 @@ export const makeHtmlEvents = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttrib
     path: NodePath<t.JSXElement>
 ): t.CallExpression | null => {
     if (!t.isStringLiteral(value) && !t.isBooleanLiteral(value) && value !== null) {
-        if (t.isArrowFunctionExpression(value)) {
-            var el;
-            if (t.isBlockStatement(value.body)) {
-                el = t.arrowFunctionExpression(value.params, value.body);
-            } else {
-                el = t.arrowFunctionExpression(value.params, t.blockStatement([t.returnStatement(value.body)]));
-            }
+        if (t.isExpression(value)) {
             var evName = name.toLowerCase().replace("on", '').replace('doubleclick', 'dblclick');
-
-            return t.callExpression(t.identifier("sender.motif.on"), [t.stringLiteral(evName), el]);
-        } else if (t.isFunctionExpression(value)) {
-            var el;
-            if (t.isBlockStatement(value.body)) {
-                el = t.functionExpression(null, value.params, value.body);
-            } else {
-                el = t.functionExpression(null, value.params, t.blockStatement([t.returnStatement(value.body)]));
-            }
-            var evName = name.toLowerCase().replace("on", '').replace('doubleclick', 'dblclick');
-
-            return t.callExpression(t.identifier("sender.motif.on"), [t.stringLiteral(evName), el]);
-        }
-        else {
-            if (t.isExpression(value)) {
-                var evName = name.toLowerCase().replace("on", '').replace('doubleclick', 'dblclick');
-                return t.callExpression(t.identifier("sender.motif.on"), [t.stringLiteral(evName), value]);
-            }
-
-        }
-    } else {
-        fail('MJX009', `Event handler "${name}" must be a function; string and boolean values are not allowed.`, prop);
-    }
-    return null;
-}
-
-export const makeGlobalEvents = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>,
-    name: string,
-    value: t.Expression | t.ObjectMethod,
-    path: NodePath<t.JSXElement>
-): t.CallExpression | null => {
-    if (!t.isStringLiteral(value) && !t.isBooleanLiteral(value) && value !== null) {
-        if (t.isArrowFunctionExpression(value)) {
-            var el;
-            if (t.isBlockStatement(value.body)) {
-                el = t.functionExpression(null, value.params, value.body);
-            } else {
-                el = t.functionExpression(null, value.params, t.blockStatement([t.returnStatement(value.body)]));
-            }
-            var evName = name.toLowerCase().replace("on-", '').replace('on:', '').replace('on_', '');
-
-            return t.callExpression(t.identifier("sender.motif.on"), [t.stringLiteral(evName), el]);
-        } else {
-            if (t.isExpression(value)) {
-                var evName = name.toLowerCase().replace("on", '').replace('doubleclick', 'dblclick');
-                return t.callExpression(t.identifier("sender.motif.on"), [t.stringLiteral(evName), value]);
-            }
-
+            return t.callExpression(t.identifier("sender.motif.on"), [t.stringLiteral(evName), value]);
         }
     } else {
         fail('MJX009', `Event handler "${name}" must be a function; string and boolean values are not allowed.`, prop);

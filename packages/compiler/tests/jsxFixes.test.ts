@@ -128,6 +128,30 @@ describe('on:x / on-x / on_x işleyicisi doğrudan motif.on\'a geçer', () => {
     });
 });
 
+describe('DOM olay işleyicisi olduğu gibi motif.on\'a geçer', () => {
+    test.each([
+        ['düz etiket', `function A(){ return <button onclick={async () => { await x(); }} />; }`, 'sender.motif.on("click", async () => {'],
+        ['ifade gövdesi', `function A(){ return <button onclick={async () => await x()} />; }`, 'sender.motif.on("click", async () => await x())'],
+        ['iki parametre', `function A(){ return <button onclick={async (s, e) => { await x(e); }} />; }`, 'sender.motif.on("click", async (s, e) => {'],
+        ['function ifadesi', `function A(){ return <button onclick={async function(){ await x(); }} />; }`, 'sender.motif.on("click", async function () {'],
+        ['değiştirici', `function A(){ return <button onclick:once={async () => { await x(); }} />; }`, 'sender.motif.on("click:once", async () => {'],
+        ['bileşen etiketi', `function A(){ return <Btn onclick={async () => { await x(); }} />; }`, 'sender.motif.on("click", async () => {'],
+        ['sınıf view()', `class B { view(){ return <button onclick={async () => { await this.x(); }} />; } }`, 'sender.motif.on("click", async () => {'],
+    ])('async korunur: %s', (_, code, expected) => {
+        expect(compile(code)).toContain(expected);
+    });
+
+    test('isimli function ifadesi adını korur', () => {
+        const out = compile(`function A(){ return <button onclick={function handle(){ handle.n = 1; }} />; }`);
+        expect(out).toContain('sender.motif.on("click", function handle() {');
+    });
+
+    test('x-ref async işleyicisi async kalır', () => {
+        const out = compile(`function A(){ return <div x-ref={async (s) => { await load(s); }} />; }`);
+        expect(out).toMatch(/ref:\s*async s => \{/);
+    });
+});
+
 describe('bileşen etiketinde ref atama biçimi', () => {
     test('ref={this.x} bileşen etiketinde atamaya iner', () => {
         const out = compile(`class A { box: any; view(){ return <Box ref={this.box} />; } }`);

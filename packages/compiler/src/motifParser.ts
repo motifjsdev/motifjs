@@ -352,7 +352,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
             }
             refEntries.push({ prop, lowered: t.arrowFunctionExpression([t.identifier('sender')], t.blockStatement(body)) });
         } else if (t.isFunctionExpression(value) || t.isArrowFunctionExpression(value)) {
-            refEntries.push({ prop, lowered: t.arrowFunctionExpression(value.params, value.body) });
+            refEntries.push({ prop, lowered: t.arrowFunctionExpression(value.params, value.body, value.async) });
         } else if (t.isExpression(value)) {
             var cx = t.expressionStatement(value);
             refEntries.push({ prop, lowered: t.arrowFunctionExpression([t.identifier('sender')], t.blockStatement([cx])) });
