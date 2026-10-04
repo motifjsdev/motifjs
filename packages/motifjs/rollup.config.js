@@ -137,7 +137,7 @@ var nodeOutput = function (format, ext) {
         entryFileNames: '[name].' + ext,
         chunkFileNames: 'chunks/core-[hash].' + ext,
         sourcemap: true,
-        sourcemapExcludeSources: true
+        sourcemapExcludeSources: false
     };
 };
 
@@ -147,7 +147,7 @@ var browserOutput = function (file, format, minify) {
         file: './dist/' + file,
         format: format,
         sourcemap: true,
-        sourcemapExcludeSources: true,
+        sourcemapExcludeSources: false,
         plugins: minify ? [terser()] : []
     };
 };
@@ -183,13 +183,13 @@ export default [
                 file: './dist/jsx-runtime.esm.js',
                 format: "esm",
                 sourcemap: true,
-                sourcemapExcludeSources: true
+                sourcemapExcludeSources: false
             },
             {
                 file: './dist/jsx-runtime.cjs',
                 format: "cjs",
                 sourcemap: true,
-                sourcemapExcludeSources: true
+                sourcemapExcludeSources: false
             }
         ],
         plugins: plugins('bundle-stats-runtime.html'),

@@ -36,13 +36,13 @@ export default [
                 format: "cjs",
                 exports: "named",
                 sourcemap: true,
-                sourcemapExcludeSources: true,
+                sourcemapExcludeSources: false,
             }, {
                 name: name,
                 file: dist("esm.js"),
                 format: "esm",
                 sourcemap: true,
-                sourcemapExcludeSources: true,
+                sourcemapExcludeSources: false,
             }
         ],
         experimentalCodeSplitting: true,
