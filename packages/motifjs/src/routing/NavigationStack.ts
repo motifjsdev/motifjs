@@ -1,5 +1,5 @@
 import { ComponentBase, notifyDeactivated } from "../";
-import { disposeNavigationTarget } from "../component/navigation";
+import { disposeNavigationTarget, hasOwnTransition } from "../component/navigation";
 import { reportError } from "../common/diagnostics";
 import type { NavigationDirection, RouteItem, StackEntryInfo, StackOptions, StackTransitionContext } from "./";
 
@@ -55,12 +55,7 @@ const EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 
 const isElement = (node: any): node is HTMLElement => !!node && node.nodeType === 1 && !!node.style;
 
-export function hasOwnTransition(component: ComponentBase | null | undefined, phase: 'enter' | 'leave'): boolean {
-    const options: any = component?.motif?.options;
-    if (!options) return false;
-    const transition = options.transition;
-    return !!((phase === 'enter' ? options.transitionIn : options.transitionOut) || (transition && (transition.classes || (transition.name && transition.name.length > 0))));
-}
+export { hasOwnTransition };
 
 export function markDirection(component: ComponentBase | null | undefined, direction: NavigationDirection): void {
     const el = component?.element as any;
@@ -395,7 +390,7 @@ export class NavigationStack {
     public async disposeEntry(entry: RetainedEntry): Promise<void> {
         const top = entry.top;
         if (!top || top.isDisposed) return;
-        try { await disposeNavigationTarget(top); } catch (error) { reportError('MJX307', error); }
+        try { await disposeNavigationTarget(top, { deep: true, skipLeaveTransition: true }); } catch (error) { reportError('MJX307', error); }
     }
 
     public async dispose(): Promise<void> {

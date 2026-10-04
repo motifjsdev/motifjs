@@ -1,4 +1,4 @@
-import { ComponentBase } from "./componentBase";
+import { ComponentBase, IDisposeOptions } from "./componentBase";
 import { resolveComponent } from "./resolveComponent";
 import { Lazy } from "./Lazy";
 import { reportError } from "../common/diagnostics";
@@ -11,6 +11,19 @@ export interface NavigationHost extends ComponentBase {
     _navLock: Promise<void>;
     _navAbort?: AbortController;
     _navPending?: number;
+}
+
+export function hasOwnTransition(component: ComponentBase | null | undefined, phase: 'enter' | 'leave'): boolean {
+    const options: any = component?.motif?.options;
+    if (!options) return false;
+    const transition = options.transition;
+    return !!((phase === 'enter' ? options.transitionIn : options.transitionOut) || (transition && (transition.classes || (transition.name && transition.name.length > 0))));
+}
+
+function playsLeave(target: ComponentBase | ComponentBase[] | null): boolean {
+    if (!target) return false;
+    if (Array.isArray(target)) return target.some(t => !!t && !t.isDisposed && hasOwnTransition(t, 'leave'));
+    return !target.isDisposed && hasOwnTransition(target, 'leave');
 }
 
 export function cancelAnimationsDeep(target: any): void {
@@ -42,24 +55,17 @@ export function cancelAnimationsDeep(target: any): void {
     } catch { }
 }
 
-export async function disposeNavigationTarget(target: ComponentBase | ComponentBase[] | null): Promise<void> {
+export async function disposeNavigationTarget(target: ComponentBase | ComponentBase[] | null, options: IDisposeOptions = { deep: true }): Promise<void> {
     if (!target) return;
-
-    if (Array.isArray(target)) {
-        for (const xr of target) {
-            try {
-                if (xr && !xr.isDisposed) {
-                    await xr.dispose({ deep: true, skipLeaveTransition: true });
-                }
-            } catch (err) {
-                reportError('MJX115', err);
-            }
+    const list = Array.isArray(target) ? target : [target];
+    await Promise.all(list.map(async (xr) => {
+        if (!xr || xr.isDisposed) return;
+        try {
+            await xr.dispose(options);
+        } catch (err) {
+            reportError('MJX115', err);
         }
-    } else {
-        if (!target.isDisposed) {
-            await target.dispose({ deep: true, skipLeaveTransition: true });
-        }
-    }
+    }));
 }
 
 export async function navigateHost(host: NavigationHost, page: ComponentBase | ComponentBase[], keepOldControl: boolean = false): Promise<void> {
@@ -110,7 +116,13 @@ export async function navigateHost(host: NavigationHost, page: ComponentBase | C
             if (oldPage && !keepOldControl) {
                 cancelAnimationsDeep(oldPage);
                 cancelAnimationsDeep(host);
-                try { await disposeNavigationTarget(oldPage); } catch { }
+                const animated = playsLeave(oldPage);
+                const leaving = disposeNavigationTarget(oldPage);
+                if (animated) {
+                    leaving.catch(() => { });
+                } else {
+                    await leaving;
+                }
             }
 
             try {

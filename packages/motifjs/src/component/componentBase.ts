@@ -39,7 +39,15 @@ function clearNavDirection(c: any): void {
 }
 
 function enterModeOf(container: any): TransitionMode {
-        return peekTransition(container)?.mode ?? transitionSettings.mode;
+        let c = container;
+        while (c) {
+                const mode = peekTransition(c)?.mode;
+                if (mode) return mode;
+                const node = c.element as Node | null;
+                if (!node || node.nodeType !== Node.COMMENT_NODE) break;
+                c = c.parent ?? c._base?._leaveContainer;
+        }
+        return transitionSettings.mode;
 }
 
 function leaveModeOf(c: any): TransitionMode {

@@ -1,6 +1,6 @@
 import { dom } from "../core";
 import { Component } from "../";
-import { ComponentBase } from "../";
+import { ComponentBase, IDisposeOptions } from "../";
 import { Lazy, LazyOptions } from "../";
 import { disposeNavigationTarget, navigateHost } from "./navigation";
 
@@ -17,9 +17,9 @@ export class Frame extends Component {
             this.controls.add(props.childs);
         }
     }
-    public async dispose() {
-        await disposeNavigationTarget(this.current);
-        await super.dispose();
+    public async dispose(options: IDisposeOptions = { deep: true }) {
+        await disposeNavigationTarget(this.current, options);
+        await super.dispose(options);
     }
     public async flush() {
         await disposeNavigationTarget(this.current);
