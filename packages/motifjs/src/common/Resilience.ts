@@ -2,13 +2,21 @@ import { MotifError, formatMotifMessage, motifError } from "./diagnostics";
 
 type AsyncOrSync<T> = Promise<T> | T;
 
-interface Context {
+export interface ResilienceContext {
     [key: string]: any;
 }
 
-type Action<T> = (ctx?: Context) => AsyncOrSync<T>;
+type Context = ResilienceContext;
+
+export type ResilienceAction<T> = (ctx?: ResilienceContext) => AsyncOrSync<T>;
+
+type Action<T> = ResilienceAction<T>;
 
 type ShouldHandlePredicate = (err: any) => boolean;
+
+export interface ResiliencePolicy {
+    execute<T>(action: ResilienceAction<T>, ctx?: ResilienceContext): Promise<T>;
+}
 
 function isTimeoutError(err: any) {
     return err && err.name === 'TimeoutError';
@@ -31,12 +39,12 @@ function addJitter(base: number, jitterFactor = 0.1) {
 }
 
 
-abstract class Policy {
+abstract class Policy implements ResiliencePolicy {
     abstract execute<T>(action: Action<T>, ctx?: Context): Promise<T>;
 }
 
 
-interface RetryOptions {
+export interface RetryOptions {
     retries?: number;
     backoff?: 'fixed' | 'exponential' | 'none';
     delay?: number;
@@ -90,7 +98,7 @@ class RetryPolicy extends Policy {
 }
 
 
-interface TimeoutOptions {
+export interface TimeoutOptions {
     timeoutMs: number;
 }
 
@@ -118,9 +126,9 @@ class TimeoutPolicy extends Policy {
 }
 
 
-type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
-interface CircuitBreakerOptions {
+export interface CircuitBreakerOptions {
     failureThreshold?: number;
     successThreshold?: number;
     durationOfBreakMs?: number;
@@ -193,7 +201,7 @@ class CircuitBreakerPolicy extends Policy {
 }
 
 
-interface BulkheadOptions {
+export interface BulkheadOptions {
     maxConcurrent?: number;
     maxQueue?: number;
 }
@@ -239,7 +247,7 @@ class BulkheadPolicy extends Policy {
 }
 
 
-interface RateLimiterOptions {
+export interface RateLimiterOptions {
     tokensPerInterval?: number;
     intervalMs?: number;
     capacity?: number;
@@ -256,7 +264,7 @@ class RateLimiterPolicy extends Policy {
         super();
         this.tokensPerInterval = opts.tokensPerInterval ?? 1;
         this.intervalMs = opts.intervalMs ?? 1000;
-        this.capacity = opts.capacity ?? 1000;
+        this.capacity = opts.capacity ?? this.tokensPerInterval;
         this.tokens = this.capacity;
         this.lastRefill = Date.now();
     }
@@ -283,7 +291,7 @@ class RateLimiterPolicy extends Policy {
 }
 
 
-interface FallbackOptions<T> {
+export interface FallbackOptions<T> {
     fallback: (err: any, ctx?: Context) => AsyncOrSync<T>;
     shouldHandle?: ShouldHandlePredicate;
 }
@@ -339,15 +347,15 @@ const resilience = {
 };
 
 
-export function decorate<T>(policy: Policy, fn: Action<T>) {
-    return (ctx?: Context) => policy.execute(fn, ctx);
+export function decorate<T>(policy: ResiliencePolicy, fn: ResilienceAction<T>) {
+    return (ctx?: ResilienceContext) => policy.execute(fn, ctx);
 }
 
-export class Resilience {
+export class Resilience implements ResiliencePolicy {
     static get create(): Resilience {
         return new Resilience();
     }
-    private resiliences: any[] = [];
+    private resiliences: Policy[] = [];
     retry = (opts?: RetryOptions): Resilience => {
         this.resiliences.push(resilience.retry(opts));
         return this;
