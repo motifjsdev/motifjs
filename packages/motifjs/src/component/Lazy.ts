@@ -1,7 +1,6 @@
 import { ComponentBase, IBaseProp } from ".";
-import { Component } from "./Component";
+import { Component, resolveToComponent } from "./Component";
 import { Frame } from "./Frame";
-import { resolveComponent } from "./resolveComponent";
 import { disposableCore } from "../disposable";
 import { motifError, reportError } from "../common/diagnostics";
 
@@ -59,7 +58,7 @@ export function Lazy(props: any): Component {
     try { frame.motif.register(disposableCore.toDisposable(() => clearAllTimers())); } catch { }
     const initial = opts.Placeholderview ?? opts.Loaderview;
     if (initial != null) {
-        frame.navigate(resolveComponent(initial));
+        frame.navigate(resolveToComponent(initial));
     }
 
     const attemptLoad = () => {
@@ -159,7 +158,7 @@ export function Lazy(props: any): Component {
             if (remaining > 0) {
                 const id = trackTimer(setTimeout(() => {
                     if (!opts.signal?.aborted) {
-                        frame.navigate(resolveComponent(target));
+                        frame.navigate(resolveToComponent(target));
                     }
                 }, remaining));
                 if (opts.signal) {
@@ -167,14 +166,14 @@ export function Lazy(props: any): Component {
                     try { opts.signal.addEventListener("abort", onAbortClearDelay, { once: true }); } catch { }
                 }
             } else {
-                frame.navigate(resolveComponent(target));
+                frame.navigate(resolveToComponent(target));
             }
         })
         .catch((err: any) => {
             try { opts.onError?.(err); } catch { /* swallow */ }
             if (opts.signal?.aborted) return;
             if (opts.Fallbackview != null) {
-                frame.navigate(resolveComponent(opts.Fallbackview));
+                frame.navigate(resolveToComponent(opts.Fallbackview));
             } else {
                 reportError('MJX126', err);
                 try { frame.motif.clear().catch(() => { }); } catch { }

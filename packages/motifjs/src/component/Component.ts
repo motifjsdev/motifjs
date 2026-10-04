@@ -248,6 +248,14 @@ export function motifComponent(element: unknown, props?: any) {
     return new Component(element, props);
 }
 
+export function resolveToComponent(input: unknown, props?: any): any {
+    const resolved = resolveComponent(input, props);
+    if (typeof resolved == "object" && resolved !== null && !(resolved instanceof ComponentBase) && 'el' in resolved) {
+        return materializeOptionsObject(resolved, undefined);
+    }
+    return resolved;
+}
+
 function materializeOptionsObject(spec: any, props: any): any {
     const result: any = motifComponent(spec.el, props);
     Object.getOwnPropertyNames(spec).forEach(key => {

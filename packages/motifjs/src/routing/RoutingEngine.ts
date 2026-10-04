@@ -1,4 +1,4 @@
-import { Component, ComponentBase, resolveComponent, notifyActivated, notifyDeactivated } from "../";
+import { Component, ComponentBase, resolveToComponent, notifyActivated, notifyDeactivated } from "../";
 import { cancelAnimationsDeep } from "../component/navigation";
 import { errorHandler } from "../common/ErrorHandler";
 import { callReported, reportError, reportWarning } from "../common/diagnostics";
@@ -490,9 +490,9 @@ export class RoutingEngine {
         }
 
         if (typeof val === 'function') {
-            return this.parseControl(this._construct(scope, route, () => resolveComponent(val, this.application)), scope, route);
+            return this.parseControl(this._construct(scope, route, () => resolveToComponent(val, this.application)), scope, route);
         }
-        return val;
+        return resolveToComponent(val);
     }
 
     private _resolveFrom(scope: ServiceProvider | undefined, token: any): any {
