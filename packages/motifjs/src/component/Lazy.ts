@@ -3,8 +3,7 @@ import { Component } from "./Component";
 import { Frame } from "./Frame";
 import { resolveComponent } from "./resolveComponent";
 import { disposableCore } from "../disposable";
-import { errorHandler } from "../common/ErrorHandler";
-import { motifError } from "../common/diagnostics";
+import { motifError, reportError } from "../common/diagnostics";
 
 export interface LazyOptions<T = any> { 
     Loaderview?: ComponentBase; 
@@ -177,7 +176,7 @@ export function Lazy(props: any): Component {
             if (opts.Fallbackview != null) {
                 frame.navigate(resolveComponent(opts.Fallbackview));
             } else {
-                errorHandler.reportSuppressed('Lazy.load (no Fallbackview)', err);
+                reportError('MJX126', err);
                 try { frame.motif.clear().catch(() => { }); } catch { }
             }
         });

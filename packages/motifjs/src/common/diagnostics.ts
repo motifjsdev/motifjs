@@ -27,6 +27,7 @@ export const motifMessages = {
     MJX123: (event: string) => `The '${event}' event handler threw.`,
     MJX124: () => `A spread object on a DOM tag cannot set innerHTML; the key was ignored. Use x-html for trusted HTML.`,
     MJX125: (key: string) => `A spread object on a DOM tag cannot set a javascript: URL on '${key}'; the value was ignored. Write the attribute on the tag if it is intended.`,
+    MJX126: () => `Lazy: loading the component failed and no Fallbackview is set; the host was cleared.`,
 
     MJX201: () => `ListBinding: renderFn must return a component instance, a component class, or a factory function.`,
     MJX202: (key: unknown, index: number) => `ListBinding: duplicate key "${String(key)}" at index ${index}. Rows are matched by the item object, not by key, so rendering is not affected; keep keys unique so they identify items.`,
