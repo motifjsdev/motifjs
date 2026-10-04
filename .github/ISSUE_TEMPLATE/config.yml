@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/motifjsdev/motifjs/discussions
+    about: Ask how to do something or share an idea before opening an issue.
+  - name: Security report
+    url: https://github.com/motifjsdev/motifjs/security/advisories/new
+    about: Report a vulnerability privately.

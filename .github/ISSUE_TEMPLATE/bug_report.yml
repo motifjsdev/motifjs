@@ -1,0 +1,53 @@
+name: Bug report
+description: Something does not work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please check the existing issues first. Security problems go through private reporting, see SECURITY.md.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: A short description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: The smallest component or snippet that shows the problem. A link to a small repository also works.
+      render: tsx
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: core-version
+    attributes:
+      label: "@motifx/core version"
+      placeholder: "1.1.0"
+    validations:
+      required: true
+  - type: input
+    id: compiler-version
+    attributes:
+      label: "@motifx/compiler version"
+      placeholder: "1.1.0"
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, bundler and operating system.
+      placeholder: "Chrome 130, Vite 6, Windows 11"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output
+      description: Any MJX warnings or errors from the console.
+      render: text
