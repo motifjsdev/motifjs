@@ -92,7 +92,16 @@ type motifEventsFor<TElement> = {
     : MotifDomEventHandler<Event>;
 };
 export type MotifDomEventProps = motifEventsFor<HTMLElement>;
-type MotifManagedProps<P> = 0 extends (1 & P) ? IBaseProp<{}> : Exclude<P, string | Node | undefined>;
+type MotifTagProps = MotifDomEventProps & {
+    class?: MotifClass;
+    className?: MotifClass;
+    style?: MotifStyle;
+    id?: MotifBindable<string>;
+    tabindex?: MotifBindable<number | string>;
+    role?: MotifBindable<string>;
+};
+type WithTagProps<T> = T & Omit<MotifTagProps, keyof T>;
+type MotifManagedProps<P> = 0 extends (1 & P) ? IBaseProp<{}> : WithTagProps<Exclude<P, string | Node | undefined>>;
 
 // Transform DOM attributes so that non-event, non-method, non-style/class/value props accept either the value or a function returning it
 type MotifElementProps<TElement> = {
