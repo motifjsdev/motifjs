@@ -15,6 +15,7 @@ import { contentBlocks as liveContentBlocks } from "./contentBlockRegistry";
 import { OPTIONS_OWNER, TRANSITION_SLOT } from "./optionsSlots";
 import { deferUntilEntered, isTransitionMode, pendingLeaves, trackEnter, trackLeave, transitionSettings, TransitionMode } from "../common/transitionRegistry";
 import { lazyBindMethods } from "../common/lazyBind";
+import type { MotifDomEventProps } from "../jsx-runtime";
 
 /** DI token'ını okunur biçime çevirir (dev uyarıları için). */
 function describeServiceToken(t: any): string {
@@ -265,7 +266,7 @@ lazyBindMethods(ComponentOptionsImpl.prototype, ['getInstance', 'hasEvent']);
 
 
 
-export type IBaseProp<T extends any> = OptionalParams<T> & {
+export type IBaseProp<T extends any> = OptionalParams<T> & MotifDomEventProps & {
         childs?: any[];
         options?: any;
         onElementCreating?(): any;

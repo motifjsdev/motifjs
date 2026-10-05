@@ -1,4 +1,4 @@
-﻿import type { ComponentBase, ElementType, EventArgs } from "./";
+﻿import type { ComponentBase, ElementType, EventArgs, IBaseProp } from "./";
 
 type motifPrimitive = string | number | boolean | Node | Text | Element | null | undefined;
 
@@ -84,12 +84,15 @@ export type MotifComponentType<P = Record<string, unknown>, TElement = unknown> 
     | { el: string; ctor?: (this: any, props?: any) => any;[newProp: string]: any };
 
 type ExtractEventArg<T> = T extends ((this: any, ev: infer EV) => any) | null ? EV : never;
+export type MotifDomEventHandler<EV> = (senderOrEvent: EV & ComponentBase, ev: EV) => unknown;
 type motifEventsFor<TElement> = {
     [P in keyof TElement as P extends `on${string}` ? P : never]?:
     TElement[P] extends ((this: any, ev: infer EV) => any) | null
-    ? ((sender: ComponentBase, ev: EV) => any) | ((ev: EV) => any)
-    : ((sender: ComponentBase, ev: any) => any) | ((ev: any) => any);
+    ? MotifDomEventHandler<EV>
+    : MotifDomEventHandler<Event>;
 };
+export type MotifDomEventProps = motifEventsFor<HTMLElement>;
+type MotifManagedProps<P> = 0 extends (1 & P) ? IBaseProp<{}> : Exclude<P, string | Node | undefined>;
 
 // Transform DOM attributes so that non-event, non-method, non-style/class/value props accept either the value or a function returning it
 type MotifElementProps<TElement> = {
@@ -147,6 +150,8 @@ export namespace JSX {
         [elementName: string]: IntrinsicElementsMap[keyof IntrinsicElementsMap];
     }
 
+    export type LibraryManagedAttributes<C, P> = MotifManagedProps<P>;
+
     export interface IntrinsicAttributes extends __attr { };
 }
 
@@ -162,6 +167,8 @@ declare global {
         export interface IntrinsicElements extends IntrinsicElementsMap {
             [elementName: string]: IntrinsicElementsMap[keyof IntrinsicElementsMap];
         }
+
+        export type LibraryManagedAttributes<C, P> = MotifManagedProps<P>;
 
         export interface IntrinsicAttributes extends __attr { }
     }
