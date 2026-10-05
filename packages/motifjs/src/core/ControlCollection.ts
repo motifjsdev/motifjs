@@ -4,6 +4,7 @@ import { TRANSITION_SLOT } from "../component/optionsSlots";
 import { dom } from "../";
 import { Component, ComponentBase, resolveComponent, notifyDeactivated } from "../";
 import { reportError } from "../common/diagnostics";
+import { checkReservedMembers } from "../component/componentBase";
 
 export class ControlCollection {
     constructor(private owner: ComponentBase) {
@@ -40,6 +41,7 @@ export class ControlCollection {
         if (typeof control == 'string' || typeof control == 'number' || typeof control == 'boolean' || typeof control == 'bigint') {
             control = new Component(dom.createTextNode(control), null as any);
         }
+        checkReservedMembers(control);
         if (control.parent) { control.parent.controls.detach(control); }
 
         if (index != undefined && index >= 0) {

@@ -16,6 +16,7 @@ import { OPTIONS_OWNER, TRANSITION_SLOT } from "./optionsSlots";
 import { deferUntilEntered, isTransitionMode, pendingLeaves, trackEnter, trackLeave, transitionSettings, TransitionMode } from "../common/transitionRegistry";
 import { lazyBindMethods } from "../common/lazyBind";
 import type { MotifDomEventProps } from "../jsx-runtime";
+import { isDevLike } from "../devtools/devbus";
 
 /** DI token'ını okunur biçime çevirir (dev uyarıları için). */
 function describeServiceToken(t: any): string {
@@ -334,6 +335,50 @@ function hasLifecycleHook(component: any, hook: string, listName: keyof Lifecycl
         if (Array.isArray(list) && list.length > 0) return true;
         if (legacyProp && component[legacyProp]) return true;
         return component._base.emiters.hasListeners(lowerName);
+}
+
+const RESERVED_METHODS = ['build', 'setState', 'reState', 'setText', 'style', 'dispose', 'disposeAsync', 'using', 'doWork', 'getService', '$', 'useModel', 'context', 'siblings', 'serviceProvider', 'isWait'];
+const checkedComponentClasses = new WeakSet<Function>();
+
+function callsSuper(fn: unknown, name: string): boolean {
+        if (typeof fn !== 'function') return false;
+        const escaped = name.replace(/\$/g, '\\$');
+        return new RegExp(`\\bsuper\\s*(\\.\\s*${escaped}(?![\\w$])|\\[)`).test(Function.prototype.toString.call(fn));
+}
+
+function reservedMemberProblems(c: ComponentBase): Array<[string, 'method' | 'field' | 'replaced']> {
+        const problems: Array<[string, 'method' | 'field' | 'replaced']> = [];
+        const own = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
+        for (const name of RESERVED_METHODS) {
+                if (own(c, name)) { problems.push([name, 'field']); continue; }
+                for (let p = Object.getPrototypeOf(c); p && p !== ComponentBase.prototype; p = Object.getPrototypeOf(p)) {
+                        const d = Object.getOwnPropertyDescriptor(p, name);
+                        if (!d) continue;
+                        const fns = 'value' in d ? [d.value] : [d.get, d.set].filter(Boolean);
+                        if (!fns.some(fn => callsSuper(fn, name))) problems.push([name, 'method']);
+                        break;
+                }
+        }
+        const anyC = c as any;
+        if (!(anyC.motif instanceof ComponentMotif)) problems.push(['motif', 'replaced']);
+        if (!(anyC.controls instanceof ControlCollection)) problems.push(['controls', 'replaced']);
+        if (!(anyC.class instanceof controlClass)) problems.push(['class', 'replaced']);
+        if (!(anyC.attr instanceof controlAttribute)) problems.push(['attr', 'replaced']);
+        if (!(anyC.bindings instanceof BindingCollection)) problems.push(['bindings', 'replaced']);
+        if (anyC.element != null && typeof Node !== 'undefined' && !(anyC.element instanceof Node)) problems.push(['element', 'replaced']);
+        if (anyC.parent != null && !(anyC.parent instanceof ComponentBase)) problems.push(['parent', 'replaced']);
+        return problems;
+}
+
+export function checkReservedMembers(c: ComponentBase): void {
+        if (!isDevLike()) return;
+        const ctor = (c as any)?.constructor;
+        if (typeof ctor !== 'function' || checkedComponentClasses.has(ctor)) return;
+        checkedComponentClasses.add(ctor);
+        const name = ctor.name || 'An anonymous component class';
+        for (const [member, how] of reservedMemberProblems(c)) {
+                reportWarning('MJX128', [name, member, how]);
+        }
 }
 
 const ComponentHelper = {
@@ -1374,6 +1419,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         }
 
         public build(building: boolean = true) {
+                checkReservedMembers(this);
                 ComponentHelper.callConfigured(this);
                 this._base._activatePreBindings();
                 if (this.isDisposed || !this.element || this.isWait) { return; }

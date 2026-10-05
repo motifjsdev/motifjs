@@ -31,6 +31,11 @@ export const motifMessages = {
     MJX127: (got: string) => got === 'module'
         ? `The loaded module has no default export. Export the component as default, or map it: () => import('./X').then(m => m.X).`
         : `The loaded value is not a component (got ${got}). Return a component class, a function component, an Options API factory or a component instance.`,
+    MJX128: (cls: string, member: string, how: 'method' | 'field' | 'replaced') => how === 'method'
+        ? `${cls} overrides ${member} without calling super.${member}; MotifJS relies on this ComponentBase member. Rename your member, or call super.${member} in the override.`
+        : how === 'field'
+            ? `${cls} defines '${member}' as an instance field, which hides the ComponentBase member MotifJS relies on. Rename your field.`
+            : `${cls} replaces '${member}', which MotifJS created for the component (a class field or an assignment with that name). Rename your member.`,
 
     MJX201: () => `ListBinding: renderFn must return a component instance, a component class, or a factory function.`,
     MJX202: (key: unknown, index: number) => `ListBinding: duplicate key "${String(key)}" at index ${index}. Rows are matched by the item object, not by key, so rendering is not affected; keep keys unique so they identify items.`,
