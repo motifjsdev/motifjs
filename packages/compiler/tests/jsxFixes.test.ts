@@ -266,3 +266,60 @@ describe('erişilemeyen ref dalı', () => {
         expect(out).not.toContain('bindings.ref');
     });
 });
+
+describe('üretilen getter içindeki çağrı bir kez değerlendirilir', () => {
+    test('x-display={check()} check\'i bir kez çağırır ve koruma kalıbını korur', () => {
+        const out = compile(`function A(){ return <p x-display={check()}>x</p>; }`);
+        expect(count(out, /check\(\)/g)).toBe(1);
+        expect(out).toMatch(/let __r1;\s*if \(check && \(__r1 = check\(\)\) !== null && __r1 !== undefined\) \{\s*return typeof __r1 === "function" \? __r1\(\) : __r1;\s*\}\s*return true;/);
+    });
+
+    test('iç içe çağrılarda her halka bir kez değerlendirilir', () => {
+        const out = compile(`function A(){ return <p x-display={store.get(key()).ready()}>x</p>; }`);
+        expect(count(out, /key\(\)/g)).toBe(1);
+        expect(count(out, /\.ready\(\)/g)).toBe(1);
+        expect(out).toMatch(/store && store\.get && \(__r1 = store\.get\(key\(\)\)\) && __r1\.ready && \(__r2 = __r1\.ready\(\)\) !== null && __r2 !== undefined/);
+    });
+
+    test('liste kaynağı ve tepkisel öznitelik de tek çağrı üretir', () => {
+        const list = compile(`function A(){ return <ul>{items().map(i => <li key={i}>{i}</li>)}</ul>; }`);
+        expect(count(list, /items\(\)/g)).toBe(1);
+        expect(list).toMatch(/return \[\];/);
+        const attr = compile(`function A(){ return <p title={s.label()}>x</p>; }`);
+        expect(count(attr, /s\.label\(\)/g)).toBe(1);
+    });
+
+    test('&& çocuğunun koşulu tek çağrı üretir', () => {
+        const out = compile(`function A(){ return <div>{ok() && <b />}</div>; }`);
+        expect(count(out, /ok\(\)/g)).toBe(1);
+        expect(out).toMatch(/catch \{\s*return null;/);
+    });
+
+    test('kullanıcının iki kez yazdığı çağrı birleştirilmez', () => {
+        const out = compile(`function A(){ return <p x-text={f(g(), g())}>x</p>; }`);
+        expect(count(out, /g\(\)/g)).toBe(2);
+        expect(count(out, /f\(g\(\), g\(\)\)/g)).toBe(1);
+    });
+
+    test('çağrı yoksa getter değişmez', () => {
+        const out = compile(`function A(){ return <p x-display={s.a.b}>x</p>; }`);
+        expect(out).not.toMatch(/__r\d/);
+        expect(out).toMatch(/if \(s && s\.a && s\.a\.b !== null && s\.a\.b !== undefined\)/);
+    });
+
+    test('tanımlayıcı çağrısı olan öznitelik statik kalır', () => {
+        const out = compile(`function A(){ return <p title={fmt()}>x</p>; }`);
+        expect(out).toMatch(/attr\.add\(\{\s*"title": fmt\(\)\s*\}\)/);
+        expect(out).not.toMatch(/__r\d/);
+    });
+
+    test('geçici ad ifadedeki bir adla çakışmaz', () => {
+        const out = compile(`function A(){ return <p x-display={__r1()}>x</p>; }`);
+        expect(out).toMatch(/let __r2;\s*if \(__r1 && \(__r2 = __r1\(\)\) !== null/);
+    });
+
+    test('fonksiyon gövdesinin içine dokunulmaz', () => {
+        const out = compile(`function A(){ return <p x-text={wrap(() => f())}>x</p>; }`);
+        expect(out).toMatch(/__r1 = wrap\(\(\) => f\(\)\)/);
+    });
+});

@@ -357,15 +357,15 @@ export const returnIfStatement = (value: any, enableDefaultreturn: boolean = tru
     } else if (t.isMemberExpression(value) || t.isIdentifier(value)) {
         rtrn = t.returnStatement(callFunctions
             ? t.conditionalExpression(
-                t.binaryExpression('===', t.unaryExpression('typeof', t.cloneNode(value)), t.stringLiteral('function')),
-                t.callExpression(t.cloneNode(value), []),
-                t.cloneNode(value))
+                t.binaryExpression('===', t.unaryExpression('typeof', value), t.stringLiteral('function')),
+                t.callExpression(value, []),
+                value)
             : value);
         var rtrns = t.ifStatement(ifStatement!, t.blockStatement([rtrn]));
         if (enableDefaultreturn) {
-            return t.arrowFunctionExpression([], t.blockStatement([rtrns, t.returnStatement(defaultLiteral)]));
+            return cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([rtrns, t.returnStatement(defaultLiteral)])), [value]);
         } else {
-            return t.arrowFunctionExpression([], t.blockStatement([rtrns]));
+            return cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([rtrns])), [value]);
         }
 
     } else if (t.isFunctionExpression(value)) {
@@ -383,9 +383,9 @@ export const returnIfStatement = (value: any, enableDefaultreturn: boolean = tru
         var le = t.logicalExpression('&&', ifStatementA, ifStatementB);
         rtrn = t.returnStatement(value);
         if (enableDefaultreturn) {
-            return t.arrowFunctionExpression([], t.blockStatement([t.ifStatement(le, t.blockStatement([rtrn])), t.returnStatement(defaultLiteral)]));
+            return cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([t.ifStatement(le, t.blockStatement([rtrn])), t.returnStatement(defaultLiteral)])), [value.left, value.right]);
         } else {
-            return t.arrowFunctionExpression([], t.blockStatement([t.ifStatement(le, t.blockStatement([rtrn]))]));
+            return cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([t.ifStatement(le, t.blockStatement([rtrn]))])), [value.left, value.right]);
         }
 
     } else if (t.isCallExpression(value)) {
@@ -393,9 +393,9 @@ export const returnIfStatement = (value: any, enableDefaultreturn: boolean = tru
         rtrn = t.returnStatement(t.conditionalExpression(mx, t.callExpression(value, []), value));
         var rtrns = t.ifStatement(ifStatement!, t.blockStatement([rtrn]));
         if (enableDefaultreturn) {
-            return t.arrowFunctionExpression([], t.blockStatement([rtrns, t.returnStatement(defaultLiteral)]));
+            return cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([rtrns, t.returnStatement(defaultLiteral)])), [value]);
         } else {
-            return t.arrowFunctionExpression([], t.blockStatement([rtrns]));
+            return cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([rtrns])), [value]);
         }
 
     } else {
@@ -471,6 +471,84 @@ export const findIfStatements = (value: t.Expression): any => {
 
     return ifStatement;
 }
+
+const isEffectNode = (node: t.Node): boolean =>
+    t.isCallExpression(node) || t.isOptionalCallExpression(node) || t.isNewExpression(node) ||
+    t.isTaggedTemplateExpression(node) || t.isUpdateExpression(node) || t.isAssignmentExpression(node) ||
+    t.isAwaitExpression(node) || t.isYieldExpression(node);
+
+const hasEffect = (node: t.Node | null | undefined): boolean => {
+    if (!node || t.isFunction(node) || t.isClass(node)) return false;
+    if (isEffectNode(node)) return true;
+    for (const key of t.VISITOR_KEYS[node.type] ?? []) {
+        const child = (node as any)[key];
+        if (Array.isArray(child) ? child.some(c => hasEffect(c)) : hasEffect(child)) return true;
+    }
+    return false;
+}
+
+const guardCallLinks = (root: t.Node, found: Set<t.Node>) => {
+    if (!t.isExpression(root) || t.isFunction(root)) return;
+    if (!t.isIdentifier(root) && !t.isMemberExpression(root) && !t.isThisExpression(root) && !t.isLiteral(root) && hasEffect(root)) {
+        found.add(root);
+    }
+    if (t.isMemberExpression(root)) guardCallLinks(root.object, found);
+    else if (t.isCallExpression(root) && t.isExpression(root.callee)) guardCallLinks(root.callee, found);
+}
+
+const collectNames = (node: t.Node | null | undefined, names: Set<string>) => {
+    if (!node) return;
+    if (t.isIdentifier(node)) names.add(node.name);
+    for (const key of t.VISITOR_KEYS[node.type] ?? []) {
+        const child = (node as any)[key];
+        if (Array.isArray(child)) child.forEach(c => collectNames(c, names));
+        else collectNames(child, names);
+    }
+}
+
+export const cacheGuardCalls = <F extends t.ArrowFunctionExpression>(fn: F, roots: t.Node[]): F => {
+    if (!t.isBlockStatement(fn.body)) return fn;
+    const links = new Set<t.Node>();
+    roots.forEach(r => guardCallLinks(r, links));
+    if (links.size === 0) return fn;
+    const used = new Set<string>();
+    collectNames(fn, used);
+    const assigned = new Map<t.Node, string>();
+    let counter = 0;
+    const nextName = () => {
+        let name: string;
+        do { name = `__r${++counter}`; } while (used.has(name));
+        return name;
+    };
+    const rewrite = (node: any): any => {
+        if (!node || typeof node !== 'object' || !node.type) return node;
+        if (links.has(node)) {
+            const known = assigned.get(node);
+            if (known) return t.identifier(known);
+            const name = nextName();
+            assigned.set(node, name);
+            return t.assignmentExpression('=', t.identifier(name), rewriteChildren(node));
+        }
+        if (t.isFunction(node) || t.isClass(node)) return node;
+        return rewriteChildren(node);
+    };
+    const rewriteChildren = (node: any): any => {
+        const copy = t.cloneNode(node, false);
+        for (const key of t.VISITOR_KEYS[node.type] ?? []) {
+            const child = node[key];
+            (copy as any)[key] = Array.isArray(child) ? child.map(rewrite) : rewrite(child);
+        }
+        return copy;
+    };
+    const body = rewriteChildren(fn.body) as t.BlockStatement;
+    if (assigned.size === 0) return fn;
+    const declaration = t.variableDeclaration('let', [...assigned.values()].map(name => t.variableDeclarator(t.identifier(name))));
+    body.body.unshift(declaration);
+    const result = t.cloneNode(fn, false);
+    result.body = body;
+    return result;
+}
+
 export const makeDirectives = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>,
     name: string,
     value: t.Expression | t.ObjectMethod,

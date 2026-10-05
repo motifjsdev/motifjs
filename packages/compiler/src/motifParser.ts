@@ -5,7 +5,7 @@ import htmlTags from 'html-tags';
 import { htmlAttributes, htmlEvents } from './htmlAtributes';
 import svgTags from 'svg-tags';
 
-import { findIfStatements, makeComponentTraps, makeDirectives, makeHtmlAttr, makeHtmlEvents, makePreDirectives, mergeHtmlAttributes, returnIfStatement, SUPPORTED_DIRECTIVES, UNSUPPORTED_DIRECTIVES, supportedDirectivesText } from './propBuilder';
+import { cacheGuardCalls, findIfStatements, makeComponentTraps, makeDirectives, makeHtmlAttr, makeHtmlEvents, makePreDirectives, mergeHtmlAttributes, returnIfStatement, SUPPORTED_DIRECTIVES, UNSUPPORTED_DIRECTIVES, supportedDirectivesText } from './propBuilder';
 import { motifComponent, motifFragment, State, motifFunctionComponent } from './constants';
 import { warn as diagWarn, fail } from './diagnostics';
 import { noteOrigin, transferOrigin, explainAt, explainChild, describeTextNode, codeOf, DEPS, type ExplainReactivity } from './explain';
@@ -1089,7 +1089,7 @@ const mkText = (exp: t.Expression) => {
             var mx = t.binaryExpression('===', t.unaryExpression('typeof', exp), t.stringLiteral('function'));
             var rtrn = t.returnStatement(t.conditionalExpression(mx, t.callExpression(exp, []), t.arrowFunctionExpression([], exp)));
             var rtrns = t.ifStatement(ifStatement!, t.blockStatement([rtrn]));
-            var kx = t.arrowFunctionExpression([], t.blockStatement([rtrns]));
+            var kx = cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([rtrns])), [exp]);
             a1 = t.callExpression(id('sender.bindings.add'), [t.stringLiteral("textContent"), kx]);
         }
     } else if (t.isObjectExpression(exp) || t.isIdentifier(exp)) {
@@ -1157,7 +1157,7 @@ const mkText = (exp: t.Expression) => {
 
             var rtrns = t.ifStatement(ifStatement!, t.blockStatement([t.returnStatement(exp.left)]));
             var tryStatement = t.tryStatement(t.blockStatement([rtrns]), t.catchClause(null, t.blockStatement([t.returnStatement(t.nullLiteral())])), null);
-            var kx = t.arrowFunctionExpression([], t.blockStatement([tryStatement]));
+            var kx = cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([tryStatement])), [exp.left]);
 
             if (!t.isFunctionDeclaration(exp.right) && !t.isArrowFunctionExpression(exp.right)) {
 
@@ -1185,14 +1185,14 @@ const mkText = (exp: t.Expression) => {
         var mx = t.binaryExpression('===', t.unaryExpression('typeof', exp), t.stringLiteral('function'));
         var rtrn = t.returnStatement(t.conditionalExpression(mx, t.callExpression(exp, []), t.arrowFunctionExpression([], exp)));
         var rtrns = t.ifStatement(ifStatement!, t.blockStatement([rtrn]));
-        var kx = t.arrowFunctionExpression([], t.blockStatement([rtrns])); 
+        var kx = cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([rtrns])), [exp]); 
         a1 = t.callExpression(id('sender.bindings.add'), [t.stringLiteral("textContent"), kx]);
     } else {
         var ifStatement = findIfStatements(exp);
         var mx = t.binaryExpression('===', t.unaryExpression('typeof', exp), t.stringLiteral('function'));
         var rtrn = t.returnStatement(t.conditionalExpression(mx, t.callExpression(exp, []), t.arrowFunctionExpression([], exp)));
         var rtrns = t.ifStatement(ifStatement!, t.blockStatement([rtrn]));
-        var kx = t.arrowFunctionExpression([], t.blockStatement([rtrns])); 
+        var kx = cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([rtrns])), [exp]); 
         a1 = t.callExpression(id('sender.bindings.add'), [t.stringLiteral("textContent"), kx]);
     }
 
@@ -1381,7 +1381,7 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
                         // var rtrn = t.returnStatement(t.conditionalExpression(mx, t.callExpression(cx.left, []), t.arrowFunctionExpression([], cx.left)));
                         var rtrns = t.ifStatement(ifStatement!, t.blockStatement([t.returnStatement(cx.left)]));
                         var tryStatement = t.tryStatement(t.blockStatement([rtrns]), t.catchClause(null, t.blockStatement([t.returnStatement(t.nullLiteral())])), null);
-                        var kx = t.arrowFunctionExpression([], t.blockStatement([tryStatement]));
+                        var kx = cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([tryStatement])), [cx.left]);
 
                         if (!t.isFunctionDeclaration(cx.right) && !t.isArrowFunctionExpression(cx.right)) {
 
@@ -1542,7 +1542,7 @@ export function ParseFrament(path: NodePath<t.JSXElement>, state: State): t.Call
                     } else {
                         var rtrnsPlain = t.ifStatement(ifStatement!, t.blockStatement([t.returnStatement(exp.left)]));
                         var tryStatement = t.tryStatement(t.blockStatement([rtrnsPlain]), t.catchClause(null, t.blockStatement([t.returnStatement(t.nullLiteral())])), null);
-                        condFn = t.arrowFunctionExpression([], t.blockStatement([tryStatement]));
+                        condFn = cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([tryStatement])), [exp.left]);
                     }
                     if (!t.isFunctionDeclaration(exp.right) && !t.isArrowFunctionExpression(exp.right)) {
                         exp.right = t.arrowFunctionExpression([t.identifier("val")], t.blockStatement([t.returnStatement(exp.right)]))
