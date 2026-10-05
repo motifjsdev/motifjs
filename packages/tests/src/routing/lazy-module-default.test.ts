@@ -38,9 +38,10 @@ afterEach(() => {
 
 const codes = () => reported.map(e => e?.code);
 
+let app: Application;
+let host: HTMLElement;
+
 describe('lazy route modules', () => {
-    let app: Application;
-    let host: HTMLElement;
 
     function start(routes: RouteItem[]) {
         window.history.replaceState({}, '', '/');
@@ -80,14 +81,66 @@ describe('lazy route modules', () => {
         await app.dispose();
     });
 
-    test('a control that resolves to a non-component reports MJX127 with the type', async () => {
-        start([{ path: '/', control: (() => 42) as any }]);
+    test('a control that resolves to a plain object reports MJX127 with the type', async () => {
+        start([{ path: '/', control: (() => ({ title: 'x' })) as any }]);
         await tick();
         const failure = reported.find(e => e?.code === 'MJX304');
         expect(failure?.cause?.code).toBe('MJX127');
-        expect(failure.cause.message).toContain('got number');
+        expect(failure.cause.message).toContain('got object');
         expect(codes()).not.toContain('MJX114');
         await app.dispose();
+    });
+
+    test('a control that resolves to text is placed as a text node, as before', async () => {
+        start([{ path: '/', control: (() => 'plain text') as any }]);
+        await tick();
+        expect(host.textContent).toContain('plain text');
+        expect(codes()).not.toContain('MJX127');
+        expect(codes()).not.toContain('MJX304');
+        await app.dispose();
+    });
+});
+
+describe('Lazy results that were valid before stay valid', () => {
+    function mountLazy(caller: () => Promise<any>, options: any = {}) {
+        const loader = new Component('p');
+        (loader.element as HTMLElement).id = 'loader';
+        const root = new Component(document.body.appendChild(document.createElement('div')));
+        root.build();
+        root.controls.add(Lazy({ caller, options: { Loaderview: loader, ...options } }));
+        return root;
+    }
+
+    test('a mapResult returning null keeps the Loaderview', async () => {
+        const root = mountLazy(() => Promise.resolve(moduleOf({ HomePage })), { mapResult: () => null });
+        await tick();
+        expect((root.element as HTMLElement).querySelector('#loader')).not.toBeNull();
+        expect(reported).toEqual([]);
+        await root.dispose();
+    });
+
+    test('a mapResult returning a promise of a component places it', async () => {
+        const root = mountLazy(() => Promise.resolve(moduleOf({ HomePage })), { mapResult: (m: any) => Promise.resolve(new m.HomePage()) });
+        await tick(60);
+        expect((root.element as HTMLElement).querySelector('#home')).not.toBeNull();
+        expect(reported).toEqual([]);
+        await root.dispose();
+    });
+
+    test('a string result is placed as text', async () => {
+        const root = mountLazy(() => Promise.resolve('loaded text'));
+        await tick();
+        expect((root.element as HTMLElement).textContent).toContain('loaded text');
+        expect(reported).toEqual([]);
+        await root.dispose();
+    });
+
+    test('an array of components is placed', async () => {
+        const root = mountLazy(() => Promise.resolve([new HomePage()]));
+        await tick();
+        expect((root.element as HTMLElement).querySelector('#home')).not.toBeNull();
+        expect(reported).toEqual([]);
+        await root.dispose();
     });
 });
 

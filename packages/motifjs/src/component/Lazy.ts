@@ -159,7 +159,7 @@ export function Lazy(props: any): Component {
         let component: any;
         try {
             component = resolveToComponent(target);
-            assertLoadedComponent(component, true);
+            assertLoadedComponent(component);
         } catch (err) {
             fail(err);
             return;

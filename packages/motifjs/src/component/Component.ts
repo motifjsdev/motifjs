@@ -269,9 +269,10 @@ function describeLoaded(value: any): string {
     return typeof value;
 }
 
-export function assertLoadedComponent(value: unknown, allowList = false): void {
-    if (value instanceof ComponentBase) return;
-    if (allowList && Array.isArray(value) && value.length > 0 && value.every(v => v instanceof ComponentBase)) return;
+export function assertLoadedComponent(value: unknown): void {
+    if (value === null || typeof value !== "object") return;
+    if (value instanceof ComponentBase || Array.isArray(value) || value instanceof Node) return;
+    if (typeof (value as any).then === "function") return;
     throw motifError('MJX127', describeLoaded(value));
 }
 
