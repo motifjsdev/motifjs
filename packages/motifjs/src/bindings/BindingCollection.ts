@@ -7,6 +7,10 @@ import { Binding, BindingFormatInfo, IBaseBinding, IBindingCollection, ListBindi
 import { reportError } from "../common/diagnostics";
 import { lazyBindMethods } from "../common/lazyBind";
 
+function resolveValue(value: any): any {
+    return typeof value === 'function' ? resolveValue(value()) : value;
+}
+
 function isWritablePathKey(target: object, key: string): boolean {
     if (key === '__proto__') return false;
     if (key === 'constructor' || key === 'prototype') return Object.prototype.hasOwnProperty.call(target, key);
@@ -102,7 +106,7 @@ export class BindingCollection implements IBindingCollection {
     }
 
     display(predicate: () => any): IBaseBinding {
-        const binding = new Binding(this._component, 'isWait', () => !predicate());
+        const binding = new Binding(this._component, 'isWait', () => !resolveValue(predicate()));
         this._items.push(binding);
         if (this._component.isBuilt) {
             (binding as Binding).activate();

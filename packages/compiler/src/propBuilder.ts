@@ -338,7 +338,10 @@ const ParentIfStatement = (path: t.Expression | t.BlockStatement, state: any[]):
     return state;
 }
 
-export const returnIfStatement = (value: any, enableDefaultreturn: boolean = true, defaultLiteral: any = t.booleanLiteral(false)): any => {
+export const returnIfStatement = (value: any, enableDefaultreturn: boolean = true, defaultLiteral: any = t.booleanLiteral(false), callFunctions: boolean = false): any => {
+    if (callFunctions && t.isFunctionExpression(value)) {
+        return value;
+    }
     var ifStatement = findIfStatements(value);
     var mx = t.binaryExpression('===', t.unaryExpression('typeof', value), t.stringLiteral('function'));
     var rtrn;
@@ -352,7 +355,12 @@ export const returnIfStatement = (value: any, enableDefaultreturn: boolean = tru
         }
 
     } else if (t.isMemberExpression(value) || t.isIdentifier(value)) {
-        rtrn = t.returnStatement(value);
+        rtrn = t.returnStatement(callFunctions
+            ? t.conditionalExpression(
+                t.binaryExpression('===', t.unaryExpression('typeof', t.cloneNode(value)), t.stringLiteral('function')),
+                t.callExpression(t.cloneNode(value), []),
+                t.cloneNode(value))
+            : value);
         var rtrns = t.ifStatement(ifStatement!, t.blockStatement([rtrn]));
         if (enableDefaultreturn) {
             return t.arrowFunctionExpression([], t.blockStatement([rtrns, t.returnStatement(defaultLiteral)]));
@@ -506,7 +514,7 @@ export const makeDirectives = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttrib
 
                     } else {
                         if (t.isExpression(value)) {
-                            result = t.expressionStatement(t.callExpression(t.identifier(callerName), [returnIfStatement(value, false)]));
+                            result = t.expressionStatement(t.callExpression(t.identifier(callerName), [returnIfStatement(value, false, t.booleanLiteral(false), true)]));
                         }
                     }
 
@@ -590,7 +598,7 @@ export const makePreDirectives = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAtt
             if (t.isObjectExpression(value)) {
                 fail('MJX012', `Directive "${name}" does not accept an object literal.`, prop);
             } else if (t.isExpression(value)) {
-                result = t.expressionStatement(t.callExpression(t.identifier(callerName), [returnIfStatement(value, true, t.booleanLiteral(true))]));
+                result = t.expressionStatement(t.callExpression(t.identifier(callerName), [returnIfStatement(value, true, t.booleanLiteral(true), true)]));
             }
         } else {
             fail('MJX006', `Directive "${name}" is not supported. Supported: ${supportedDirectivesText()}.`, prop);

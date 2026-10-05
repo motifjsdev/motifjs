@@ -128,6 +128,37 @@ describe('on:x / on-x / on_x işleyicisi doğrudan motif.on\'a geçer', () => {
     });
 });
 
+describe('direktife verilen fonksiyon tutan tanımlayıcı ve metot referansı çağrılır', () => {
+    test.each([
+        ['x-display', 'display'],
+        ['x-wait', 'wait'],
+    ])('%s={ok} değer fonksiyonsa çağırır', (attr, fn) => {
+        const out = compile(`function A(){ const ok = () => true; return <div ${attr}={ok} />; }`);
+        expect(out).toMatch(new RegExp(`bindings\\.${fn}\\(\\(\\) => \\{\\s*if \\(ok !== null && ok !== undefined\\) \\{\\s*return typeof ok === "function" \\? ok\\(\\) : ok;`));
+    });
+
+    test('metot referansı üye çağrısı olarak kalır, this korunur', () => {
+        const out = compile(`class B { ok(){ return true; } view(){ return <div x-wait={this.ok} />; } }`);
+        expect(out).toContain('return typeof this.ok === "function" ? this.ok() : this.ok;');
+    });
+
+    test('x-text metot referansı da çağrılır', () => {
+        const out = compile(`class B { label(){ return 'x'; } view(){ return <div x-text={this.label} />; } }`);
+        expect(out).toContain('return typeof this.label === "function" ? this.label() : this.label;');
+    });
+
+    test('x-display function ifadesi getter olarak geçer', () => {
+        const out = compile(`function A(){ return <div x-display={function () { return true; }} />; }`);
+        expect(out).toMatch(/bindings\.display\(function \(\) \{\s*return true;\s*\}\)/);
+    });
+
+    test('değer tutan tanımlayıcı aynı sonucu verir, öznitelik yolu değişmez', () => {
+        const out = compile(`function A(){ const t = () => 'x'; return <div title={t} x-display={s.open} />; }`);
+        expect(out).toMatch(/attr\.add\(\{\s*"title": t\s*\}\)/);
+        expect(out).toContain('return typeof s.open === "function" ? s.open() : s.open;');
+    });
+});
+
 describe('DOM olay işleyicisi olduğu gibi motif.on\'a geçer', () => {
     test.each([
         ['düz etiket', `function A(){ return <button onclick={async () => { await x(); }} />; }`, 'sender.motif.on("click", async () => {'],
