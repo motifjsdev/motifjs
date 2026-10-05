@@ -2040,7 +2040,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 try { return Application.main?.provider ?? null; } catch { return null; }
         }
 
-        public getService<T>(token: abstract new (...args: any[]) => T): T | null;
+        public getService<T>(token: (abstract new (...args: any) => T) | { prototype: T }): T | null;
         public getService<T = any>(token: string | symbol | object): T | null;
         public getService(token: any): any {
                 try {

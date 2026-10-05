@@ -69,6 +69,61 @@ function expectedFrom(source: string) {
     });
 }
 
+const constructorFixture = `
+import { Component, FromService, ServiceProvider, inject } from '@motifx/core';
+type Same<A, B> = (<G>() => G extends A ? 1 : 2) extends (<G>() => G extends B ? 1 : 2) ? true : false;
+declare function check<T extends true>(): void;
+interface ILogger { log(m: string): void; }
+class NoParams { a = 1; }
+class WithParams { constructor(public api: NoParams, n: number) { } b = 1; }
+class Optional { constructor(x?: string) { } c = 1; }
+class RestParams { constructor(...xs: number[]) { } d = 1; }
+abstract class Repo { constructor(n: number) { } abstract find(): number; }
+class Guarded { protected constructor(x: number) { } e = 1; }
+class Box<T> { constructor(public v: T) { } }
+class Logger implements ILogger { constructor(p: string) { } log(m: string) { } }
+declare const provider: ServiceProvider;
+declare const host: Component;
+const f1 = FromService(WithParams);
+const f1t = FromService<WithParams>(WithParams);
+const f2 = FromService(Repo);
+const f2t = FromService<Repo>(Repo);
+const f3 = FromService(Guarded);
+const f4 = FromService(Box);
+const f4t = FromService<Box<string>>(Box);
+const f5 = FromService<ILogger>(Logger);
+const f6 = FromService(Logger);
+const s1 = host.getService(WithParams);
+const s1t = host.getService<WithParams>(WithParams);
+const s2 = host.getService(Optional);
+const g1 = provider.get(RestParams);
+const g1t = provider.get<RestParams>(RestParams);
+const g2 = provider.getAsync(WithParams);
+const g2t = provider.getAsync<WithParams>(WithParams);
+const i1 = inject(WithParams);
+const i1t = inject<WithParams>(WithParams);
+const n1 = FromService(NoParams);
+check<Same<typeof f1, WithParams>>();
+check<Same<typeof f1, typeof f1t>>();
+check<Same<typeof f2, Repo>>();
+check<Same<typeof f2, typeof f2t>>();
+check<Same<typeof f3, Guarded>>();
+check<Same<typeof f4, Box<any>>>();
+check<Same<typeof f4t, Box<string>>>();
+check<Same<typeof f5, ILogger>>();
+check<Same<typeof f6, Logger>>();
+check<Same<typeof s1, WithParams | null>>();
+check<Same<typeof s1, typeof s1t>>();
+check<Same<typeof s2, Optional | null>>();
+check<Same<typeof g1, RestParams>>();
+check<Same<typeof g1, typeof g1t>>();
+check<Same<typeof g2, Promise<WithParams>>>();
+check<Same<typeof g2, typeof g2t>>();
+check<Same<typeof i1, WithParams>>();
+check<Same<typeof i1, typeof i1t>>();
+check<Same<typeof n1, NoParams>>();
+`;
+
 describe('DI token types under strict', () => {
     test('a class token types the result; string and symbol tokens take an explicit generic', () => {
         const actual = diagnose(fixture);
@@ -76,5 +131,9 @@ describe('DI token types under strict', () => {
         expect(actual.filter(d => d.code === 'TS7006')).toEqual([]);
         expect([...new Set(actual.map(d => JSON.stringify(d)))].map(s => JSON.parse(s)).sort(byLine))
             .toEqual(expectedFrom(fixture).sort(byLine));
+    });
+
+    test('a class whose constructor takes parameters is typed the same with or without the generic', () => {
+        expect(diagnose(constructorFixture)).toEqual([]);
     });
 });

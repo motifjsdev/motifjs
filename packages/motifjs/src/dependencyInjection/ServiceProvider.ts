@@ -64,7 +64,7 @@ function pinnedScopeOf(owner: object | null): ServiceProvider | null {
     return null;
 }
 
-export function inject<T>(token: abstract new (...args: any[]) => T): T;
+export function inject<T>(token: (abstract new (...args: any) => T) | { prototype: T }): T;
 export function inject<T = any>(token: string | symbol | object): T;
 export function inject(token: any): any {
     if (!activeResolver) throw motifError('MJX409', describeInjectToken(token));
@@ -155,7 +155,7 @@ export class ServiceProvider {
     public enableAutoDisposeTransients(enable = true): this { this._autoDisposeTransients = enable; return this; }
 
 
-    public get<T>(token: abstract new (...args: any[]) => T): T;
+    public get<T>(token: (abstract new (...args: any) => T) | { prototype: T }): T;
     public get<T = any>(token: string | symbol | object): T;
     public get(token: any): any {
         const desc = this.services.getDescriptor(token);
@@ -164,7 +164,7 @@ export class ServiceProvider {
         return value;
     }
 
-    public getAsync<T>(token: abstract new (...args: any[]) => T): Promise<T>;
+    public getAsync<T>(token: (abstract new (...args: any) => T) | { prototype: T }): Promise<T>;
     public getAsync<T = any>(token: string | symbol | object): Promise<T>;
     public async getAsync(token: any): Promise<any> {
         const desc = this.services.getDescriptor(token);
