@@ -28,6 +28,9 @@ export const motifMessages = {
     MJX124: (key: string) => `A spread object on a DOM tag cannot set ${key}; the key was ignored. Write it on the tag, or use x-html, for HTML you trust.`,
     MJX125: (key: string) => `A spread object on a DOM tag cannot set a javascript: URL on '${key}'; the value was ignored. Write the attribute on the tag if it is intended.`,
     MJX126: () => `Lazy: loading the component failed and no Fallbackview is set; the host was cleared.`,
+    MJX127: (got: string) => got === 'module'
+        ? `The loaded module has no default export. Export the component as default, or map it: () => import('./X').then(m => m.X).`
+        : `The loaded value is not a component (got ${got}). Return a component class, a function component, an Options API factory or a component instance.`,
 
     MJX201: () => `ListBinding: renderFn must return a component instance, a component class, or a factory function.`,
     MJX202: (key: unknown, index: number) => `ListBinding: duplicate key "${String(key)}" at index ${index}. Rows are matched by the item object, not by key, so rendering is not affected; keep keys unique so they identify items.`,

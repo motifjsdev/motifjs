@@ -1,4 +1,4 @@
-import { Component, ComponentBase, resolveToComponent, notifyActivated, notifyDeactivated } from "../";
+import { Component, ComponentBase, assertLoadedComponent, resolveToComponent, unwrapModule, notifyActivated, notifyDeactivated } from "../";
 import { cancelAnimationsDeep } from "../component/navigation";
 import { errorHandler } from "../common/ErrorHandler";
 import { callReported, reportError, reportWarning } from "../common/diagnostics";
@@ -479,9 +479,7 @@ export class RoutingEngine {
         }
         let val = control as any;
         if (val instanceof Promise) {
-            val = await val.then((result: any) => {
-                return result.default ? result.default : result;
-            });
+            val = unwrapModule(await val);
         }
 
         instance = this._construct(scope, route, () => this._resolveFrom(scope, val));
@@ -511,6 +509,7 @@ export class RoutingEngine {
 
     private async _instanceCreator(control: RouteItem['control'], scope?: ServiceProvider, route?: RouteSnapshot): Promise<any> {
         let val = await this.parseControl(control, scope, route) as any;
+        assertLoadedComponent(val);
         // if (val instanceof Promise) {
         //         return result.default ? result.default : result;
 

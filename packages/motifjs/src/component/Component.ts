@@ -2,7 +2,7 @@ import { dom } from "../";
 import { ComponentBase, IBaseProp, ParseProps, applyComponentOptions, applyFallthroughProps, applyTransitionProp, extractRefs, safeCallSilent, takePendingRefs, untracked } from "../";
 import { resolveComponent } from "./resolveComponent";
 import { ElementType, EventArgs } from "./types";
-import { callReported } from "../common/diagnostics";
+import { callReported, motifError } from "../common/diagnostics";
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
@@ -253,6 +253,26 @@ export function motifComponent(element: unknown, props?: any) {
 
 function isOptionsObject(value: unknown): boolean {
     return typeof value == "object" && value !== null && !(value instanceof ComponentBase) && 'el' in value;
+}
+
+export function unwrapModule(result: any): any {
+    if (result && typeof result === "object" && !(result instanceof ComponentBase) && result.default != null) {
+        return result.default;
+    }
+    return result;
+}
+
+function describeLoaded(value: any): string {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'array';
+    if (typeof value === "object" && (Object.prototype.toString.call(value) === '[object Module]' || value.__esModule)) return 'module';
+    return typeof value;
+}
+
+export function assertLoadedComponent(value: unknown, allowList = false): void {
+    if (value instanceof ComponentBase) return;
+    if (allowList && Array.isArray(value) && value.length > 0 && value.every(v => v instanceof ComponentBase)) return;
+    throw motifError('MJX127', describeLoaded(value));
 }
 
 export function resolveToComponent(input: unknown, props?: any): any {

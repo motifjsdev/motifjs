@@ -1,5 +1,5 @@
 import { ComponentBase, IBaseProp } from ".";
-import { Component, resolveToComponent } from "./Component";
+import { Component, assertLoadedComponent, resolveToComponent, unwrapModule } from "./Component";
 import { Frame } from "./Frame";
 import { disposableCore } from "../disposable";
 import { motifError, reportError } from "../common/diagnostics";
@@ -36,10 +36,7 @@ function normalizeRetry(retry: LazyOptions['retry']): Required<LazyRetryOptions>
 }
 
 function defaultMapper(result: any) {
-    if (result && typeof result === "object" && typeof (result as any).default === "function") {
-        return (result as any).default;
-    }
-    return result;
+    return unwrapModule(result);
 }
 
 
@@ -147,6 +144,29 @@ export function Lazy(props: any): Component {
 
     const startTs = Date.now();
 
+    const fail = (err: any) => {
+        try { opts.onError?.(err); } catch { /* swallow */ }
+        if (opts.signal?.aborted) return;
+        if (opts.Fallbackview != null) {
+            frame.navigate(resolveToComponent(opts.Fallbackview));
+        } else {
+            reportError('MJX126', err);
+            try { frame.motif.clear().catch(() => { }); } catch { }
+        }
+    };
+
+    const place = (target: any) => {
+        let component: any;
+        try {
+            component = resolveToComponent(target);
+            assertLoadedComponent(component, true);
+        } catch (err) {
+            fail(err);
+            return;
+        }
+        frame.navigate(component);
+    };
+
     loadPromise
         .then((result: any) => {
             if (opts.signal?.aborted) { return; }
@@ -158,7 +178,7 @@ export function Lazy(props: any): Component {
             if (remaining > 0) {
                 const id = trackTimer(setTimeout(() => {
                     if (!opts.signal?.aborted) {
-                        frame.navigate(resolveToComponent(target));
+                        place(target);
                     }
                 }, remaining));
                 if (opts.signal) {
@@ -166,19 +186,10 @@ export function Lazy(props: any): Component {
                     try { opts.signal.addEventListener("abort", onAbortClearDelay, { once: true }); } catch { }
                 }
             } else {
-                frame.navigate(resolveToComponent(target));
+                place(target);
             }
         })
-        .catch((err: any) => {
-            try { opts.onError?.(err); } catch { /* swallow */ }
-            if (opts.signal?.aborted) return;
-            if (opts.Fallbackview != null) {
-                frame.navigate(resolveToComponent(opts.Fallbackview));
-            } else {
-                reportError('MJX126', err);
-                try { frame.motif.clear().catch(() => { }); } catch { }
-            }
-        });
+        .catch(fail);
 
     return frame;
 }
