@@ -806,7 +806,7 @@ function removeComponentDom(c: any, node: Node, alsoPlaceholder: boolean): void 
 
 function detachDomWithAnimation(c: any): void {
         const node = c.element as unknown as Node | null;
-        if (!node) return;
+        if (!node || c._keepElementOnDispose === true) return;
         const opts = c.motif.options;
         const t = opts?.[TRANSITION_SLOT] as TransitionApi | undefined;
         try {
@@ -833,7 +833,7 @@ function detachDomWithAnimation(c: any): void {
 
 async function detachDomWithAnimationAsync(c: any): Promise<void> {
         const node = c.element as unknown as Node | null;
-        if (!node) return;
+        if (!node || c._keepElementOnDispose === true) return;
         const opts = c.motif.options;
         const t = opts?.[TRANSITION_SLOT] as TransitionApi | undefined;
         try {

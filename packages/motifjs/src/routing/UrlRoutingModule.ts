@@ -834,13 +834,14 @@ export class UrlRoutingModule {
         } catch { }
     }
 
-    public dispose(): void {
+    public dispose(): Promise<void> {
         try { this._scroll?.dispose(); } catch { }
         this._scroll = null;
         this._historyStamp = null;
+        let done: Promise<void> = Promise.resolve();
         try {
             // keepAlive önbelleğindeki örnekleri bırak
-            try { void this.routingEngine.dispose(); } catch { }
+            try { done = this.routingEngine.dispose(); } catch { }
             if (this._navHandler) {
                 try { document.removeEventListener('click', this._navHandler); } catch { }
                 this._navHandler = null;
@@ -851,6 +852,7 @@ export class UrlRoutingModule {
                 this._windowNavListener = null;
             }
         } catch { }
+        return done;
     }
 
 }

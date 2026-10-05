@@ -122,6 +122,7 @@ export class Application {
         const AppShell = new Component(target);
         this.appShell = AppShell;
         safeCallSilent(() => {
+            (AppShell as any)._keepElementOnDispose = true;
             (AppShell as any).application = this;
             (AppShell as any).provider = this.provider;
 
@@ -164,10 +165,11 @@ export class Application {
         this.appShell.element?.appendChild(component);
     }
 
-    public dispose(): void {
+    public dispose(): Promise<void> {
         startedApplicationBuilder = false;
+        let routerDone: Promise<void> | undefined;
         safeCallSilent(() => { this._removeLifecycleListeners(); }, 'Application.dispose.lifecycle');
-        safeCallSilent(() => { (this as any).urlRoutingModule?.dispose?.(); }, 'Application.dispose.router');
+        safeCallSilent(() => { routerDone = (this as any).urlRoutingModule?.dispose?.(); }, 'Application.dispose.router');
         safeCallSilent(() => { this.provider.dispose(); }, 'Application.dispose.preDispose');
         safeCallSilent(() => { engine.stopGc(); }, 'Application.dispose.gcStop');
         safeCallSilent(() => {
@@ -181,6 +183,13 @@ export class Application {
         }, 'Application.dispose.resetUrl');
         transitionSettings.mode = 'concurrent';
         _globalApplication = null;
+        const shell = this.appShell;
+        return (async () => {
+            try { await routerDone; } catch (error) { reportError('MJX307', error); }
+            if (shell && !shell.isDisposed) {
+                try { await shell.dispose(); } catch (error) { reportError('MJX307', error); }
+            }
+        })();
     }
 
     public useTransitions(options: { mode?: TransitionMode }): Application {
