@@ -52,6 +52,9 @@ export class Component<TElement extends ElementType = any, TProps extends object
 
         if (elementOrParams instanceof Function) {
             elementOrParams = resolveComponent(elementOrParams, options);
+            if (isOptionsObject(elementOrParams)) {
+                return materializeOptionsObject(elementOrParams, options);
+            }
         }
         if (Array.isArray(elementOrParams)) {
             const letter = CreateFragment();
@@ -248,9 +251,13 @@ export function motifComponent(element: unknown, props?: any) {
     return new Component(element, props);
 }
 
+function isOptionsObject(value: unknown): boolean {
+    return typeof value == "object" && value !== null && !(value instanceof ComponentBase) && 'el' in value;
+}
+
 export function resolveToComponent(input: unknown, props?: any): any {
     const resolved = resolveComponent(input, props);
-    if (typeof resolved == "object" && resolved !== null && !(resolved instanceof ComponentBase) && 'el' in resolved) {
+    if (isOptionsObject(resolved)) {
         return materializeOptionsObject(resolved, undefined);
     }
     return resolved;
