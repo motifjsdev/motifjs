@@ -53,7 +53,7 @@ compiler({
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `diagnostics` | `true` | Print compiler warnings (`MJX001`–`MJX004`, `MJX007`) for patterns that compile but do not behave as they read. |
+| `diagnostics` | `true` | Print compiler warnings (`MJX001`–`MJX004`, `MJX007`, `MJX015`) for patterns that compile but do not behave as they read. `MJX015` (a class component override that does not reach `super` on every path) is also checked in `.ts` / `.js` files. |
 | `explain` | `false` | Print what every JSX expression was lowered to. `true` for all files, or a string / `RegExp` matched against the file path. |
 
 ## Command-line tools
@@ -62,7 +62,7 @@ compiler({
 npx motif-lint [--project tsconfig.json] [--json] [--no-fail] [file.tsx …]
 ```
 
-Type-aware lint (`MJX005`): reports a ternary passed to a component prop whose declared type does not accept a getter. Exits with code 1 when there are findings (`--no-fail` to disable).
+Type-aware lint: `MJX005` reports a ternary passed to a component prop whose declared type does not accept a getter; `MJX015` reports a class component override that does not reach `super` on every path, with the base class resolved by the type checker. Exits with code 1 when there are findings (`--no-fail` to disable).
 
 ```bash
 npx motif-explain src/App.tsx [more.tsx …] [--json] [--site child|attr|prop|…] [--code]

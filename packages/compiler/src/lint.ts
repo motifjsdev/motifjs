@@ -1,6 +1,7 @@
 import * as ts from 'typescript';
 import pPath from 'path';
 import type { MotifDiagnostic } from './diagnostics';
+import { analyzeModule, mayHaveSuperOverrides, parseModule, superCallMessage } from './superCalls';
 
 
 export interface LintOptions {
@@ -65,6 +66,7 @@ export function lintProgram(program: ts.Program, files?: string[]): MotifDiagnos
         if (sf.isDeclarationFile) continue;
         if (sf.fileName.includes('/node_modules/')) continue;
         if (wanted && !wanted.has(normalize(sf.fileName))) continue;
+        out.push(...superCallFindings(sf, checker));
         if (!/\.(tsx|jsx|mtsx|mjsx)$/.test(sf.fileName)) continue;
 
         const visit = (node: ts.Node): void => {
@@ -113,6 +115,53 @@ export function lintProgram(program: ts.Program, files?: string[]): MotifDiagnos
         };
 
         visit(sf);
+    }
+    return out;
+}
+
+const coreDeclarationFile = /[\\/](?:@motifx[\\/]core|motifjs[\\/](?:dist|src))[\\/]/;
+
+function derivesFromComponentBase(node: ts.ClassLikeDeclaration, checker: ts.TypeChecker): boolean {
+    try {
+        let type: ts.Type | undefined = checker.getTypeAtLocation(node);
+        const seen = new Set<ts.Type>();
+        const queue: ts.Type[] = type ? [type] : [];
+        while (queue.length > 0) {
+            type = queue.shift()!;
+            const target = ((type as ts.TypeReference).target ?? type) as ts.InterfaceType;
+            if (seen.has(target)) continue;
+            seen.add(target);
+            const sym = target.getSymbol();
+            if (sym && sym.getName() === 'ComponentBase' && sym.declarations?.some(d => coreDeclarationFile.test(d.getSourceFile().fileName))) return true;
+            if (!(target.objectFlags & (ts.ObjectFlags.Class | ts.ObjectFlags.Interface))) continue;
+            for (const b of checker.getBaseTypes(target) ?? []) queue.push(b);
+        }
+    } catch { }
+    return false;
+}
+
+function superCallFindings(sf: ts.SourceFile, checker: ts.TypeChecker): MotifDiagnostic[] {
+    if (!mayHaveSuperOverrides(sf.text)) return [];
+    const ast = parseModule(sf.text, sf.fileName);
+    if (!ast) return [];
+    const findings = analyzeModule(ast).findings;
+    if (findings.length === 0) return [];
+    const membersByLine = new Map<string, ts.ClassElement>();
+    const collect = (n: ts.Node): void => {
+        if ((ts.isMethodDeclaration(n) || ts.isGetAccessorDeclaration(n) || ts.isSetAccessorDeclaration(n)) && (ts.isClassDeclaration(n.parent) || ts.isClassExpression(n.parent))) {
+            const name = n.name && (ts.isIdentifier(n.name) || ts.isStringLiteral(n.name)) ? n.name.text : '';
+            const lines = [n.getStart(sf), n.name.getStart(sf)].map(p => sf.getLineAndCharacterOfPosition(p).line + 1);
+            for (const l of lines) membersByLine.set(`${l}:${name}`, n);
+        }
+        ts.forEachChild(n, collect);
+    };
+    collect(sf);
+    const out: MotifDiagnostic[] = [];
+    for (const f of findings) {
+        const member = membersByLine.get(`${f.line}:${f.member}`);
+        const cls = member?.parent as ts.ClassLikeDeclaration | undefined;
+        if (!member || !cls || !derivesFromComponentBase(cls, checker)) continue;
+        out.push({ code: 'MJX015', file: sf.fileName, line: f.line, message: superCallMessage(f), frame: codeFrame(sf, member) });
     }
     return out;
 }
