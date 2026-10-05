@@ -1977,12 +1977,14 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 try { return Application.main?.provider ?? null; } catch { return null; }
         }
 
-        public getService<T = any>(token: any): T | null {
+        public getService<T>(token: abstract new (...args: any[]) => T): T | null;
+        public getService<T = any>(token: string | symbol | object): T | null;
+        public getService(token: any): any {
                 try {
 
                         const sp = this.serviceProvider;
                         if (sp) {
-                                return sp._getFor<T>(this, token);
+                                return sp._getFor(this, token);
                         }
                         reportWarning('MJX407', [describeServiceToken(token)], { token });
                 } catch (err) {

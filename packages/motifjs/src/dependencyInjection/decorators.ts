@@ -19,7 +19,9 @@ export function Injectable(options?: {
 
 
 
-export function FromService<T = any>(token: any): T {
+export function FromService<T>(token: abstract new (...args: any[]) => T): T;
+export function FromService<T = any>(token: string | symbol | object): T;
+export function FromService(token: any): any {
     try {
         return Application.main.provider.get(token);
     } catch (error) {

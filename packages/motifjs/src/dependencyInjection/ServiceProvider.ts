@@ -155,18 +155,22 @@ export class ServiceProvider {
     public enableAutoDisposeTransients(enable = true): this { this._autoDisposeTransients = enable; return this; }
 
 
-    public get<T = any>(token: any): T {
+    public get<T>(token: abstract new (...args: any[]) => T): T;
+    public get<T = any>(token: string | symbol | object): T;
+    public get(token: any): any {
         const desc = this.services.getDescriptor(token);
         if (!desc) throw motifError('MJX401', this.describeToken(token));
         const value = this.resolveDescriptorSync(desc, [token]);
-        return value as T;
+        return value;
     }
 
-    public async getAsync<T = any>(token: any): Promise<T> {
+    public getAsync<T>(token: abstract new (...args: any[]) => T): Promise<T>;
+    public getAsync<T = any>(token: string | symbol | object): Promise<T>;
+    public async getAsync(token: any): Promise<any> {
         const desc = this.services.getDescriptor(token);
         if (!desc) throw motifError('MJX401', this.describeToken(token));
         const value = await this.resolveDescriptorAsync(desc, [token]);
-        return value as T;
+        return value;
     }
 
     public _getFor<T = any>(owner: object, token: any): T {
