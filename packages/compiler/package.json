@@ -1,7 +1,7 @@
 {
   "private": false,
   "name": "@motifx/compiler",
-  "version": "1.1.0",
+  "version": "1.2.0-rc.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/motifjsdev/motifjs.git",
@@ -69,7 +69,7 @@
     "typescript": ">=5.0.0 <7"
   },
   "peerDependencies": {
-    "@motifx/core": "^1.0.1"
+    "@motifx/core": "^1.2.0-rc.0"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.27.2",
