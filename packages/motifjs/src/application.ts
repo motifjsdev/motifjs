@@ -21,6 +21,8 @@ export interface IStartup {
 }
 
 let _globalApplication: Application | null = null;
+
+export type ApplicationState = 'initializing' | 'running' | 'disposing' | 'disposed';
 let _globalBuilder: ApplicationBuilder | null = null;
 let startedApplicationBuilder = false;
 const _applicationStack = new Map<string | symbol, { builder: ApplicationBuilder, app: Application }>();
@@ -30,7 +32,7 @@ export class ApplicationBuilder {
     public services: ServiceCollection = new ServiceCollection();
 
     constructor() {
-        if (_globalApplication || startedApplicationBuilder) {
+        if ((_globalApplication && _globalApplication.state !== 'disposing') || startedApplicationBuilder) {
             throw new MotifError('MJX405', formatMotifMessage('MJX405'), { cause: _globalApplication });
         }
         startedApplicationBuilder = true;
@@ -92,6 +94,12 @@ export class Application {
     }
 
     constructor(public provider: ServiceProvider) { }
+    public static _disposingCount = 0;
+    private _state: ApplicationState = 'initializing';
+    private _disposing?: Promise<void>;
+    public get state(): ApplicationState {
+        return this._state;
+    }
     private _middlewares: Array<(ctx: RouteResolveContext, next: () => Promise<void>) => any> = [];
     private _beforeEachGuards: NavigationGuard[] = [];
     public readonly _routerState = new RouterState();
@@ -119,6 +127,7 @@ export class Application {
         let rootInstance: any = appRoot;
 
 
+        this._state = 'running';
         const AppShell = new Component(target);
         this.appShell = AppShell;
         safeCallSilent(() => {
@@ -166,11 +175,13 @@ export class Application {
     }
 
     public dispose(): Promise<void> {
+        if (this._disposing) return this._disposing;
+        this._state = 'disposing';
+        Application._disposingCount++;
         startedApplicationBuilder = false;
         let routerDone: Promise<void> | undefined;
         safeCallSilent(() => { this._removeLifecycleListeners(); }, 'Application.dispose.lifecycle');
         safeCallSilent(() => { routerDone = (this as any).urlRoutingModule?.dispose?.(); }, 'Application.dispose.router');
-        safeCallSilent(() => { this.provider.dispose(); }, 'Application.dispose.preDispose');
         safeCallSilent(() => { engine.stopGc(); }, 'Application.dispose.gcStop');
         safeCallSilent(() => {
             try {
@@ -182,13 +193,16 @@ export class Application {
             } catch { /* ignore */ }
         }, 'Application.dispose.resetUrl');
         transitionSettings.mode = 'concurrent';
-        _globalApplication = null;
         const shell = this.appShell;
-        return (async () => {
+        return this._disposing = (async () => {
             try { await routerDone; } catch (error) { reportError('MJX307', error); }
             if (shell && !shell.isDisposed) {
                 try { await shell.dispose(); } catch (error) { reportError('MJX307', error); }
             }
+            try { await this.provider.dispose(); } catch { }
+            if (_globalApplication === this) _globalApplication = null;
+            this._state = 'disposed';
+            Application._disposingCount--;
         })();
     }
 

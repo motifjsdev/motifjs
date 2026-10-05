@@ -71,6 +71,7 @@ export {
 export type {
     __attr,
     AnyEvents,
+    ApplicationState,
     AnyFunctionalComponent,
     AsyncTrackingToken,
     Bind,

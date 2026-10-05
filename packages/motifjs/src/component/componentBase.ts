@@ -998,8 +998,23 @@ function subtreeDisposesSync(c: any, root: boolean): boolean {
         return true;
 }
 
+const teardownApplications = new WeakMap<object, Application>();
+
+function owningApplication(c: any): Application | null {
+        for (let p = c; p; p = p.parent) {
+                if (p.application) return p.application;
+                const recorded = teardownApplications.get(p);
+                if (recorded) return recorded;
+        }
+        return Application.main ?? null;
+}
+
 function disposePrefix(c: any, options: IDisposeOptions, asChild: boolean): void {
         const ctx = asChild ? 'disposeAsync' : 'dispose';
+        if (Application._disposingCount > 0) {
+                const app = owningApplication(c);
+                if (app && app.state === 'disposing') teardownApplications.set(c, app);
+        }
         if (!asChild && options?.skipLeaveTransition) {
                 c.motif.options.transition.skipNextLeave = true;
         }
@@ -1403,7 +1418,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
         public get context(): Application {
                 const parentCtx: any = this.parent?.context;
-                const app: Application = parentCtx?.[RAW_APPLICATION] ?? parentCtx ?? Application.main;
+                const app: Application = parentCtx?.[RAW_APPLICATION] ?? parentCtx ?? teardownApplications.get(this) ?? Application.main;
                 if (!app) { return app; }
                 if ((this._scopedContext as any)?.[RAW_APPLICATION] !== app) {
                         this._scopedContext = createScopedContext(app, this);
@@ -2018,6 +2033,8 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 while (c) {
                         const p = (c as any).provider as ServiceProvider | undefined;
                         if (p) return p;
+                        const recorded = teardownApplications.get(c);
+                        if (recorded) return recorded.state === 'disposed' ? null : recorded.provider;
                         c = c.parent;
                 }
                 try { return Application.main?.provider ?? null; } catch { return null; }
