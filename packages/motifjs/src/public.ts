@@ -131,6 +131,7 @@ export type {
     Router,
     RouterClassingSettings,
     RouteRedirect,
+    RouteResolution,
     RouteResolveContext,
     RouterEvents,
     RouterNavigatedEventArgs,

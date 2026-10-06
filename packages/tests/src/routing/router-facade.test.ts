@@ -47,19 +47,35 @@ describe('app.router facade: resolve, href, routes', () => {
 
     test('resolve matches without navigating', () => {
         const hit = app.router.resolve('/users/5');
-        expect(hit.ok).toBe(true);
-        expect(hit.route?.name).toBe('user');
-        expect(hit.params.id).toBe('5');
+        expect(hit.result.ok).toBe(true);
+        expect(hit.result.route?.name).toBe('user');
+        expect(hit.result.params.id).toBe('5');
+        expect(hit.chain).toEqual(['/users/5']);
         expect(app.router.uri).toBe('/');
         expect(window.location.pathname).toBe('/');
 
         const nested = app.router.resolve('/admin/logs/2026-09-27');
-        expect(nested.ok).toBe(true);
-        expect(nested.route?.name).toBe('admin-logs');
-        expect(nested.params.day).toBe('2026-09-27');
-        expect(nested.chain.map(r => r.name)).toEqual(['admin', 'admin-logs']);
+        expect(nested.result.ok).toBe(true);
+        expect(nested.result.route?.name).toBe('admin-logs');
+        expect(nested.result.params.day).toBe('2026-09-27');
+        expect(nested.result.chain.map(r => r.name)).toEqual(['admin', 'admin-logs']);
+        expect(nested.chain).toEqual(['/admin', '/logs/2026-09-27']);
 
-        expect(app.router.resolve('/missing').ok).toBe(false);
+        const missing = app.router.resolve('/missing');
+        expect(missing.result.ok).toBe(false);
+        expect(missing.chain).toEqual([]);
+    });
+
+    test('resolve returns the same chain and result shape as a navigation', async () => {
+        const preview = app.router.resolve('/admin/logs/2026-09-27');
+        const shown = await app.router.navigate('/admin/logs/2026-09-27');
+
+        expect(preview.chain).toEqual(app.router.chain);
+        expect(preview.result.uri).toBe(shown.uri);
+        expect(preview.result.route).toBe(shown.route);
+        expect(preview.result.chain).toEqual(shown.chain);
+        expect(preview.result.params).toEqual(shown.params);
+        expect(Object.keys(preview.result).sort()).toEqual(Object.keys(shown).sort());
     });
 
     test('href builds the path of a named route', () => {
@@ -74,6 +90,36 @@ describe('app.router facade: resolve, href, routes', () => {
         await app.router.navigateByName('user', { id: 9 });
         expect(app.router.uri).toBe(app.router.href('user', { id: 9 }));
         await app.router.navigateByName('home');
+        expect(app.router.uri).toBe('/');
+    });
+
+    test('router.navigate and navigateByName return the same result as app.navigate', async () => {
+        const shown = await app.router.navigate('/admin/logs/2026-09-27');
+        expect(shown.ok).toBe(true);
+        expect(shown.route?.name).toBe('admin-logs');
+        expect(shown.chain.map((r: RouteItem) => r.name)).toEqual(['admin', 'admin-logs']);
+        expect(app.router.chain).toEqual(['/admin', '/logs/2026-09-27']);
+
+        const same = await app.router.navigate('/admin/logs/2026-09-27');
+        expect(same).toEqual({ ok: true, skipped: true, uri: '/admin/logs/2026-09-27' });
+
+        const named = await app.router.navigateByName('user', { id: 3 });
+        expect(named.ok).toBe(true);
+        expect(named.params.id).toBe('3');
+        expect(named.chain.map((r: RouteItem) => r.name)).toEqual(['user']);
+
+        const missing = await app.router.navigate('/missing');
+        expect(missing.ok).toBe(false);
+
+        const viaApp = await app.navigate('/users/4');
+        const viaRouter = await app.router.navigate('/users/5');
+        expect(Object.keys(viaRouter).sort()).toEqual(Object.keys(viaApp).sort());
+    });
+
+    test('a guard cancel is reported by router.navigate', async () => {
+        app.useGuard(({ to }, next) => { if (to.path === '/users/1') next(false); else next(); });
+        const cancelled = await app.router.navigate('/users/1');
+        expect(cancelled).toEqual({ ok: false, cancelled: true, reason: 'guard' });
         expect(app.router.uri).toBe('/');
     });
 

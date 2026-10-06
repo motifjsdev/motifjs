@@ -79,6 +79,11 @@ export interface ResolveResult {
     aliasOf?: string | null;
 }
 
+export type RouteResolution = {
+    chain: string[];
+    result: ResolveResult;
+}
+
 export type Router = {
     readonly params: Record<string, any>;
     readonly route: RouteItem | null;
@@ -86,8 +91,8 @@ export type Router = {
     readonly uri: string;
     readonly fullPath: string | null;
     readonly aliasOf: string | null;
-    navigate: (uri: string, options?: NavigationOptions) => Promise<void>;
-    navigateByName: (name: string, params?: Record<string, any>, options?: NavigationOptions) => Promise<void>;
+    navigate: (uri: string, options?: NavigationOptions) => Promise<any>;
+    navigateByName: (name: string, params?: Record<string, any>, options?: NavigationOptions) => Promise<any>;
     evict: (route?: RouteItem | string | null) => Promise<void>;
     readonly chain: string[];
     readonly extend: Record<string, any>;
@@ -95,7 +100,7 @@ export type Router = {
     readonly direction?: NavigationDirection;
     readonly state?: any;
     readonly stack?: StackEntryInfo[];
-    resolve: (uri: string) => ResolveResult;
+    resolve: (uri: string) => RouteResolution;
     href: (name: string, params?: Record<string, any>) => string;
     readonly routes: RouteInfo[];
 }

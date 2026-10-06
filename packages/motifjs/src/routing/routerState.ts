@@ -78,15 +78,19 @@ export function createRouter(state: RouterState, module: () => UrlRoutingModule 
             return module()?.routeInfos() ?? [];
         },
         navigate: async (uri: string, options?: NavigationOptions) => {
-            await required().navigate(uri, options);
+            return await required().navigate(uri, options);
         },
         navigateByName: async (name: string, params?: Record<string, any>, options?: NavigationOptions) => {
-            await required().navigateByName(name, params, options);
+            return await required().navigateByName(name, params, options);
         },
         evict: async (route?: RouteItem | string | null) => {
             await required().evict(route);
         },
-        resolve: (uri: string) => required().resolve(uri),
+        resolve: (uri: string) => {
+            const current = required();
+            const result = current.resolve(uri);
+            return { chain: current.chainOf(result), result };
+        },
         href: (name: string, params?: Record<string, any>) => required().href(name, params),
     };
 }

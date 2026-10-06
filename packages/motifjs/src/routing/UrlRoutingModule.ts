@@ -351,7 +351,7 @@ export class UrlRoutingModule {
 
             const snapshotOf = (result: ResolveResult): RouteSnapshot => ({
                 target: result,
-                chain: result.chain.map(r => this.routingEngine.generatePathString(r.path, result.params) || ''),
+                chain: this.chainOf(result),
                 direction,
                 state: entryState,
             });
@@ -564,6 +564,10 @@ export class UrlRoutingModule {
             await dispatch(0);
         }
         return { proceed, uri: urix };
+    }
+
+    public chainOf(result: ResolveResult): string[] {
+        return result.chain.map(r => this.routingEngine.generatePathString(r.path, result.params) || '');
     }
 
     public resolve(uri: string): ResolveResult {
