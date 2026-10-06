@@ -12,11 +12,10 @@ import compiler from '@motifx/compiler';
 
 export default defineConfig({
     plugins: [compiler()],
-    esbuild: { jsx: 'preserve' },
 });
 ```
 
-Set `"jsx": "preserve"` in `tsconfig.json` as well, so that only the compiler handles JSX. It compiles `.tsx`, `.jsx`, `.mtsx`, `.mjsx` and `.aio` files, and the standard decorators in `.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs` files (unless the nearest `tsconfig.json` enables `experimentalDecorators`).
+The plugin runs before Vite's own transform and leaves no JSX behind, so Vite needs no JSX setting; `"jsx": "preserve"` in `tsconfig.json` lets TypeScript type-check JSX without compiling it. It compiles `.tsx`, `.jsx`, `.mtsx`, `.mjsx` and `.aio` files, and the standard decorators in `.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs` files (unless the nearest `tsconfig.json` enables `experimentalDecorators`).
 
 Options:
 

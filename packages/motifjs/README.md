@@ -23,7 +23,6 @@ import compiler from '@motifx/compiler';
 
 export default defineConfig({
     plugins: [compiler()],
-    esbuild: { jsx: 'preserve' },
 });
 ```
 
@@ -43,7 +42,7 @@ export default defineConfig({
 }
 ```
 
-`jsx: "preserve"` is required in both places: the JSX is compiled by `@motifx/compiler`, not by esbuild or TypeScript.
+The JSX is compiled by `@motifx/compiler`, which runs before Vite's own transform, so Vite needs no JSX setting. `"jsx": "preserve"` in `tsconfig.json` lets TypeScript type-check JSX without compiling it.
 
 ## A first component
 

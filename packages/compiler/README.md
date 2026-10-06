@@ -18,11 +18,10 @@ import compiler from '@motifx/compiler';
 
 export default defineConfig({
     plugins: [compiler()],
-    esbuild: { jsx: 'preserve' },
 });
 ```
 
-Set `"jsx": "preserve"` in `tsconfig.json` as well, so that only `@motifx/compiler` compiles JSX. Vitest picks up the same plugin from the Vite config.
+The plugin runs before Vite's own transform (`enforce: 'pre'`) and leaves no JSX behind, so Vite needs no JSX setting. Set `"jsx": "preserve"` in `tsconfig.json` so that TypeScript type-checks JSX without compiling it. Vitest picks up the same plugin from the Vite config.
 
 ## Rollup
 

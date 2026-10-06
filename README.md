@@ -60,7 +60,6 @@ import compiler from '@motifx/compiler';
 
 export default defineConfig({
     plugins: [compiler()],
-    esbuild: { jsx: 'preserve' }, // the compiler compiles JSX; esbuild must leave it alone
 });
 ```
 
