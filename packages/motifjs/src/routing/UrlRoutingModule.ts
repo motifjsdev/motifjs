@@ -84,7 +84,7 @@ export class UrlRoutingModule {
                 const h = w?.location?.hash || '';
                 return h && h.startsWith('#') ? h.slice(1) || '/' : '/';
             }
-            return (w?.location?.pathname || '/') + (w?.location?.search || '');
+            return (w?.location?.pathname || '/') + (w?.location?.search || '') + (w?.location?.hash || '');
         } catch { return '/'; }
     }
 
@@ -391,7 +391,7 @@ export class UrlRoutingModule {
             if (navOptions.scroll) { 
                 this._handleScrollBehavior(navOptions.scroll);
             } else {
-                this._scroll?.arrived(this._uriWithHash(appliedPath, uri));
+                this._scroll?.arrived(this._uriWithHash(appliedPath, uri), direction);
             }
             this.application.fire?.('motifjs-router-navigated', {
                 uri: appliedPath,
@@ -754,8 +754,13 @@ export class UrlRoutingModule {
             }
 
             if (w?.history && typeof w.history.pushState === 'function') {
-                const current = (w.location.pathname || '/') + (w.location.search || '');
-                if (current !== uri) {
+                const current = (w.location.pathname || '/') + (w.location.search || '') + (w.location.hash || '');
+                let wanted = uri;
+                try {
+                    const url = new URL(uri, w.location.href);
+                    wanted = url.pathname + url.search + url.hash;
+                } catch { }
+                if (current !== wanted) {
                     if (options.replace) {
                         const stamp = this._nextHistoryStamp(false);
                         w.history.replaceState(this._routerState(options.state, stamp), '', uri);

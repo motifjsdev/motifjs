@@ -17,6 +17,7 @@
 
 import { Application, Component } from '@motifx/core';
 import { RouteItem } from '@motifx/core';
+import { trackRouter } from '../helpers/router-traversal';
 
 const createMockControl = () => () => new Component('div');
 
@@ -78,11 +79,12 @@ describe('Scroll memory', () => {
         app = Application.CreateBuilder().build();
     });
 
-    afterEach(() => {
-        try { app?.dispose(); } catch { }
+    afterEach(async () => {
+        try { await app?.dispose(); } catch { }
+        await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    const run = () => app.run(document.createElement('div'));
+    const run =() => app.run(document.createElement('div'));
 
     it('varsayılan kapalı: kaydırmaya dokunulmaz', async () => {
         app.useRouter({ routes: routes(), mode: 'history' });
@@ -272,6 +274,155 @@ describe('Scroll memory', () => {
 
         expect(view.state.top).toBe(900);
     });
+    describe('kaydırma biçimi', () => {
+        const anchors: HTMLElement[] = [];
+        const anchor = (id: string, top: number) => {
+            const el = document.createElement('div');
+            el.id = id;
+            const scrollIntoView = jest.fn(() => { view.state.top = top; });
+            (el as any).scrollIntoView = scrollIntoView;
+            document.body.appendChild(el);
+            anchors.push(el);
+            return scrollIntoView;
+        };
+
+        afterEach(() => {
+            for (const el of anchors.splice(0)) el.remove();
+        });
+
+        it('kayıtlı konuma ve sayfa başına anında kaydırır', async () => {
+            app.useRouter({ routes: routes(), mode: 'history', scrollMemory: true });
+            run();
+
+            await app.router.navigate('/uzun');
+            view.state.top = 1200;
+            await app.router.navigate('/kisa');
+            expect(view.scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'instant' });
+
+            await app.router.navigate('/uzun');
+            expect(view.scrollTo).toHaveBeenLastCalledWith({ top: 1200, behavior: 'instant' });
+            expect(view.state.top).toBe(1200);
+        });
+
+        it('başka sayfadan gelinen çapaya anında kaydırır', async () => {
+            const scrollIntoView = anchor('bolum', 640);
+            app.useRouter({ routes: routes(), mode: 'history', scrollMemory: true });
+            run();
+
+            await app.router.navigate('/kisa');
+            await app.router.navigate('/uzun#bolum');
+            expect(scrollIntoView).toHaveBeenCalledTimes(1);
+            expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'instant' });
+            expect(view.state.top).toBe(640);
+        });
+
+        it('aynı sayfadaki çapa linki CSS scroll-behavior kuralına bırakılır', async () => {
+            const scrollIntoView = anchor('bolum', 640);
+            app.useRouter({ routes: routes(), mode: 'history', scrollMemory: true });
+            run();
+
+            await app.router.navigate('/uzun');
+            await app.router.navigate('/uzun#bolum');
+            expect(scrollIntoView).toHaveBeenCalledTimes(1);
+            expect(scrollIntoView.mock.calls[0]).toEqual([]);
+
+            await app.router.navigate('/uzun#bolum-yok');
+            await app.router.navigate('/uzun#bolum', { replace: true });
+            expect(scrollIntoView).toHaveBeenCalledTimes(2);
+            expect(scrollIntoView.mock.calls[1]).toEqual([]);
+        });
+
+        it('hash kipinde de aynı sayfadaki çapa CSS kuralına, başka sayfadan gelinen çapa anında', async () => {
+            const scrollIntoView = anchor('bolum', 640);
+            app.useRouter({ routes: routes(), mode: 'hash', scrollMemory: true });
+            run();
+
+            await app.router.navigate('/kisa');
+            await app.router.navigate('/uzun#bolum');
+            expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'instant' });
+
+            await app.router.navigate('/uzun');
+            await app.router.navigate('/uzun#bolum');
+            expect(scrollIntoView.mock.calls[1]).toEqual([]);
+        });
+
+        it('aynı sayfada geri ve ileri çapaya anında döner', async () => {
+            const first = anchor('ilk', 300);
+            const second = anchor('ikinci', 900);
+            app.useRouter({ routes: routes(), mode: 'history', scrollMemory: true });
+            const nav = trackRouter(app);
+            run();
+            await nav.idle();
+
+            await app.router.navigate('/uzun#ilk');
+            await app.router.navigate('/uzun#ikinci');
+            expect(second.mock.calls[0]).toEqual([]);
+
+            await nav.traverse(() => window.history.back());
+            expect(app.router.direction).toBe('back');
+            expect(first).toHaveBeenLastCalledWith({ behavior: 'instant' });
+            expect(view.state.top).toBe(300);
+
+            await nav.traverse(() => window.history.forward());
+            expect(app.router.direction).toBe('forward');
+            expect(second).toHaveBeenLastCalledWith({ behavior: 'instant' });
+            expect(view.state.top).toBe(900);
+        });
+
+        it('düz çapa linkinin tarayıcı geçişi CSS scroll-behavior kuralına bırakılır', async () => {
+            const scrollIntoView = anchor('bolum', 640);
+            app.useRouter({ routes: routes(), mode: 'history', scrollMemory: true });
+            const nav = trackRouter(app);
+            run();
+            await nav.idle();
+
+            await app.router.navigate('/uzun');
+            await nav.traverse(() => {
+                history.pushState(null, '', '/uzun#bolum');
+                window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+            });
+            expect(app.router.direction).toBe('traverse');
+            expect(scrollIntoView).toHaveBeenCalledTimes(1);
+            expect(scrollIntoView.mock.calls[0]).toEqual([]);
+        });
+
+        it('hash kipinde aynı sayfada geri ve ileri çapaya anında döner', async () => {
+            const first = anchor('ilk', 300);
+            const second = anchor('ikinci', 900);
+            app.useRouter({ routes: routes(), mode: 'hash', scrollMemory: true });
+            const nav = trackRouter(app);
+            run();
+            await nav.idle();
+
+            await app.router.navigate('/uzun#ilk');
+            await app.router.navigate('/uzun#ikinci');
+            await nav.idle();
+            expect(second.mock.calls[0]).toEqual([]);
+
+            await nav.traverse(() => window.history.back());
+            expect(app.router.direction).toBe('back');
+            expect(first).toHaveBeenLastCalledWith({ behavior: 'instant' });
+            expect(view.state.top).toBe(300);
+
+            await nav.traverse(() => window.history.forward());
+            expect(app.router.direction).toBe('forward');
+            expect(second).toHaveBeenLastCalledWith({ behavior: 'instant' });
+            expect(view.state.top).toBe(900);
+        });
+
+        it('anchor: false iken aynı sayfadaki çapa kaydırılmaz', async () => {
+            const scrollIntoView = anchor('bolum', 640);
+            app.useRouter({ routes: routes(), mode: 'history', scrollMemory: { anchor: false } });
+            run();
+
+            await app.router.navigate('/uzun');
+            view.state.top = 200;
+            await app.router.navigate('/uzun#bolum');
+            expect(scrollIntoView).not.toHaveBeenCalled();
+            expect(view.state.top).toBe(200);
+        });
+    });
+
     describe('container', () => {
         const makeScroller = (height = 5000) => {
             const el = document.createElement('div');
@@ -318,6 +469,23 @@ describe('Scroll memory', () => {
             await app.router.navigate('/uzun');
 
             expect(box.top).toBe(700);
+        });
+
+        it('kabı CSS scroll-behavior beklemeden anında kaydırır', async () => {
+            const { el, box } = makeScroller();
+            const scrollTo = jest.fn((options: ScrollToOptions) => { box.top = Number(options.top ?? 0); });
+            (el as any).scrollTo = scrollTo;
+            app.useRouter({ routes: routes(), mode: 'history', scrollMemory: { container: '#scroller' } });
+            run();
+
+            await app.router.navigate('/uzun');
+            box.top = 1500;
+            await app.router.navigate('/kisa');
+            expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'instant' });
+
+            await app.router.navigate('/uzun');
+            expect(scrollTo).toHaveBeenLastCalledWith({ top: 1500, behavior: 'instant' });
+            expect(box.top).toBe(1500);
         });
 
         it('kap bulunamazsa pencere kaydırmasına düşer', async () => {

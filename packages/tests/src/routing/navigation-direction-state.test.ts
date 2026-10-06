@@ -83,6 +83,59 @@ describe('Navigation direction and entry state', () => {
             expect(['replace', 'push']).toContain(app.router.direction);
         });
 
+        it('history mode keeps the hash through back and forward on the same page', async () => {
+            const events: string[] = [];
+            app.onRouterChanged(e => { events.push(`${e!.uri}:${e!.direction}`); });
+            start('history');
+            await nav.idle();
+            await app.navigate('/a#one');
+            await app.navigate('/a#two');
+
+            await traverse(() => window.history.back());
+            expect(location.pathname + location.hash).toBe('/a#one');
+            expect(app.router.uri).toBe('/a#one');
+            expect(app.router.direction).toBe('back');
+
+            await traverse(() => window.history.forward());
+            expect(location.pathname + location.hash).toBe('/a#two');
+            expect(app.router.uri).toBe('/a#two');
+            expect(app.router.direction).toBe('forward');
+
+            await traverse(() => window.history.back());
+            expect(app.router.uri).toBe('/a#one');
+            expect(app.router.direction).toBe('back');
+
+            expect(events.slice(1)).toEqual(['/a#one:push', '/a#two:push', '/a#one:back', '/a#two:forward', '/a#one:back']);
+        });
+
+        it('history mode drops the hash from the address when navigating to the bare path', async () => {
+            start('history');
+            await nav.idle();
+            await app.navigate('/a#one');
+            expect(location.pathname + location.hash).toBe('/a#one');
+
+            await app.navigate('/a');
+            expect(location.pathname + location.hash).toBe('/a');
+            expect(app.router.uri).toBe('/a');
+
+            await traverse(() => window.history.back());
+            expect(location.pathname + location.hash).toBe('/a#one');
+            expect(app.router.uri).toBe('/a#one');
+        });
+
+        it('history mode does not add a history entry for the address already shown', async () => {
+            start('history');
+            await nav.idle();
+            await app.navigate('/a#b%C3%B6l%C3%BCm');
+            const length = history.length;
+
+            await traverse(() => window.history.back());
+            await traverse(() => window.history.forward());
+            await app.navigate('/a#bölüm');
+            expect(history.length).toBe(length);
+            expect(location.hash).toBe('#b%C3%B6l%C3%BCm');
+        });
+
         it('hash mode reports back and forward', async () => {
             start('hash');
             await app.navigate('/a');

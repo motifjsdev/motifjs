@@ -1,10 +1,10 @@
 
-import type { ScrollMemoryOptions } from './common';
+import type { NavigationDirection, ScrollMemoryOptions } from './common';
 
 export interface ScrollViewport {
     scrollTop(): number;
     scrollTo(top: number): void;
-    scrollToAnchor(id: string): boolean;
+    scrollToAnchor(id: string, follow?: boolean): boolean;
 }
 
 const STORAGE_KEY = 'motifjs:scroll';
@@ -19,6 +19,7 @@ export class ScrollMemory {
     private readonly positions = new Map<string, number>();
 
     private currentKey = '';
+    private currentPath: string | null = null;
 
     private visited = false;
     private restoring = false;
@@ -54,11 +55,13 @@ export class ScrollMemory {
         this.persist();
     }
 
-    public arrived(uri: string): void {
+    public arrived(uri: string, direction?: NavigationDirection): void {
         this.visited = true;
         const { path, hash } = splitUri(uri);
+        const inPage = !!hash && path === this.currentPath && (direction === 'push' || direction === 'replace' || direction === 'traverse');
+        this.currentPath = path;
         this.currentKey = this.keyOf(path);
-        this.restore(this.currentKey, this.options.anchor === false ? '' : hash || (this.locationAnchor ? locationHash() : ''));
+        this.restore(this.currentKey, this.options.anchor === false ? '' : hash || (this.locationAnchor ? locationHash() : ''), inPage);
     }
 
     public saved(key: string): number {
@@ -89,7 +92,7 @@ export class ScrollMemory {
         }
     }
 
-    private restore(key: string, anchor: string): void {
+    private restore(key: string, anchor: string, follow: boolean): void {
         this.cancelRestore();
 
         const target = this.positions.get(key) ?? 0;
@@ -105,7 +108,7 @@ export class ScrollMemory {
 
         const attempt = (): void => {
             this.cancelFrame = null;
-            const done = anchor ? this.viewport.scrollToAnchor(anchor) : this.reached(target);
+            const done = anchor ? this.viewport.scrollToAnchor(anchor, follow) : this.reached(target);
             if (done || Date.now() - startedAt >= settleMs) {
                 this.cancelRestore();
                 this.remember(key, this.viewport.scrollTop());
@@ -186,13 +189,18 @@ function windowViewport(): ScrollViewport {
             try { return window.scrollY || document.documentElement?.scrollTop || 0; } catch { return 0; }
         },
         scrollTo: (top) => {
-            try { window.scrollTo(0, top); } catch { }
+            try { window.scrollTo({ top, behavior: 'instant' }); }
+            catch { try { window.scrollTo(0, top); } catch { } }
         },
-        scrollToAnchor: (id) => {
+        scrollToAnchor: (id, follow) => {
             try {
                 const node = document.getElementById(id);
                 if (!node) return false;
-                node.scrollIntoView();
+                if (follow) node.scrollIntoView();
+                else {
+                    try { node.scrollIntoView({ behavior: 'instant' }); }
+                    catch { node.scrollIntoView(); }
+                }
                 return true;
             } catch { return false; }
         },
@@ -217,9 +225,10 @@ function containerViewport(container: NonNullable<ScrollMemoryOptions['container
         scrollTo: (top) => {
             const el = resolve();
             if (!el) { fallback.scrollTo(top); return; }
-            try { el.scrollTop = top; } catch { }
+            try { el.scrollTo({ top, behavior: 'instant' }); }
+            catch { try { el.scrollTop = top; } catch { } }
         },
-        scrollToAnchor: (id) => fallback.scrollToAnchor(id),
+        scrollToAnchor: (id, follow) => fallback.scrollToAnchor(id, follow),
     };
 }
 
