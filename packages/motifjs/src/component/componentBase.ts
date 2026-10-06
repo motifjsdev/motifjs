@@ -1338,14 +1338,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         this.element = element;
                 }
 
-                if (props) {
-                        const refs = extractRefs(props, this);
-                        if (refs.length > 0) {
-                                for (const fn of takePendingRefs(this, refs)) {
-                                        callReported(() => fn(this), 'MJX122', 'ref');
-                                }
-                        }
-                }
+                const refs = props ? extractRefs(props, this) : [];
 
                 props && ParseProps(props, this);
                 applyComponentOptions((props as any)?.options, this);
@@ -1359,6 +1352,11 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         else applyFallthroughProps(props, this);
                 }
 
+                if (refs.length > 0) {
+                        for (const fn of takePendingRefs(this, refs)) {
+                                callReported(() => fn(this), 'MJX122', 'ref');
+                        }
+                }
 
                 ComponentHelper.callOnInitializing(this);
                 if (this.isDisposed) return;

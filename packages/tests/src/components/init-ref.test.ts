@@ -342,6 +342,44 @@ describe('ref is kept out of props and applied only where it was given', () => {
         await root.dispose();
     });
 
+    test('inside ref a class component already has its props, its tag attributes and its options', async () => {
+        const seen: any[] = [];
+        const read = (c: any) => seen.push({ title: c.props?.title, cls: c.element.className, strategy: c.motif.options.hideStrategy });
+        const A = evalJsx(`
+            class Box extends Component {
+                constructor(p){ super('article', p); }
+            }
+            class Tagged extends Component<HTMLDivElement> {}
+            function A(){
+                return <div>
+                    <Box title="t" class="c" options={{ hideStrategy: 'detach' }} ref={read} />
+                    <Tagged title="t" class="c" options={{ hideStrategy: 'detach' }} ref={read} />
+                </div>;
+            }`, 'A', { read });
+        const { root } = mount(A());
+        class Manual extends Component {
+            constructor(p: any) { super('section', p); }
+        }
+        new Manual({ title: 't', class: 'c', options: { hideStrategy: 'detach' }, ref: read } as any);
+        expect(seen).toEqual([
+            { title: 't', cls: 'c', strategy: 'detach' },
+            { title: 't', cls: 'c', strategy: 'detach' },
+            { title: 't', cls: 'c', strategy: 'detach' },
+        ]);
+        await root.dispose();
+    });
+
+    test('subclass fields are set after ref: JavaScript initializes them once the base constructor returns', async () => {
+        const seen: any[] = [];
+        class Ctl extends Component {
+            marker = 'ready';
+            constructor(p: any) { super('div', p); }
+        }
+        const c = new Ctl({ ref: (x: any) => seen.push(x.marker) } as any);
+        expect(seen).toEqual([undefined]);
+        expect(c.marker).toBe('ready');
+    });
+
     test('a ref given inside runover is used as well, once, on the component it was given to', async () => {
         const got: string[] = [];
         class Box extends Component {
