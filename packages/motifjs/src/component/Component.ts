@@ -1,5 +1,6 @@
 import { dom } from "../";
 import { ComponentBase, IBaseProp, ParseProps, applyComponentOptions, applyFallthroughProps, applyTransitionProp, extractRefs, safeCallSilent, takePendingRefs, untracked } from "../";
+import { disposeUnplacedChilds } from "./componentBase";
 import { resolveComponent } from "./resolveComponent";
 import { ElementType, EventArgs } from "./types";
 import { callReported, motifError } from "../common/diagnostics";
@@ -33,6 +34,7 @@ export class Component<TElement extends ElementType = any, TProps extends object
 
     public static elementTag?: string;
     public static elementNamespace?: string;
+    public static _placesChilds?: boolean;
 
     constructor(elementOrParams: TElement | string | IBaseProp<TProps>);
     constructor(element: TElement | string, options: IBaseProp<TProps>);
@@ -115,8 +117,10 @@ export class Component<TElement extends ElementType = any, TProps extends object
                 // Alt sınıflar initializeComponent'i ezdiği için FragmentNode.initializeComponent'e güvenilemez.
                 const kids = this.childs;
                 if (Array.isArray(kids) && kids.length) {
-                    for (const kid of kids) {
-                        if (kid) this.controls.add(kid);
+                    if (derivedCtor?._placesChilds !== true) {
+                        for (const kid of kids) {
+                            if (kid) this.controls.add(kid);
+                        }
                     }
                 }
             }
@@ -145,6 +149,7 @@ function applyJsxFrameworkProps(target: any, props: any, refs: any[]): any {
     if (!(target instanceof ComponentBase)) return target;
 
     applyRefs(target, refs.concat(extractRefs(props)));
+    disposeUnplacedChilds(target, (props as any).childs);
 
     // Fonksiyon bileşeni etiketindeki ortak öznitelikler (class/id/aria-*…) döndürülen köke düşer.
     // Kök `<div {...props}/>` ise aynı değerler zaten uygulanmıştır; ikinci kez uygulanmaz.

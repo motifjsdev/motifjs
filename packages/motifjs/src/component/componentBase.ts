@@ -2170,6 +2170,15 @@ export function takePendingRefs(component: ComponentBase, ref: any): Function[] 
         return pending;
 }
 
+export function disposeUnplacedChilds(owner: ComponentBase, kids: unknown): void {
+        if (!Array.isArray(kids) || !kids.some(kid => kid instanceof ComponentBase)) return;
+        owner.motif.setDisposable(() => {
+                for (const kid of kids) {
+                        if (kid instanceof ComponentBase && !kid.isDisposed && !kid.parent) kid.dispose();
+                }
+        });
+}
+
 const isCallableRef = (ref: any): boolean => typeof ref === 'function' || Array.isArray(ref);
 
 export function extractRefs(props: any, component?: ComponentBase): any[] {
@@ -2246,6 +2255,7 @@ export function ParseProps(props: any, component: ComponentBase): any {
                         } else if (key == 'childs') {
                                 const flat: ComponentBase[] = ([] as any[]).concat(...props[key] as any);
                                 component.childs = flat;
+                                disposeUnplacedChilds(component, flat);
                                 delete props[key];
                         } else if (key === 'transition') {
                                 applyTransitionProp(props[key], component);

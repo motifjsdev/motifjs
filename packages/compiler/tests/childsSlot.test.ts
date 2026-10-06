@@ -115,6 +115,48 @@ describe('childs içerik slotu', () => {
     });
 });
 
+describe('childs slotu yerleştiren sınıf işaretlenir', () => {
+    const marked = (out: string) => /_placesChilds = true/.test(out);
+
+    test('{this.childs} yerleştiren sınıf _placesChilds alır', () => {
+        expect(marked(compile(`class P extends Component<HTMLDivElement> { view() { return <div>{this.childs}</div>; } }`))).toBe(true);
+    });
+
+    test('iç içe elemandaki ve getter biçimindeki slot da işaretler', () => {
+        expect(marked(compile(`class P extends Component { view() { return <section><div x-wait={() => w}>{this.childs}</div></section>; } }`))).toBe(true);
+        expect(marked(compile(`class P extends Component { view() { return <div>{() => this.childs}</div>; } }`))).toBe(true);
+    });
+
+    test('bileşen etiketine aktarılan slot da işaretler', () => {
+        expect(marked(compile(`class P extends Component { view() { return <Card>{this.childs}</Card>; } }`))).toBe(true);
+    });
+
+    test('sınıf alanındaki ok fonksiyonu ve yardımcı metot da sayılır', () => {
+        expect(marked(compile(`class P extends Component { body = () => <div>{this.childs}</div>; view() { return this.body(); } }`))).toBe(true);
+        expect(marked(compile(`class P extends Component { body() { return <div>{this.childs}</div>; } view() { return this.body(); } }`))).toBe(true);
+    });
+
+    test("slot yoksa, öznitelikte ya da başka nesnenin childs'ında işaret yok", () => {
+        expect(marked(compile(`class P extends Component<HTMLDivElement> { view() { return <div>{this.title}</div>; } }`))).toBe(false);
+        expect(marked(compile(`class P extends Component { view() { return <X items={this.childs} />; } }`))).toBe(false);
+        expect(marked(compile(`class P extends Component { view() { return <div>{props.childs}</div>; } }`))).toBe(false);
+        expect(marked(compile(`class P extends Component { view() { return <div>{this.childsCount}</div>; } }`))).toBe(false);
+    });
+
+    test('iç sınıfın slotu dış sınıfı, function ifadesi içindeki this.childs sınıfı işaretlemez', () => {
+        const out = compile(`class Outer extends Component { view() { class Inner extends Component { view() { return <i>{this.childs}</i>; } } return <div />; } }`);
+        expect(out.match(/_placesChilds = true/g)?.length).toBe(1);
+        expect(marked(compile(`class P extends Component { view() { return list.map(function () { return <div>{this.childs}</div>; }); } }`))).toBe(false);
+    });
+
+    test('elle yazılmış _placesChilds korunur, üst sınıfı olmayan sınıfa dokunulmaz', () => {
+        const out = compile(`class P extends Component { static _placesChilds = false; view() { return <div>{this.childs}</div>; } }`);
+        expect(out).toContain('_placesChilds = false');
+        expect(out).not.toContain('_placesChilds = true');
+        expect(marked(compile(`class P { view() { return <div>{this.childs}</div>; } }`))).toBe(false);
+    });
+});
+
 describe('childs slotunun JSX konumu korunur', () => {
     test('kardeşler arasındaki slot, kaynak sırasıyla aynı yere eklenir', () => {
         const out = compile(`
