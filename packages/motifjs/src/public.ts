@@ -153,4 +153,5 @@ export type {
     VirtualizationDataResponse,
     VirtualizationProps,
     VirtualizationState,
+    VisibilityChangedEventArgs,
 } from "./index";

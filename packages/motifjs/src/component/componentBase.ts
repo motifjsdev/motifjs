@@ -5,7 +5,7 @@ import { effect } from "../store/reactivity-core";
 import { ComponentEmiter } from "./ComponentEmiter";
 import { controlAttribute } from "./controlAttribute";
 import { controlClass } from "./controlClass";
-import { ComponentBaseOptions, ElementType, EventArgs, HtmlElementEvents, OptionalParams, RouterClassingSettings, shimAnimation } from "./types";
+import { ComponentBaseOptions, ElementType, EventArgs, HtmlElementEvents, OptionalParams, RouterClassingSettings, shimAnimation, VisibilityChangedEventArgs } from "./types";
 import { UnwrapValueRefs } from "../store/common";
 import { getTransitionInfo, runCssTransition, TransitionProps } from "../common/transition";
 import { callReported, motifError, reportError, reportWarning } from "../common/diagnostics";
@@ -281,7 +281,7 @@ export type IBaseProp<T extends any> = OptionalParams<T> & MotifDomEventProps & 
         onDisposed?(sender: ComponentBase, e: EventArgs): void;
         onConfig?(sender: ComponentBase, e: EventArgs): void;
         onConfigured?(sender: ComponentBase, e: EventArgs): void;
-        onVisibilityChanged?(sender: ComponentBase, e: EventArgs): void;
+        onVisibilityChanged?(sender: ComponentBase, e: VisibilityChangedEventArgs): void;
         onActivated?(sender: ComponentBase, e: EventArgs): void;
         onDeactivated?(sender: ComponentBase, e: EventArgs): void;
         runover?: {
@@ -603,10 +603,10 @@ const ComponentHelper = {
                 }
                 fireLifecycle(component,'oninitializing', ev);
         },
-        callVisibilityChanged(component: ComponentBase | any) {
+        callVisibilityChanged(component: ComponentBase | any, visible: boolean) {
                 if (!component || component.isDisposed) { return; }
                 if (!hasLifecycleHook(component, 'onVisibilityChanged', '_onVisibilityChangedHandlers', 'onvisibilitychanged')) { return; }
-                const sender = component, ev = { cancel: false } as EventArgs;
+                const sender = component, ev: VisibilityChangedEventArgs = { cancel: false, visible };
                 if (component.onVisibilityChanged) { callReported(() => component.onVisibilityChanged(sender, ev), 'MJX122', 'onVisibilityChanged'); }
                 if (Array.isArray(component._base._onVisibilityChangedHandlers)) {
                         for (const fn of component._base._onVisibilityChangedHandlers) {
@@ -1406,7 +1406,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         public onDisposed?(sender: ComponentBase, e: EventArgs): void;
         public onConfig?(sender: ComponentBase, e: EventArgs): void;
         public onConfigured?(sender: ComponentBase, e: EventArgs): void;
-        public onVisibilityChanged?(sender: ComponentBase, e: EventArgs): void;
+        public onVisibilityChanged?(sender: ComponentBase, e: VisibilityChangedEventArgs): void;
         /** keepAlive rota bileşeni outlet'ten ayrılıp önbelleğe alındığında (RoutingEngine) tetiklenir. */
         public onDeactivated?(sender: ComponentBase, e: EventArgs): void;
         /** keepAlive rota bileşeni önbellekten outlet'e yeniden bağlandığında (RoutingEngine) tetiklenir. */
@@ -1669,7 +1669,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 const strategy = this._computeHideStrategy();
                 if (strategy === 'detach') {
 
-                        ComponentHelper.callVisibilityChanged(this);
+                        ComponentHelper.callVisibilityChanged(this, true);
                         if (this.isDisposed) { return; }
                         const needAttach = !this._isInDom() && this.parent && this.parent.isBuilt && !this.isWait;
                         this.isVisible = true;
@@ -1684,6 +1684,8 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
                         if (this.motif.options.placeholder && placeholderParent && placeholderParent !== expectedParent) {
                                 reportWarning('MJX106', []);
+                                ComponentHelper.callVisibilityChanged(this, true);
+                                if (this.isDisposed) { return; }
                                 this.isVisible = true;
                                 if (this.parent?.isBuilt) {
                                         ComponentHelper.internalBuild.call(this.parent, this);
@@ -1693,7 +1695,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
                         /** A*/
                         wantsEnterTransition(this) && this.motif.options.transition.enterTransition(() => { });
-                        ComponentHelper.callVisibilityChanged(this);
+                        ComponentHelper.callVisibilityChanged(this, true);
                         if (this.isDisposed) { return; }
                         if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
                                 this.controls.forEach(c => {
@@ -1719,7 +1721,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
                 const strategy = this._computeHideStrategy();
                 if (strategy === 'detach') {
-                        ComponentHelper.callVisibilityChanged(this);
+                        ComponentHelper.callVisibilityChanged(this, false);
                         if (this.isDisposed) { return; }
                         await this._base._detachDomWithAnimationAsync();
                         this.isVisible = false;
@@ -1730,7 +1732,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         const skip = transition.skipNextLeave === true;
                         if (skip) transition.skipNextLeave = false;
                         const finish = () => {
-                                ComponentHelper.callVisibilityChanged(this);
+                                ComponentHelper.callVisibilityChanged(this, false);
                                 if (this.isDisposed) { return; }
                                 if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
                                         this.controls.forEach(c => {

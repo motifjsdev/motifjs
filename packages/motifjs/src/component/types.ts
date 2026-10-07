@@ -16,6 +16,10 @@ export interface EventArgs {
     cancel: boolean;
 }
 
+export interface VisibilityChangedEventArgs extends EventArgs {
+    visible: boolean;
+}
+
 export type RouterClassingSettings = {
     to: 'all' | 'active' | 'exact' | 'none',
     path: string,
@@ -141,4 +145,4 @@ export type HtmlElementEvents = {
     : 'x:building' | 'x:built' | 'x:initializing' | 'x:initialized' | 'x:disposing' | 'x:disposed' | 'x:config' | 'x:configured' | 'x:visibilityChanged' | 'x:mounted']
     : CustomParameters<IHtmlElement[K]> extends Event ? CustomParameters<IHtmlElement[K]> : EventArgs;
 
-} & AnyEvents;
+} & { 'x:visibilityChanged': VisibilityChangedEventArgs } & AnyEvents;
