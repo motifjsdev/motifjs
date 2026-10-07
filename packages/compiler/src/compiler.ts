@@ -104,18 +104,23 @@ function stripTypeOnlyFields(path: NodePath<t.ClassDeclaration | t.ClassExpressi
     path.node.body.body = body.filter(member => !isTypeOnlyField(member));
 }
 
-const elementTagPlugin = () => ({
-    name: 'motifjs-element-tag',
-    visitor: {
-        Class: {
-            enter(path: NodePath<t.ClassDeclaration | t.ClassExpression>) {
-                stripTypeOnlyFields(path);
-                injectDeclaredElementTag(path);
-                injectChildsSlotMarker(path);
+const elementTagPlugin = () => {
+    const visited = new WeakSet<t.Node>();
+    return {
+        name: 'motifjs-element-tag',
+        visitor: {
+            Class: {
+                enter(path: NodePath<t.ClassDeclaration | t.ClassExpression>) {
+                    if (visited.has(path.node)) return;
+                    visited.add(path.node);
+                    stripTypeOnlyFields(path);
+                    injectDeclaredElementTag(path);
+                    injectChildsSlotMarker(path);
+                }
             }
         }
-    }
-});
+    };
+};
 
 
 
