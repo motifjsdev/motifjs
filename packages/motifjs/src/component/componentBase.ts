@@ -2517,31 +2517,47 @@ function findParentElement(component: ComponentBase): ComponentBase | null {
 }
 
 
+type AttachWaiter = { element: Element; callback: () => any };
+const attachWaiters = new Set<AttachWaiter>();
+let attachObserver: MutationObserver | null = null;
+
+function releaseAttachObserver() {
+        if (attachWaiters.size || !attachObserver) { return; }
+        try { attachObserver.disconnect(); } catch { /* ignore */ }
+        attachObserver = null;
+}
+
+function flushAttachWaiters() {
+        for (const waiter of [...attachWaiters]) {
+                if (!attachWaiters.has(waiter) || !document.contains(waiter.element)) { continue; }
+                attachWaiters.delete(waiter);
+                try {
+                        waiter.callback();
+                } catch (error) {
+                        queueMicrotask(() => { throw error; });
+                }
+        }
+        releaseAttachObserver();
+}
+
 function onElementAttached(element: Element, callback: () => any): (() => void) | null {
         if (document.contains(element)) {
                 callback();
                 return null;
         }
 
-        let done = false;
-        const observer = new MutationObserver(() => {
-                if (done) { return; }
-                if (document.contains(element)) {
-                        done = true;
-                        observer.disconnect();
-                        callback();
-                }
-        });
-
-        observer.observe(document.documentElement, {
-                childList: true,
-                subtree: true,
-        });
+        const waiter: AttachWaiter = { element, callback };
+        attachWaiters.add(waiter);
+        if (!attachObserver) {
+                attachObserver = new MutationObserver(flushAttachWaiters);
+                attachObserver.observe(document.documentElement, {
+                        childList: true,
+                        subtree: true,
+                });
+        }
 
         return () => {
-                if (done) { return; }
-                done = true;
-                try { observer.disconnect(); } catch { /* ignore */ }
+                if (attachWaiters.delete(waiter)) { releaseAttachObserver(); }
         };
 }
 
