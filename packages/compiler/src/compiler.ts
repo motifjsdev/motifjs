@@ -95,11 +95,21 @@ function injectChildsSlotMarker(path: NodePath<t.ClassDeclaration | t.ClassExpre
     } catch { }
 }
 
+const isTypeOnlyField = (member: t.Node): boolean =>
+    t.isClassProperty(member) && (!!member.declare || !!member.abstract);
+
+function stripTypeOnlyFields(path: NodePath<t.ClassDeclaration | t.ClassExpression>) {
+    const body = path.node.body.body;
+    if (!body.some(isTypeOnlyField)) return;
+    path.node.body.body = body.filter(member => !isTypeOnlyField(member));
+}
+
 const elementTagPlugin = () => ({
     name: 'motifjs-element-tag',
     visitor: {
         Class: {
             enter(path: NodePath<t.ClassDeclaration | t.ClassExpression>) {
+                stripTypeOnlyFields(path);
                 injectDeclaredElementTag(path);
                 injectChildsSlotMarker(path);
             }
