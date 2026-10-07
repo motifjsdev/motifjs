@@ -1329,6 +1329,8 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
         constructor(element: TElement, props: TProps = {} as TProps) {
                 super();
+                const asComponentRoot = constructingComponentRoot;
+                constructingComponentRoot = false;
                 recordServiceOwner(this);
                 if (this.onElementCreating) {
                         this.element = this.onElementCreating.call(this);
@@ -1347,7 +1349,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 // (class/style/id/tabindex/role/aria-*/data-*) kök düğüme (root node) düşer, prop'lar this.props'ta kalır.
                 if (props) {
                         const ctor0 = new.target as any;
-                        const plain = ctor0 === ComponentBase || Object.getPrototypeOf(ctor0) === ComponentBase;
+                        const plain = !asComponentRoot && (ctor0 === ComponentBase || Object.getPrototypeOf(ctor0) === ComponentBase);
                         if (plain) applyPlainElementProps(props, this);
                         else applyFallthroughProps(props, this);
                 }
@@ -2451,6 +2453,17 @@ function appliedDomProps(component: ComponentBase): Map<string, any> {
 const FALLTHROUGH_KEYS = new Set(['class', 'className', 'style', 'id', 'tabindex', 'role']);
 function isFallthroughKey(key: string): boolean {
         return FALLTHROUGH_KEYS.has(key) || key.startsWith('aria-') || key.startsWith('data-');
+}
+
+let constructingComponentRoot = false;
+
+export function constructComponentRoot<T>(make: () => T): T {
+        constructingComponentRoot = true;
+        try {
+                return make();
+        } finally {
+                constructingComponentRoot = false;
+        }
 }
 
 export function applyFallthroughProps(props: any, component: ComponentBase): void {

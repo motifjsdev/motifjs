@@ -1,6 +1,6 @@
 import { dom } from "../";
 import { ComponentBase, IBaseProp, ParseProps, applyComponentOptions, applyFallthroughProps, applyTransitionProp, extractRefs, safeCallSilent, takePendingRefs, untracked } from "../";
-import { disposeUnplacedChilds } from "./componentBase";
+import { constructComponentRoot, disposeUnplacedChilds } from "./componentBase";
 import { resolveComponent } from "./resolveComponent";
 import { ElementType, EventArgs } from "./types";
 import { callReported, motifError } from "../common/diagnostics";
@@ -290,7 +290,9 @@ export function resolveToComponent(input: unknown, props?: any): any {
 }
 
 function materializeOptionsObject(spec: any, props: any): any {
-    const result: any = motifComponent(spec.el, props);
+    const result: any = typeof spec.el === 'string'
+        ? constructComponentRoot(() => motifComponent(spec.el, props))
+        : motifComponent(spec.el, props);
     Object.getOwnPropertyNames(spec).forEach(key => {
         if (key !== 'el' && key !== 'ctor') {
             result[key] = spec[key];
