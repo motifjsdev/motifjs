@@ -4,7 +4,7 @@ import { MotifError, formatMotifMessage, motifError, reportWarning } from "../co
 
 export class DisposableStore implements IDisposable {
 
-    private readonly _items = new Set<IDisposable>();
+    private _items?: Set<IDisposable>;
     private _closed = false;
 
     constructor() {
@@ -26,7 +26,7 @@ export class DisposableStore implements IDisposable {
         if (this._closed) {
             reportWarning('MJX504', [], new Error().stack);
         } else {
-            this._items.add(item);
+            (this._items ??= new Set()).add(item);
         }
         return item;
     }
@@ -38,29 +38,30 @@ export class DisposableStore implements IDisposable {
         if ((item as unknown) === this) {
             throw motifError('MJX505');
         }
-        this._items.delete(item);
+        this._items?.delete(item);
         item.dispose();
     }
 
     detach<T extends IDisposable>(item: T): void {
-        if (item && this._items.delete(item)) {
+        if (item && this._items?.delete(item)) {
             disposableCore.notifyOwner(item, null);
         }
     }
 
     clear(): void {
-        if (this._items.size === 0) {
+        const items = this._items;
+        if (!items || items.size === 0) {
             return;
         }
         const failures: unknown[] = [];
-        for (const item of this._items) {
+        for (const item of items) {
             try {
                 item?.dispose();
             } catch (error) {
                 failures.push(error);
             }
         }
-        this._items.clear();
+        items.clear();
         if (failures.length === 1) {
             throw failures[0];
         }

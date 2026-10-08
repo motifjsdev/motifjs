@@ -320,13 +320,14 @@ interface BaseCtx extends LifecycleStorage {
         _disposeShallow: () => void;
         _deepCleanup: () => void;
         emiters: ComponentEmiter;
+        _emiters?: ComponentEmiter;
         itemRef?: any;
         [key: string]: any;
 }
 
 function fireLifecycle(component: any, name: string, ev: EventArgs): void {
         const base = component._base;
-        if (base) base.emiters.fire(name, ev);
+        if (base) base._emiters?.fire(name, ev);
 }
 
 function hasLifecycleHook(component: any, hook: string, listName: keyof LifecycleStorage, lowerName: string, legacyProp?: string): boolean {
@@ -334,7 +335,7 @@ function hasLifecycleHook(component: any, hook: string, listName: keyof Lifecycl
         const list = component._base[listName];
         if (Array.isArray(list) && list.length > 0) return true;
         if (legacyProp && component[legacyProp]) return true;
-        return component._base.emiters.hasListeners(lowerName);
+        return !!component._base._emiters?.hasListeners(lowerName);
 }
 
 const RESERVED_METHODS = ['build', 'setState', 'reState', 'setText', 'style', 'dispose', 'disposeAsync', 'using', 'doWork', 'getService', '$', 'useModel', 'context', 'siblings', 'serviceProvider', 'isWait'];
@@ -928,7 +929,7 @@ function disposeShallow(c: any): void {
                 }
         }
         ComponentHelper.callDisposed.call(c, c);
-        safeCall(() => { c._base.emiters.clear(); }, 'disposeShallow.emiters');
+        safeCall(() => { c._base._emiters?.clear(); }, 'disposeShallow.emiters');
         c.isDisposed = true;
         Disposable.prototype.dispose.call(c);
 }
@@ -1030,7 +1031,7 @@ function disposeFinish(c: any, options: IDisposeOptions, asChild: boolean): void
         if (asChild) {
                 c.controls.items = [];
                 safeCall(() => { ComponentHelper.callDisposed.call(c, c); }, 'disposeAsync.callDisposed');
-                safeCall(() => { c._base.emiters.clear(); }, 'disposeAsync.emiters');
+                safeCall(() => { c._base._emiters?.clear(); }, 'disposeAsync.emiters');
                 if (options?.deep) {
                         c._base._deepCleanup();
                 }
@@ -1038,7 +1039,7 @@ function disposeFinish(c: any, options: IDisposeOptions, asChild: boolean): void
         }
         c.element = null;
         safeCall(() => { ComponentHelper.callDisposed.call(c, c); }, 'dispose.callDisposed');
-        safeCall(() => { c._base.emiters.clear(); }, 'dispose.emiters');
+        safeCall(() => { c._base._emiters?.clear(); }, 'dispose.emiters');
         c._base._offAll();
         c._base._deepCleanup();
 }
@@ -1133,6 +1134,10 @@ function disposeRemainderSync(root: any, options: IDisposeOptions, asChild: bool
 }
 
 const BASE_PROTO = {
+        get emiters(): ComponentEmiter {
+                const base = this as unknown as BaseCtx;
+                return base._emiters ??= new ComponentEmiter(base.owner);
+        },
         _offAll(this: BaseCtx): void {
                 const c: any = this.owner;
                 if (!c._eventHandlers) return;
@@ -1200,8 +1205,28 @@ function createBaseCtx(owner: ComponentBase): BaseCtx {
         const base: BaseCtx = Object.create(BASE_PROTO);
         base.owner = owner;
         base.prebinding_Activated = false;
-        base.emiters = new ComponentEmiter(owner);
         return base;
+}
+
+function controlsOwner(collection: ControlCollection): any {
+        return (collection as any).owner;
+}
+
+function ownerControlAdded(this: ControlCollection, c: ComponentBase) {
+        const owner = controlsOwner(this);
+        if (owner._eventHandlers?.has('controladded')) owner.motif.trigger('controladded', { control: c });
+        if (owner.isWait || owner.parent?.isWait) return;
+        ComponentHelper.internalBuild.call(owner, c);
+}
+
+function ownerControlAddedBeforeBuild(this: ControlCollection, c: ComponentBase) {
+        const owner = controlsOwner(this);
+        if (owner._eventHandlers?.has('controladded')) owner.motif.trigger('controladded', { control: c });
+}
+
+function ownerControlRemoved(this: ControlCollection, c: ComponentBase) {
+        const owner = controlsOwner(this);
+        if (owner._eventHandlers?.has('controlremoved')) owner.motif.trigger('controlremoved', { control: c });
 }
 
 const fragmentCloseMarkers = new WeakMap<Comment, Comment>();
@@ -1362,21 +1387,9 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
                 ComponentHelper.callOnInitializing(this);
                 if (this.isDisposed) return;
-                this.controls.onAdd = (c) => {
-                        if (this._eventHandlers?.has('controladded')) this.motif.trigger('controladded', { control: c });
-                        if (this.isWait || this.parent?.isWait) return;
-                        ComponentHelper.internalBuild.call(this, c);
-
-                }
-
-                this.controls.onAddBeforeBuild = (c) => {
-                        if (this._eventHandlers?.has('controladded')) this.motif.trigger('controladded', { control: c });
-                }
-
-
-                this.controls.onRemove = (c) => {
-                        if (this._eventHandlers?.has('controlremoved')) this.motif.trigger('controlremoved', { control: c });
-                }
+                this.controls.onAdd = ownerControlAdded;
+                this.controls.onAddBeforeBuild = ownerControlAddedBeforeBuild;
+                this.controls.onRemove = ownerControlRemoved;
                 ComponentHelper.callOnInitialized(this);
 
                 const ctor = new.target as any;
@@ -1897,7 +1910,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 return this;
                         }
                         if (LIFECYCLE_X_EVENTS.has(xName)) {
-                                this._base.emiters.off("on" + xName, cb as any);
+                                this._base._emiters?.off("on" + xName, cb as any);
                         }
                         return this;
                 }

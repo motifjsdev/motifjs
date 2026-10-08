@@ -1,7 +1,7 @@
 import { Component } from '@motifx/core';
 import { wait, createTestContainer, cleanupTestContainer } from '../helpers/test-utils';
 
-const storeSize = (c: Component) => (c as any)._disposables._items.size as number;
+const storeSize = (c: Component) => ((c as any)._disposables._items?.size ?? 0) as number;
 
 describe("off('x:mounted')", () => {
     let container: HTMLElement;
