@@ -27,12 +27,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
             } else if (value && typeof value === 'object') {
                 this._addStaticFromObject(value as Record<string, any>);
             } else {
-                var valueStr = String(value ?? '').trim();
-                if (valueStr.split(' ').length > 1) {
-                    this._addStaticFromArray(valueStr.split(' '));
-                } else {
-                    this._addStaticFromString(valueStr);
-                }
+                this._addStaticNames(this._splitClasses(String(value ?? '')));
             }
         }
         return this._parent;
@@ -89,10 +84,9 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
     }
 
     private _splitClasses(input: string): string[] {
-        return (input || '')
-            .split(/\s+/)
-            .map(s => s.trim())
-            .filter(s => s.length > 0);
+        if (!input) return [];
+        if (!/\s/.test(input)) return [input];
+        return input.split(/\s+/).filter(s => s.length > 0);
     }
 
     private _normalizeToSet(values: any, key?: any): Set<string> {
@@ -167,12 +161,19 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
         }
     }
 
-    private _addStaticFromString(s: string) {
-        if (!s) return;
+    private _addStaticNames(names: string[]) {
+        if (names.length === 0) return;
         const el = this._getElement();
-        const prev = new Set(this._staticSet);
-        for (const cls of this._splitClasses(s)) this._staticSet.add(cls);
-        this._applySourceDiff('static', prev, new Set(this._staticSet), el);
+        const staticSet = this._staticSet;
+        for (const cls of names) {
+            if (staticSet.has(cls)) continue;
+            staticSet.add(cls);
+            const prevCount = this._counts.get(cls) || 0;
+            this._counts.set(cls, prevCount + 1);
+            if (prevCount === 0 && el) {
+                try { (el as any).classList.add(cls); } catch { }
+            }
+        }
     }
 
     private _addStaticFromArray(arr: any[]) {
