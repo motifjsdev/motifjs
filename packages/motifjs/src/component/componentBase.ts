@@ -1215,7 +1215,7 @@ function controlsOwner(collection: ControlCollection): any {
 function ownerControlAdded(this: ControlCollection, c: ComponentBase) {
         const owner = controlsOwner(this);
         if (owner._eventHandlers?.has('controladded')) owner.motif.trigger('controladded', { control: c });
-        if (owner.isWait || owner.parent?.isWait) return;
+        if (!owner.isVisible && (owner.element as Node)?.nodeType === Node.COMMENT_NODE) return;
         ComponentHelper.internalBuild.call(owner, c);
 }
 
@@ -1713,6 +1713,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         ComponentHelper.callVisibilityChanged(this, true);
                         if (this.isDisposed) { return; }
                         if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
+                                this.controls.items.filter(c => !c.isBuilt && !c.isWait).forEach(c => ComponentHelper.internalBuild.call(this, c));
                                 this.controls.forEach(c => {
                                         c.motif.show();
                                 });

@@ -59,17 +59,21 @@ describe('children added and removed through controls', () => {
         expect((parent.element as HTMLElement).contains(c.element as any)).toBe(true);
     });
 
-    test('a child added under a waiting grandparent is not built while it waits', async () => {
+    test('a child added under a waiting grandparent stays out of view and appears when the wait ends', async () => {
         const parent = new Component('div', {});
         const child = new Component('section', {});
         parent.controls.add(child);
         host().controls.add(parent);
         await settle();
         parent.isWait = true;
+        await settle();
         const c = new Component('span', {});
         child.controls.add(c);
-        expect(c.isBuilt).toBe(false);
+        expect((c.element as any).isConnected).toBe(false);
         expect(child.controls.items).toContain(c);
+        parent.isWait = false;
+        await settle();
+        expect((c.element as any).isConnected).toBe(true);
     });
 
     test('controladded without a listener does not throw and children still build', async () => {
