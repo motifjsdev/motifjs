@@ -14,6 +14,7 @@ export interface IBindingCollection {
     list(itemsFn: () => any[] | Iterable<any>, renderFn: (item: any, index: number) => ComponentBase, options: ListBindingOptions): IBaseBinding;
     remove(binding: IBaseBinding): void;
     clear(): void;
+    writeModel(value: any): boolean;
     items: IBaseBinding[];
 
     switchCase(

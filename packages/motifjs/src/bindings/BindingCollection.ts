@@ -19,6 +19,7 @@ function isWritablePathKey(target: object, key: string): boolean {
 
 export class BindingCollection implements IBindingCollection {
     private _items: IBaseBinding[] = [];
+    private _modelWriters?: WeakMap<IBaseBinding, (value: any) => void>;
     private _component: ComponentBase;
     private _branchScope: Array<() => void> | null = null;
 
@@ -309,41 +310,45 @@ export class BindingCollection implements IBindingCollection {
             const [dataSource, dataMember, formatString, formatInfo] = args;
             binding = new Binding(this._component, propertyName, dataSource, dataMember, formatString, formatInfo);
         }
+        const write = (raw: any) => {
+            let value: any = raw;
+            const b: any = binding;
+            if (typeof b.converterBack === 'function') {
+                value = b.converterBack(value);
+            }
+            if (typeof b.setter === 'function') {
+                b.setter(value);
+                return;
+            }
+            const member: string | undefined = b.dataMember;
+            const source = b.dataSource;
+            if (member && source != null) {
+
+                const path = member.split('.');
+                let target: any = source;
+                for (let i = 0; i < path.length && target != null; i++) {
+                    const key = path[i];
+                    if (!isWritablePathKey(target, key)) return;
+                    if (i === path.length - 1) {
+                        target[key] = value;
+                    } else {
+                        target = target[key];
+                    }
+                }
+            } else if (source != null && typeof source === 'object' && 'value' in source) {
+
+                source.value = value;
+            }
+        };
+        (this._modelWriters ??= new WeakMap()).set(binding, write);
+
         const lowerTag = tn.toLowerCase();
         if (lowerTag === 'input' || lowerTag === 'select' || lowerTag === 'textarea') {
             const writeBack = () => {
                 try {
                     const el: any = this._component.element;
                     if (!el) return;
-
-                    let value: any = readModelValue(el);
-                    const b: any = binding;
-                    if (typeof b.converterBack === 'function') {
-                        value = b.converterBack(value);
-                    }
-                    if (typeof b.setter === 'function') {
-                        b.setter(value);
-                        return;
-                    }
-                    const member: string | undefined = b.dataMember;
-                    const source = b.dataSource;
-                    if (member && source != null) {
-
-                        const path = member.split('.');
-                        let target: any = source;
-                        for (let i = 0; i < path.length && target != null; i++) {
-                            const key = path[i];
-                            if (!isWritablePathKey(target, key)) return;
-                            if (i === path.length - 1) {
-                                target[key] = value;
-                            } else {
-                                target = target[key];
-                            }
-                        }
-                    } else if (source != null && typeof source === 'object' && 'value' in source) {
-
-                        source.value = value;
-                    }
+                    write(readModelValue(el));
                 } catch { /* ignore */ }
             };
 
@@ -356,6 +361,21 @@ export class BindingCollection implements IBindingCollection {
             (binding as Binding).activate();
         }
         return binding;
+    }
+
+    writeModel(value: any): boolean {
+        const writers = this._modelWriters;
+        if (!writers) return false;
+        let written = false;
+        for (const binding of this._items) {
+            const write = writers.get(binding);
+            if (!write) continue;
+            try {
+                write(value);
+                written = true;
+            } catch { /* ignore */ }
+        }
+        return written;
     }
 
 
