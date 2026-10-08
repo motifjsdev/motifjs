@@ -32,7 +32,6 @@ export type RouterClassingSettings = {
 }
 
 export interface ComponentBaseOptions<TProps> {
-    props?: TProps;
     [key: string]: any;
     cache?: DocumentFragment;
     closeFragment?: Comment;

@@ -2240,12 +2240,6 @@ function collectLifecycleHandlers(component: ComponentBase, lowerKey: string, va
 
 export function ParseProps(props: any, component: ComponentBase): any {
         if (props) {
-                if (component.motif.options.props) {
-                        Object.assign(component.motif.options.props, props);
-                } else {
-                        component.motif.options.props = {};
-                        Object.assign(component.motif.options.props, props);
-                }
                 var keys = Object.keys(props);
                 if (keys.length === 0) return;
                 keys.forEach(key => {

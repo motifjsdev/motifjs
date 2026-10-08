@@ -332,7 +332,7 @@ export class FragmentNode<TProps extends object = any> extends Component<Comment
             }
         }
         safeCallSilent(() => {
-            const nodes = (this.motif.options as any)?.props?.nodes as any[] | undefined;
+            const nodes = (this.props as any)?.nodes as any[] | undefined;
             if (Array.isArray(nodes) && nodes.length) {
                 for (const n of nodes) {
                     if (n) this.controls.add(n);
