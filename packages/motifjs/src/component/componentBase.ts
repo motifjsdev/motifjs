@@ -1101,7 +1101,7 @@ function disposeRemainderSync(root: any, options: IDisposeOptions, asChild: bool
                                 retireServiceOwner(child);
                                 child._disposing = root._disposing;
                                 disposePrefix(child, childOptions, true);
-                                detachDomWithAnimation(child);
+                                if ((child.element as Node | null)?.isConnected !== false) detachDomWithAnimation(child);
                                 nodes.push(child);
                                 parents.push(n);
                         } catch (error) {
@@ -1165,7 +1165,7 @@ const BASE_PROTO = {
         },
         _deactivateBindings(this: BaseCtx): void {
                 const c: any = this.owner;
-                try { c.bindings?.deactivateAll(); } catch { }
+                try { if (c.bindings?._items?.length) c.bindings.deactivateAll(); } catch { }
         },
         _activateBindings(this: BaseCtx): void {
                 const c: any = this.owner;
