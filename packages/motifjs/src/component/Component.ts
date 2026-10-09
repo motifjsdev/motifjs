@@ -162,8 +162,7 @@ function applyJsxFrameworkProps(target: any, props: any, refs: any[]): any {
     const runover = (props as any).runover;
     if (!runover || typeof runover !== 'object') return target;
 
-    const handlers: any[] = (target as any)._base?._onConfigHandlers;
-    const configuredBefore = Array.isArray(handlers) ? handlers.length : 0;
+    const configuredBefore = handlerCount(target, '_onConfigHandlers');
     const initializingBefore = handlerCount(target, '_onInitializingHandlers');
     const initializedBefore = handlerCount(target, '_onInitializedHandlers');
     ParseProps(runover, target as ComponentBase);
@@ -179,12 +178,9 @@ function applyJsxFrameworkProps(target: any, props: any, refs: any[]): any {
         if (typeof pre === 'function') {
             safeCallSilent(() => pre(target), 'motifComponent.preconfig');
         }
-        const after: any[] = (target as any)._base?._onConfigHandlers;
-        if (Array.isArray(after)) {
-            for (let i = configuredBefore; i < after.length; i++) {
-                const fn = after[i];
-                callReported(() => fn(target, { cancel: false } as EventArgs), 'MJX122', 'onConfig');
-            }
+        for (let i = configuredBefore; i < handlerCount(target, '_onConfigHandlers'); i++) {
+            const fn = hookList(target, '_onConfigHandlers')[i];
+            callReported(() => fn(target, { cancel: false } as EventArgs), 'MJX122', 'onConfig');
         }
     }
     return target;
@@ -199,17 +195,19 @@ function applyRefs(target: any, refs: any[]): any {
     return target;
 }
 
+function hookList(target: any, listName: string): any[] {
+    const slot = target._base?.[listName];
+    return !slot ? [] : typeof slot === 'function' ? [slot] : slot;
+}
+
 function handlerCount(target: any, listName: string): number {
-    const list: any[] = target._base?.[listName];
-    return Array.isArray(list) ? list.length : 0;
+    return hookList(target, listName).length;
 }
 
 function callAddedHandlers(target: any, listName: string, from: number, hook: string): void {
-    const list: any[] = target._base?.[listName];
-    if (!Array.isArray(list)) return;
-    for (let i = from; i < list.length; i++) {
+    for (let i = from; i < handlerCount(target, listName); i++) {
         if (target.isDisposed) return;
-        const fn = list[i];
+        const fn = hookList(target, listName)[i];
         callReported(() => fn(target, { cancel: false } as EventArgs), 'MJX122', hook);
     }
 }

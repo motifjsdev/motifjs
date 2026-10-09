@@ -291,21 +291,22 @@ export type IBaseProp<T extends any> = OptionalParams<T> & MotifDomEventProps & 
 };
 
 type LifecycleHandler = (sender: ComponentBase, e: EventArgs) => void;
+type HookSlot = LifecycleHandler | LifecycleHandler[];
 interface LifecycleStorage {
-        _initializeComponentHandlers?: LifecycleHandler[];
-        _onInitializeComponentHandlers?: LifecycleHandler[];
-        _onBuildingHandlers?: LifecycleHandler[];
-        _onBuiltHandlers?: LifecycleHandler[];
-        _onMountedHandlers?: LifecycleHandler[];
-        _onInitializingHandlers?: LifecycleHandler[];
-        _onInitializedHandlers?: LifecycleHandler[];
-        _onConfigHandlers?: LifecycleHandler[];
-        _onConfiguredHandlers?: LifecycleHandler[];
-        _onVisibilityChangedHandlers?: LifecycleHandler[];
-        _onActivatedHandlers?: LifecycleHandler[];
-        _onDeactivatedHandlers?: LifecycleHandler[];
-        _onDisposingHandlers?: LifecycleHandler[];
-        _onDisposedHandlers?: LifecycleHandler[];
+        _initializeComponentHandlers?: HookSlot;
+        _onInitializeComponentHandlers?: HookSlot;
+        _onBuildingHandlers?: HookSlot;
+        _onBuiltHandlers?: HookSlot;
+        _onMountedHandlers?: HookSlot;
+        _onInitializingHandlers?: HookSlot;
+        _onInitializedHandlers?: HookSlot;
+        _onConfigHandlers?: HookSlot;
+        _onConfiguredHandlers?: HookSlot;
+        _onVisibilityChangedHandlers?: HookSlot;
+        _onActivatedHandlers?: HookSlot;
+        _onDeactivatedHandlers?: HookSlot;
+        _onDisposingHandlers?: HookSlot;
+        _onDisposedHandlers?: HookSlot;
 }
 interface BaseCtx extends LifecycleStorage {
         owner: ComponentBase;
@@ -330,10 +331,26 @@ function fireLifecycle(component: any, name: string, ev: EventArgs): void {
         if (base) base._emiters?.fire(name, ev);
 }
 
+function runHooks(base: any, listName: keyof LifecycleStorage, sender: any, ev: EventArgs, label: string): void {
+        let slot: HookSlot | undefined = base[listName];
+        if (!slot) return;
+        let from = 0;
+        if (typeof slot === 'function') {
+                const fn = slot;
+                callReported(() => fn(sender, ev), 'MJX122', label);
+                slot = base[listName];
+                if (!Array.isArray(slot)) return;
+                from = 1;
+        }
+        for (let i = from; i < slot.length; i++) {
+                const fn = slot[i];
+                callReported(() => fn(sender, ev), 'MJX122', label);
+        }
+}
+
 function hasLifecycleHook(component: any, hook: string, listName: keyof LifecycleStorage, lowerName: string, legacyProp?: string): boolean {
         if (component[hook]) return true;
-        const list = component._base[listName];
-        if (Array.isArray(list) && list.length > 0) return true;
+        if (component._base[listName]) return true;
         if (legacyProp && component[legacyProp]) return true;
         return !!component._base._emiters?.hasListeners(lowerName);
 }
@@ -392,21 +409,13 @@ const ComponentHelper = {
                         callReported(() => component.initializeComponent(sender, ev), 'MJX122', 'initializeComponent');
                 }
                 // 2) aggregated extra initializeComponent handlers (örn, from props)
-                if (Array.isArray(component._base._initializeComponentHandlers) && component._base._initializeComponentHandlers.length) {
-                        for (const fn of component._base._initializeComponentHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'initializeComponent');
-                        }
-                }
+                runHooks(component._base, '_initializeComponentHandlers', sender, ev, 'initializeComponent');
                 // 3) class method  oninitializeComponent  
                 if (typeof component.oninitializeComponent === 'function') {
                         callReported(() => component.oninitializeComponent(sender, ev), 'MJX122', 'oninitializeComponent');
                 }
                 // 4) aggregated extra oninitializeComponent handlers (örn, from props)
-                if (Array.isArray(component._base._onInitializeComponentHandlers) && component._base._onInitializeComponentHandlers.length) {
-                        for (const fn of component._base._onInitializeComponentHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'oninitializeComponent');
-                        }
-                }
+                runHooks(component._base, '_onInitializeComponentHandlers', sender, ev, 'oninitializeComponent');
         },
         callDisposing(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
@@ -415,11 +424,7 @@ const ComponentHelper = {
                 if (component.onDisposing) {
                         callReported(() => component.onDisposing(sender, ev), 'MJX122', 'onDisposing');
                 }
-                if (Array.isArray(component._base._onDisposingHandlers)) {
-                        for (const fn of component._base._onDisposingHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onDisposing');
-                        }
-                }
+                runHooks(component._base, '_onDisposingHandlers', sender, ev, 'onDisposing');
                 if (component.ondisposing) {
                         callReported(() => component.ondisposing(sender, ev), 'MJX122', 'ondisposing');
                 }
@@ -429,22 +434,14 @@ const ComponentHelper = {
                 if (!component || component.isDisposed) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onActivated) { callReported(() => component.onActivated(sender, ev), 'MJX122', 'onActivated'); }
-                if (Array.isArray(component._base._onActivatedHandlers)) {
-                        for (const fn of component._base._onActivatedHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onActivated');
-                        }
-                }
+                runHooks(component._base, '_onActivatedHandlers', sender, ev, 'onActivated');
                 fireLifecycle(component,'onactivated', ev);
         },
         callDeactivated(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onDeactivated) { callReported(() => component.onDeactivated(sender, ev), 'MJX122', 'onDeactivated'); }
-                if (Array.isArray(component._base._onDeactivatedHandlers)) {
-                        for (const fn of component._base._onDeactivatedHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onDeactivated');
-                        }
-                }
+                runHooks(component._base, '_onDeactivatedHandlers', sender, ev, 'onDeactivated');
                 fireLifecycle(component,'ondeactivated', ev);
         },
         deactivateTree(component: ComponentBase | any, deep: boolean = true) {
@@ -475,11 +472,7 @@ const ComponentHelper = {
                 if (hasLifecycleHook(component, 'onDisposed', '_onDisposedHandlers', 'ondisposed', 'ondisposed')) {
                         const sender = component, ev = { cancel: false } as EventArgs;
                         if (component.onDisposed) { callReported(() => component.onDisposed(sender, ev), 'MJX122', 'onDisposed'); }
-                        if (Array.isArray(component._base._onDisposedHandlers)) {
-                                for (const fn of component._base._onDisposedHandlers) {
-                                        callReported(() => fn(sender, ev), 'MJX122', 'onDisposed');
-                                }
-                        }
+                        runHooks(component._base, '_onDisposedHandlers', sender, ev, 'onDisposed');
                         if (component.ondisposed) { callReported(() => component.ondisposed(sender, ev), 'MJX122', 'ondisposed'); }
                         fireLifecycle(component,'ondisposed', ev);
                 }
@@ -490,11 +483,7 @@ const ComponentHelper = {
                 if (hasLifecycleHook(component, 'onBuilt', '_onBuiltHandlers', 'onbuilt', 'onbuilt')) {
                         const sender = component, ev = { cancel: false } as EventArgs;
                         if (component.onBuilt) { callReported(() => component.onBuilt(sender, ev), 'MJX122', 'onBuilt'); }
-                        if (Array.isArray(component._base._onBuiltHandlers)) {
-                                for (const fn of component._base._onBuiltHandlers) {
-                                        callReported(() => fn(sender, ev), 'MJX122', 'onBuilt');
-                                }
-                        }
+                        runHooks(component._base, '_onBuiltHandlers', sender, ev, 'onBuilt');
                         if (component.onbuilt) { callReported(() => component.onbuilt(sender, ev), 'MJX122', 'onbuilt'); }
                         fireLifecycle(component,'onbuilt', ev);
                 }
@@ -503,7 +492,7 @@ const ComponentHelper = {
         scheduleMounted(component: ComponentBase | any) {
                 if (!component || component.isDisposed || component._base._mountedScheduled) { return; }
                 const hasHook = typeof component.onMounted === 'function'
-                        || (Array.isArray(component._base._onMountedHandlers) && component._base._onMountedHandlers.length > 0)
+                        || !!component._base._onMountedHandlers
                         || typeof component.onmounted === 'function';
                 if (!hasHook) { return; }
                 component._base._mountedScheduled = true;
@@ -522,11 +511,7 @@ const ComponentHelper = {
                 component._base._mountedFired = true;
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onMounted) { callReported(() => component.onMounted(sender, ev), 'MJX122', 'onMounted'); }
-                if (Array.isArray(component._base._onMountedHandlers)) {
-                        for (const fn of component._base._onMountedHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onMounted');
-                        }
-                }
+                runHooks(component._base, '_onMountedHandlers', sender, ev, 'onMounted');
                 if (component.onmounted) { callReported(() => component.onmounted(sender, ev), 'MJX122', 'onmounted'); }
                 fireLifecycle(component,'onmounted', ev);
         },
@@ -535,11 +520,7 @@ const ComponentHelper = {
                 if (!hasLifecycleHook(component, 'onBuilding', '_onBuildingHandlers', 'onbuilding')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onBuilding) { callReported(() => component.onBuilding(sender, ev), 'MJX122', 'onBuilding'); }
-                if (Array.isArray(component._base._onBuildingHandlers)) {
-                        for (const fn of component._base._onBuildingHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onBuilding');
-                        }
-                }
+                runHooks(component._base, '_onBuildingHandlers', sender, ev, 'onBuilding');
                 fireLifecycle(component,'onbuilding', ev);
         },
         callConfig(component: ComponentBase | any) {
@@ -553,11 +534,7 @@ const ComponentHelper = {
                 if (!hasLifecycleHook(component, 'onConfig', '_onConfigHandlers', 'onconfig')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onConfig) { callReported(() => component.onConfig(sender, ev), 'MJX122', 'onConfig'); }
-                if (Array.isArray(component._base._onConfigHandlers)) {
-                        for (const fn of component._base._onConfigHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onConfig');
-                        }
-                }
+                runHooks(component._base, '_onConfigHandlers', sender, ev, 'onConfig');
                 fireLifecycle(component,'onconfig', ev);
         },
         callConfigured(component: ComponentBase | any) {
@@ -572,11 +549,7 @@ const ComponentHelper = {
                 if (!hasLifecycleHook(component, 'onConfigured', '_onConfiguredHandlers', 'onconfigured')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onConfigured) { callReported(() => component.onConfigured(sender, ev), 'MJX122', 'onConfigured'); }
-                if (Array.isArray(component._base._onConfiguredHandlers)) {
-                        for (const fn of component._base._onConfiguredHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onConfigured');
-                        }
-                }
+                runHooks(component._base, '_onConfiguredHandlers', sender, ev, 'onConfigured');
                 fireLifecycle(component,'onconfigured', ev);
         },
         callOnInitialized(component: ComponentBase | any) {
@@ -585,11 +558,7 @@ const ComponentHelper = {
                 if (!hasLifecycleHook(component, 'onInitialized', '_onInitializedHandlers', 'oninitialized')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onInitialized) { callReported(() => component.onInitialized(sender, ev), 'MJX122', 'onInitialized'); }
-                if (Array.isArray(component._base._onInitializedHandlers)) {
-                        for (const fn of component._base._onInitializedHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onInitialized');
-                        }
-                }
+                runHooks(component._base, '_onInitializedHandlers', sender, ev, 'onInitialized');
                 fireLifecycle(component,'oninitialized', ev);
         },
         callOnInitializing(component: ComponentBase | any) {
@@ -597,11 +566,7 @@ const ComponentHelper = {
                 if (!hasLifecycleHook(component, 'onInitializing', '_onInitializingHandlers', 'oninitializing')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onInitializing) { callReported(() => component.onInitializing(sender, ev), 'MJX122', 'onInitializing'); }
-                if (Array.isArray(component._base._onInitializingHandlers)) {
-                        for (const fn of component._base._onInitializingHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onInitializing');
-                        }
-                }
+                runHooks(component._base, '_onInitializingHandlers', sender, ev, 'onInitializing');
                 fireLifecycle(component,'oninitializing', ev);
         },
         callVisibilityChanged(component: ComponentBase | any, visible: boolean) {
@@ -609,11 +574,7 @@ const ComponentHelper = {
                 if (!hasLifecycleHook(component, 'onVisibilityChanged', '_onVisibilityChangedHandlers', 'onvisibilitychanged')) { return; }
                 const sender = component, ev: VisibilityChangedEventArgs = { cancel: false, visible };
                 if (component.onVisibilityChanged) { callReported(() => component.onVisibilityChanged(sender, ev), 'MJX122', 'onVisibilityChanged'); }
-                if (Array.isArray(component._base._onVisibilityChangedHandlers)) {
-                        for (const fn of component._base._onVisibilityChangedHandlers) {
-                                callReported(() => fn(sender, ev), 'MJX122', 'onVisibilityChanged');
-                        }
-                }
+                runHooks(component._base, '_onVisibilityChangedHandlers', sender, ev, 'onVisibilityChanged');
                 fireLifecycle(component,'onvisibilitychanged', ev);
         },
         findFragmentContent(c: ComponentBase) {
@@ -2266,10 +2227,12 @@ function collectLifecycleHandlers(component: ComponentBase, lowerKey: string, va
         if (!listName) return false;
         const fns: any[] = Array.isArray(value) ? value : [value];
         if (fns.length === 0 || !fns.every(fn => typeof fn === 'function')) return false;
-        (component as any)._base[listName] ??= [];
-        const list = (component as any)._base[listName] as Function[];
+        const base = (component as any)._base;
         for (const fn of fns) {
-                if (!list.includes(fn)) list.push(fn);
+                const slot: HookSlot | undefined = base[listName];
+                if (slot === undefined) base[listName] = fn;
+                else if (typeof slot === 'function') { if (slot !== fn) base[listName] = [slot, fn]; }
+                else if (!slot.includes(fn)) slot.push(fn);
         }
         return true;
 }
