@@ -165,15 +165,18 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
         if (names.length === 0) return;
         const el = this._getElement();
         const staticSet = this._staticSet;
+        const fresh: string[] | null = el && !el.hasAttribute('class') ? [] : null;
         for (const cls of names) {
             if (staticSet.has(cls)) continue;
             staticSet.add(cls);
             const prevCount = this._counts.get(cls) || 0;
             this._counts.set(cls, prevCount + 1);
             if (prevCount === 0 && el) {
-                try { (el as any).classList.add(cls); } catch { }
+                if (fresh) fresh.push(cls);
+                else { try { (el as any).classList.add(cls); } catch { } }
             }
         }
+        if (fresh && fresh.length > 0) el!.setAttribute('class', fresh.join(' '));
     }
 
     private _addStaticFromArray(arr: any[]) {
