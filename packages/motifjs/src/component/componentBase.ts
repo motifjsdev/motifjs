@@ -642,7 +642,10 @@ const ComponentHelper = {
                 ComponentHelper.callConfigured(c);
                 if (c.isDisposed) return;
                 c._base._activatePreBindings();
-                if (c.isWait) return;
+                if (c.isWait) {
+                        if (this.isBuilt) placeTrace(this, c);
+                        return;
+                }
                 const cisBuilt = c.isBuilt;
                 if (!this.isBuilt) {
                         return;
@@ -684,40 +687,13 @@ const ComponentHelper = {
                         controlElement = ComponentHelper.getContent.call(c) as Node;
                 }
 
-                let referenceNode: Node | null = null;
-
                 const insertHost = appendableElement?.element as Node | undefined;
-                const domReferenceOf = (n: ComponentBase | undefined): Node | null => {
-                        if (!n || !n.isBuilt) return null;
-                        const candidate: Node | null = n.isVisible
-                                ? (n.element as unknown as Node)
-                                : (((n.motif.options as any)?.placeholder as Node | undefined) ?? null);
-                        if (!candidate) return null;
-                        return (insertHost && candidate.parentNode === insertHost) ? candidate : null;
-                };
-
-                const siblings = this.controls.items;
-                for (let i = currentIndex + 1; i < siblings.length; i++) {
-                        const candidate = domReferenceOf(siblings[i]);
-                        if (candidate) {
-                                referenceNode = candidate;
-                                break;
-                        }
-                }
-                if (!referenceNode) {
-                        if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
-                                const close = this.motif.options.closeFragment as unknown as Node | undefined;
-                                referenceNode = (close && insertHost && close.parentNode === insertHost) ? close : null;
-                        } else {
-                                referenceNode = null;
-                        }
-                }
+                const trace = c.motif.options.placeholder as Node | undefined;
+                const ownTrace = c.isVisible && trace && insertHost && trace.parentNode === insertHost ? trace : null;
+                const referenceNode: Node | null = ownTrace ?? (insertHost ? followingAnchor(this, currentIndex + 1, insertHost) : null);
 
                 if (!c.isVisible) {
-                        const cfg = (c as any).motif.options?.hideStrategy ?? 'auto';
-                        const isFromListOrKeyed = !!((c as any).motif.options?.__fromList || typeof ((c as any).motif.options as any)?.indexkey !== 'undefined' || typeof (c as any).motif.options?.__key !== 'undefined');
-                        const strategy: 'placeholder' | 'detach' = cfg === 'placeholder' ? 'placeholder' : (cfg === 'detach' ? 'detach' : (isFromListOrKeyed ? 'detach' : 'placeholder'));
-                        if (strategy === 'placeholder') {
+                        if (keepsTrace(c)) {
                                 if (!(c as any).motif.options.placeholder) {
                                         (c as any).motif.options.placeholder = dom.createComment("h");
                                 }
@@ -754,6 +730,7 @@ const ComponentHelper = {
                         } else {
                                 appendableElement?.element.appendChild(controlElement!);
                         }
+                        if (ownTrace && ownTrace.parentNode) ownTrace.parentNode.removeChild(ownTrace);
                 }
                 if (c.isVisible) {
                         const enteredInBuild = !cisBuilt && c._base._enterSeq !== enterSeq;
@@ -768,7 +745,10 @@ const ComponentHelper = {
                 if ((this.element as Node).nodeType == Node.COMMENT_NODE) {
                         this.motif.options.cache?.appendChild(this.element as Node);
                         this.controls.forEach(child => {
-                                this.motif.options.cache?.appendChild(ComponentHelper.getContent.call(child) as Node);
+                                const node = child.isWait || !child.isVisible
+                                        ? (keepsTrace(child) ? ((child.motif.options as any).placeholder ??= dom.createComment("h")) as Node : undefined)
+                                        : ComponentHelper.getContent.call(child) as Node;
+                                if (node) this.motif.options.cache?.appendChild(node);
                         });
                         this.motif.options.cache?.appendChild(this.motif.options.closeFragment!);
                         return this.motif.options.cache;
@@ -822,24 +802,61 @@ const ComponentHelper = {
         }
 }
 
+function keepsTrace(c: ComponentBase): boolean {
+        return c.motif.options?.hideStrategy !== 'detach';
+}
+
+export function domAnchor(c: ComponentBase, host: Node): Node | null {
+        const trace = c.motif.options?.placeholder as Node | undefined;
+        if (trace && trace.parentNode === host) return trace;
+        const node = c.element as unknown as Node | null;
+        return node && node.parentNode === host ? node : null;
+}
+
+function followingAnchor(owner: ComponentBase, start: number, host: Node): Node | null {
+        const siblings = owner.controls.items;
+        for (let i = start; i < siblings.length; i++) {
+                const anchor = siblings[i] ? domAnchor(siblings[i], host) : null;
+                if (anchor) return anchor;
+        }
+        if ((owner.element as unknown as Node).nodeType === Node.COMMENT_NODE) {
+                const close = owner.motif.options.closeFragment as unknown as Node | undefined;
+                return close && close.parentNode === host ? close : null;
+        }
+        return null;
+}
+
+function placeTrace(owner: ComponentBase, c: ComponentBase): void {
+        if (!keepsTrace(c)) return;
+        const host = findAppendableComponent(owner)?.element as unknown as Node | undefined;
+        if (!host) return;
+        const element = c.element as unknown as Node | null;
+        if (element && element.parentNode === host) return;
+        const opts: any = c.motif.options;
+        const trace: Node = opts.placeholder ?? (opts.placeholder = dom.createComment("h"));
+        if (trace.parentNode === host) return;
+        host.insertBefore(trace, followingAnchor(owner, owner.controls.items.indexOf(c) + 1, host));
+}
+
 function removeComponentDom(c: any, node: Node, alsoPlaceholder: boolean): void {
         const opts = c.motif?.options;
         const parent = node.parentNode;
         if (node.nodeType === Node.COMMENT_NODE) {
-                if (!parent) return;
-                const close = (opts?.closeFragment as unknown as Node | undefined) || null;
-                if (close) {
-                        let current: Node | null = node;
-                        while (current) {
-                                const after: Node | null = current.nextSibling;
-                                try { parent.removeChild(current); } catch { }
-                                if (current === close) break;
-                                current = after;
+                if (parent) {
+                        const close = (opts?.closeFragment as unknown as Node | undefined) || null;
+                        if (close) {
+                                let current: Node | null = node;
+                                while (current) {
+                                        const after: Node | null = current.nextSibling;
+                                        try { parent.removeChild(current); } catch { }
+                                        if (current === close) break;
+                                        current = after;
+                                }
+                        } else {
+                                try { parent.removeChild(node); } catch { }
                         }
-                } else {
-                        try { parent.removeChild(node); } catch { }
+                        if (!alsoPlaceholder) return;
                 }
-                if (!alsoPlaceholder) return;
         } else if (parent) {
                 try { parent.removeChild(node); } catch { }
                 if (!alsoPlaceholder) return;
@@ -1314,13 +1331,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         }
 
         private _computeHideStrategy(): 'placeholder' | 'detach' {
-                const cfg = this.motif.options?.hideStrategy ?? 'auto';
-                if (cfg === 'placeholder') return 'placeholder';
-                if (cfg === 'detach') return 'detach';
-                if (this.motif.options?.__fromList || typeof (this.motif.options as any)?.indexkey !== 'undefined' || typeof this.motif.options?.__key !== 'undefined') {
-                        return 'detach';
-                }
-                return 'placeholder';
+                return keepsTrace(this) ? 'placeholder' : 'detach';
         }
 
         private _isInDom(): boolean {
@@ -1492,13 +1503,19 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         this._base._activateBindings();
                 }
 
-                for (const element of this.controls.items.filter(c => !c.isWait)) {
-                        element.parent = this;
-                        element.build(false);
+                for (const element of this.controls.items.slice()) {
+                        var target = isFragment ? this.motif.options.cache : this.element;
+                        if (!element.isWait) {
+                                element.parent = this;
+                                element.build(false);
+                        }
                         if (element.isWait) {
+                                if (keepsTrace(element)) {
+                                        const opts: any = element.motif.options;
+                                        (building ? ph : target as any).appendChild(opts.placeholder ?? (opts.placeholder = dom.createComment("h")));
+                                }
                                 continue;
                         }
-                        var target = isFragment ? this.motif.options.cache : this.element;
                         if (building) {
                                 if (element.motif.options.cache) {
                                         ph.appendChild(element.motif.options.cache);
@@ -1659,6 +1676,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
                 if (this.isDisposed || !this.element) { return; }
                 if (this.isVisible) { return; }/* A*/
+                if (this.isWait) { return; }
 
                 if (this.parent && enterModeOf(this.parent) === 'out-in') {
                         const showHost = ((this.motif.options.placeholder as Node | undefined)?.parentNode)
@@ -1713,12 +1731,16 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         ComponentHelper.callVisibilityChanged(this, true);
                         if (this.isDisposed) { return; }
                         if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
-                                this.controls.items.filter(c => !c.isBuilt && !c.isWait).forEach(c => ComponentHelper.internalBuild.call(this, c));
+                                this.controls.items.filter(c => !c.isBuilt).forEach(c => ComponentHelper.internalBuild.call(this, c));
                                 this.controls.forEach(c => {
                                         c.motif.show();
                                 });
                                 this.isVisible = true;
                                 ComponentHelper.activateTree(this, false);
+                                return;
+                        }
+                        if (!this.isBuilt) {
+                                this.isVisible = true;
                                 return;
                         }
                         var parent = (this.motif.options.placeholder as Node)?.parentElement;

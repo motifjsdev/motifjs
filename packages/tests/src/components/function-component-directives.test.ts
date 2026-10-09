@@ -40,7 +40,7 @@ describe('framework props on function components (S4)', () => {
             childs: []
         }) as any);
         await tick();
-        expect(html(host)).toBe('');
+        expect(html(host)).toBe('<!--h-->');
 
         st.show = true;
         await tick();

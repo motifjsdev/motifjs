@@ -4,7 +4,7 @@ import { TRANSITION_SLOT } from "../component/optionsSlots";
 import { dom } from "../";
 import { Component, ComponentBase, resolveComponent, notifyDeactivated } from "../";
 import { reportError } from "../common/diagnostics";
-import { checkReservedMembers } from "../component/componentBase";
+import { checkReservedMembers, domAnchor } from "../component/componentBase";
 
 export class ControlCollection {
     constructor(private owner: ComponentBase) {
@@ -161,27 +161,23 @@ export class ControlCollection {
             this.items.splice(insertAt, 0, control);
         }
 
-        if ((control as any).isWait) {
-            return;
-        }
         const container = findAppendableElement(this.owner);
-        if (!container) return;
+        if (!container || !domAnchor(control, container)) return;
 
-        const referenceNode: Node | null = before ? (before.element as unknown as Node) : computeAppendReference(this.owner);
-
-        moveComponentDomRange(control, container, referenceNode);
+        const at = before ? this.items.indexOf(before) : -1;
+        moveComponentDomRange(control, container, at >= 0 ? anchorFrom(this.owner, this.items, at, container) : computeAppendReference(this.owner));
     }
 
     _reorder(order: ComponentBase[], stable: Set<number>): void {
         const container = findAppendableElement(this.owner);
         if (container) {
-            const end = computeAppendReference(this.owner);
+            let ref = computeAppendReference(this.owner);
             for (let i = order.length - 1; i >= 0; i--) {
-                if (stable.has(i)) continue;
                 const control = order[i];
-                if ((control as any).isWait) continue;
-                const before = i + 1 < order.length ? order[i + 1] : null;
-                moveComponentDomRange(control, container, before ? (before.element as unknown as Node) : end);
+                const node = domAnchor(control, container);
+                if (!node) continue;
+                if (!stable.has(i)) moveComponentDomRange(control, container, ref);
+                ref = node;
             }
         }
         const items = this.items;
@@ -221,12 +217,20 @@ function computeAppendReference(owner: ComponentBase): Node | null {
     return null;
 }
 
+function anchorFrom(owner: ComponentBase, items: ComponentBase[], start: number, container: Node): Node | null {
+    for (let i = start; i < items.length; i++) {
+        const anchor = domAnchor(items[i], container);
+        if (anchor) return anchor;
+    }
+    return computeAppendReference(owner);
+}
+
 /** Bir component'in kök DOM aralığını (tek element veya fragment aralığı) referenceNode öncesine taşır. */
 function moveComponentDomRange(control: ComponentBase, container: Node, referenceNode: Node | null) {
-    const node = control.element as any as Node | null;
+    const node = domAnchor(control, container);
     if (!node) return;
 
-    if (node.nodeType !== Node.COMMENT_NODE) {
+    if (node.nodeType !== Node.COMMENT_NODE || node !== (control.element as unknown as Node)) {
         try { container.insertBefore(node, referenceNode); } catch { }
         return;
     }
@@ -287,8 +291,7 @@ function detachComponentDom(control: ComponentBase): void {
     const node = control.element as unknown as Node | null;
     if (!node) return;
     const opts: any = (control as any).motif.options;
-    if (node.nodeType === Node.COMMENT_NODE) {
-        if (!node.parentNode) return;
+    if (node.nodeType === Node.COMMENT_NODE && node.parentNode) {
         const close = (opts?.closeFragment as Node | undefined) || null;
         const cache: DocumentFragment = opts.cache ?? (opts.cache = dom.createDocumentFragment());
         let current: Node | null = node;
