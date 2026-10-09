@@ -172,6 +172,22 @@ export class ControlCollection {
         moveComponentDomRange(control, container, referenceNode);
     }
 
+    _reorder(order: ComponentBase[], stable: Set<number>): void {
+        const container = findAppendableElement(this.owner);
+        if (container) {
+            const end = computeAppendReference(this.owner);
+            for (let i = order.length - 1; i >= 0; i--) {
+                if (stable.has(i)) continue;
+                const control = order[i];
+                if ((control as any).isWait) continue;
+                const before = i + 1 < order.length ? order[i + 1] : null;
+                moveComponentDomRange(control, container, before ? (before.element as unknown as Node) : end);
+            }
+        }
+        const items = this.items;
+        for (let i = 0; i < order.length; i++) items[i] = order[i];
+    }
+
     moveToIndex(control: ComponentBase, index: number): void {
         if (!control || control.isDisposed) return;
         if (!Number.isFinite(index as any)) return;

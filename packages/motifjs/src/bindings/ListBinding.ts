@@ -292,6 +292,11 @@ export class ListBinding implements IBaseBinding {
 
         const stable = new Set(longestIncreasingIndices(sources));
 
+        if (newComponents.length === items.length && isPermutation(sources, newComponents, this.container)) {
+            controls._reorder(newComponents, stable);
+            return;
+        }
+
         let anchor: ComponentBase | null = null;
         for (let i = newComponents.length - 1; i >= 0; i--) {
             const comp = newComponents[i];
@@ -310,6 +315,18 @@ export class ListBinding implements IBaseBinding {
             anchor = comp;
         }
     }
+}
+
+function isPermutation(sources: number[], components: ComponentBase[], owner: ComponentBase): boolean {
+    const seen = new Uint8Array(sources.length);
+    for (let i = 0; i < sources.length; i++) {
+        const s = sources[i];
+        if (s === -1 || seen[s]) return false;
+        seen[s] = 1;
+        const c = components[i];
+        if (c.isDisposed || c.parent !== owner) return false;
+    }
+    return true;
 }
 
 function longestIncreasingIndices(sources: number[]): number[] {
