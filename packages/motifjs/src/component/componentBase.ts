@@ -275,7 +275,7 @@ class ComponentOptionsImpl {
         }
 
         hasEvent(name: string): boolean {
-                return !!(this[OPTIONS_OWNER] as any)._eventHandlers?.has(name);
+                return hasEventKey(this[OPTIONS_OWNER], name);
         }
 }
 lazyBindMethods(ComponentOptionsImpl.prototype, ['getInstance', 'hasEvent']);
@@ -939,11 +939,6 @@ function disposeShallow(c: any): void {
 function deepCleanup(c: any): void {
         try { c.parent = null; } catch { }
 
-        try {
-                c._eventHandlers?.clear();
-        } catch {
-
-        }
         c._eventHandlers = undefined;
 
         try { c._class?._countsStore?.clear(); } catch { }
@@ -1171,28 +1166,110 @@ const BASE_PROTO = {
         },
 };
 
-function offAll(c: any): void {
-                if (!c._eventHandlers) return;
-                for (const [full, set] of c._eventHandlers) {
-                        const name = full.split(":")[0];
-                        const evt = name.startsWith("on") ? name.slice(2).toLowerCase() : name.toLowerCase();
-                        for (const rec of set) {
-                                if (!rec || !rec.wrapped) { continue; }
+const EV_SELF = 1;
+const EV_TRUSTED = 2;
+const EV_PREVENT = 4;
+const EV_STOP = 8;
+const EV_CAPTURE = 16;
+const EV_DOM = 32;
+const EV_REMOVED = 64;
 
-                                if ((rec as any).domEvent === false) { continue; }
-                                const cap = (rec as any).capture === true;
-                                try {
-                                        (c.element as any).removeEventListener(evt, rec.wrapped as EventListener, cap);
-                                } catch { }
+const NO_MODS: string[] = [];
 
-                                try {
-                                        if ((rec as any).capture === undefined) {
-                                                (c.element as any).removeEventListener(evt, rec.wrapped as EventListener, !cap);
-                                        }
-                                } catch { }
+let eventDispatchDepth = 0;
+
+class EventRecord {
+        owner: any;
+        key: string;
+        original: (sender: any, e: any) => any;
+        type: string;
+        flags: number;
+        next: EventRecord | undefined;
+
+        constructor(owner: any, key: string, original: (sender: any, e: any) => any, type: string, flags: number) {
+                this.owner = owner;
+                this.key = key;
+                this.original = original;
+                this.type = type;
+                this.flags = flags;
+                this.next = undefined;
+        }
+
+        handleEvent(ev: Event): void {
+                const flags = this.flags;
+                const owner = this.owner;
+                if ((flags & EV_SELF) !== 0 && ev.target !== owner.element) return;
+                if ((flags & EV_TRUSTED) !== 0 && !ev.isTrusted) return;
+                const cb: any = this.original;
+                let res: any;
+                try {
+                        if (cb && cb.length <= 1) {
+                                res = cb(ev);
+                        } else if (cb) {
+                                res = cb(owner, ev);
                         }
+                } catch (error) {
+                        reportError('MJX123', error, this.type);
                 }
-                c._eventHandlers.clear();
+                if (res && typeof res.then === 'function') {
+                        const type = this.type;
+                        res.then(undefined, (error: unknown) => reportError('MJX123', error, type));
+                }
+                if ((flags & EV_PREVENT) !== 0) { preventEvent(ev); }
+                if ((flags & EV_STOP) !== 0) { stopEvent(ev); }
+                if (res && (res as any).cancel === true) {
+                        preventEvent(ev);
+                        stopEvent(ev);
+                }
+        }
+}
+
+function preventEvent(ev: any): void {
+        if (typeof ev?.preventDefault === 'function') ev.preventDefault();
+}
+
+function stopEvent(ev: any): void {
+        if (typeof ev?.stopPropagation === 'function') ev.stopPropagation();
+}
+
+function addEventRecord(c: any, record: EventRecord): void {
+        let last: EventRecord | undefined = c._eventHandlers;
+        if (last === undefined) {
+                c._eventHandlers = record;
+                return;
+        }
+        while (last.next !== undefined) last = last.next;
+        last.next = record;
+}
+
+function compactEventRecords(c: any): void {
+        let head: EventRecord | undefined;
+        let tail: EventRecord | undefined;
+        for (let r: EventRecord | undefined = c._eventHandlers; r !== undefined; r = r.next) {
+                if ((r.flags & EV_REMOVED) !== 0) continue;
+                if (tail === undefined) head = r; else tail.next = r;
+                tail = r;
+        }
+        if (tail !== undefined) tail.next = undefined;
+        c._eventHandlers = head;
+}
+
+function hasEventKey(c: any, key: string): boolean {
+        for (let r: EventRecord | undefined = c._eventHandlers; r !== undefined; r = r.next) {
+                if ((r.flags & EV_REMOVED) === 0 && r.key === key) return true;
+        }
+        return false;
+}
+
+function offAll(c: any): void {
+                const head: EventRecord | undefined = c._eventHandlers;
+                if (head === undefined) return;
+                for (let r: EventRecord | undefined = head; r !== undefined; r = r.next) {
+                        if ((r.flags & (EV_DOM | EV_REMOVED)) !== EV_DOM) { continue; }
+                        try {
+                                (c.element as any).removeEventListener(r.type, r, (r.flags & EV_CAPTURE) !== 0);
+                        } catch { }
+                }
                 c._eventHandlers = undefined;
 }
 
@@ -1247,19 +1324,19 @@ function createOwnedControls(c: ComponentBase): ControlCollection {
 
 function ownerControlAdded(this: ControlCollection, c: ComponentBase) {
         const owner = controlsOwner(this);
-        if (owner._eventHandlers?.has('controladded')) owner.motif.trigger('controladded', { control: c });
+        if (hasEventKey(owner, 'controladded')) owner.motif.trigger('controladded', { control: c });
         if (!owner.isVisible && (owner.element as Node)?.nodeType === Node.COMMENT_NODE) return;
         ComponentHelper.internalBuild.call(owner, c);
 }
 
 function ownerControlAddedBeforeBuild(this: ControlCollection, c: ComponentBase) {
         const owner = controlsOwner(this);
-        if (owner._eventHandlers?.has('controladded')) owner.motif.trigger('controladded', { control: c });
+        if (hasEventKey(owner, 'controladded')) owner.motif.trigger('controladded', { control: c });
 }
 
 function ownerControlRemoved(this: ControlCollection, c: ComponentBase) {
         const owner = controlsOwner(this);
-        if (owner._eventHandlers?.has('controlremoved')) owner.motif.trigger('controlremoved', { control: c });
+        if (hasEventKey(owner, 'controlremoved')) owner.motif.trigger('controlremoved', { control: c });
 }
 
 const fragmentCloseMarkers = new WeakMap<Comment, Comment>();
@@ -1375,14 +1452,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 this._controls = value;
         }
 
-        private _eventHandlers?: Map<string, Set<{
-                original: (sender: ComponentBase, e: EventArgs) => any,
-                wrapped?: (e: Event) => void,
-                dom?: boolean,
-                domEvent?: boolean,
-                capture?: boolean,
-                type?: string
-        }>>;
+        private _eventHandlers?: EventRecord;
         private _class?: IClass<TElement> = undefined;
         private _attr?: controlAttribute<TElement> = undefined;
         public get class(): IClass<TElement> {
@@ -1942,51 +2012,28 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         }
                 }
 
-                const [name, ...mods] = full.split(":");
+                const colon = full.indexOf(":");
+                const name = colon < 0 ? full : full.slice(0, colon);
+                const mods = colon < 0 ? NO_MODS : full.slice(colon + 1).split(":");
                 const evt = name.startsWith("on") ? name.slice(2).toLowerCase() : name.toLowerCase();
-                const options: AddEventListenerOptions = {};
-                if (mods.includes("once")) options.once = true;
-                if (mods.includes("passive")) options.passive = true;
-                if (mods.includes("capture")) options.capture = true;
-
-                const wrapped = (ev: Event) => {
-                        if (mods.includes("self") && ev.target !== this.element) return;
-                        if (mods.includes("trusted") && !ev.isTrusted) return;
-                        let res: any;
-                        try {
-                                if (cb && (cb as any).length <= 1) {
-                                        res = (cb as any)(ev as any);
-                                } else if (cb) {
-                                        res = cb(this, ev as any);
-                                }
-                        } catch (error) {
-                                reportError('MJX123', error, evt);
-                        }
-                        if (res && typeof res.then === 'function') {
-                                res.then(undefined, (error: unknown) => reportError('MJX123', error, evt));
-                        }
-                        const prevent = () => { if (typeof (ev as any)?.preventDefault === 'function') ev.preventDefault(); };
-                        const stop = () => { if (typeof (ev as any)?.stopPropagation === 'function') ev.stopPropagation(); };
-                        if (mods.includes("prevent")) { prevent(); }
-                        if (mods.includes("stop")) { stop(); }
-                        if (res && (res as any).cancel === true) {
-                                prevent();
-                                stop();
-                        }
-                };
-                if (domEvent) {
-                        (this.element as any).addEventListener(evt, wrapped as EventListener, options);
+                let flags = domEvent ? EV_DOM : 0;
+                let options: AddEventListenerOptions | undefined;
+                if (mods.length) {
+                        options = {};
+                        if (mods.includes("once")) options.once = true;
+                        if (mods.includes("passive")) options.passive = true;
+                        if (mods.includes("capture")) { options.capture = true; flags |= EV_CAPTURE; }
+                        if (mods.includes("self")) flags |= EV_SELF;
+                        if (mods.includes("trusted")) flags |= EV_TRUSTED;
+                        if (mods.includes("prevent")) flags |= EV_PREVENT;
+                        if (mods.includes("stop")) flags |= EV_STOP;
                 }
 
-
-                this._eventHandlers ??= new Map();
-                const key = full.toLowerCase();
-                const set = this._eventHandlers.get(key) ?? new Set();
-                set.add({ original: cb as any, wrapped, capture: !!options.capture, domEvent: !!domEvent, type: evt });
-                this._eventHandlers.set(key, set);
-                this._register(disposableCore.toDisposable(() => {
-                        this.motif.off(event, cb);
-                }));
+                const record = new EventRecord(this, full.toLowerCase(), cb as any, evt, flags);
+                if (domEvent) {
+                        (this.element as any).addEventListener(evt, record, options);
+                }
+                addEventRecord(this, record);
                 return this;
         }
 
@@ -1996,15 +2043,18 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 }
                 const name = String(event).toLowerCase();
                 safeCall(() => {
-                        var eh = this._eventHandlers?.get(name);
-                        if (eh) {
-                                eh.forEach(rec => {
+                        eventDispatchDepth++;
+                        try {
+                                for (let r = this._eventHandlers; r !== undefined; r = r.next) {
+                                        if ((r.flags & EV_REMOVED) !== 0 || r.key !== name) continue;
                                         try {
-                                                (rec.wrapped as any)(ev);
+                                                r.handleEvent(ev);
                                         } catch {
 
                                         }
-                                });
+                                }
+                        } finally {
+                                eventDispatchDepth--;
                         }
                 }, 'trigger');
                 return this;
@@ -2032,27 +2082,16 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         }
                         return this;
                 }
-                const name = full.split(":")[0];
-                const evt = name.startsWith("on") ? name.slice(2).toLowerCase() : name.toLowerCase();
-                if (!this._eventHandlers) return this;
-                const set = this._eventHandlers.get(full);
-                if (!set) return this;
-                for (const rec of Array.from(set)) {
-                        if (rec.original === (cb as any)) {
-                                if ((rec as any).domEvent !== false) {
-                                        const cap = (rec as any).capture === true;
-                                        safeCall(() => { (this.element as any).removeEventListener(evt, rec.wrapped as EventListener, cap); }, 'off.removeEventListener');
-                                        safeCall(() => {
-                                                if ((rec as any).capture === undefined) {
-                                                        (this.element as any).removeEventListener(evt, rec.wrapped as EventListener, !cap);
-                                                }
-                                        }, 'off.removeEventListener.fallback');
-                                }
-                                set.delete(rec);
-                                break;
+                for (let r = this._eventHandlers; r !== undefined; r = r.next) {
+                        if ((r.flags & EV_REMOVED) !== 0 || r.key !== full || r.original !== (cb as any)) continue;
+                        if ((r.flags & EV_DOM) !== 0) {
+                                const rec = r;
+                                safeCall(() => { (this.element as any).removeEventListener(rec.type, rec, (rec.flags & EV_CAPTURE) !== 0); }, 'off.removeEventListener');
                         }
+                        r.flags |= EV_REMOVED;
+                        break;
                 }
-                if (set.size === 0) this._eventHandlers.delete(full);
+                if (eventDispatchDepth === 0) compactEventRecords(this);
                 return this;
         }
         /** Süren bertaraf: ikinci bir dispose/disposeAsync çağrısı yenisini başlatmaz, bunu bekler. */
