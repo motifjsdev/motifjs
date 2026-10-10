@@ -75,14 +75,14 @@ export class ControlCollection {
     remove(control: ComponentBase) {
         var index = this.items.indexOf(control);
         if (index > -1) {
-            this.items.splice(index, 1);
+            takeAt(this.items, index);
             try { control.dispose(); } catch { /* ignore */ }
         }
     }
     detach(control: ComponentBase): Promise<void> {
         const index = this.items.indexOf(control);
         if (index === -1) return Promise.resolve();
-        this.items.splice(index, 1);
+        takeAt(this.items, index);
         if (control.isDisposed) return Promise.resolve();
         (control as any)._leaveContainer = this.owner;
         control.parent = null;
@@ -93,7 +93,7 @@ export class ControlCollection {
         if (unlinkOnly) { this.silentUnlink(control); return; }
         const index = this.items.indexOf(control);
         if (index === -1) return;
-        this.items.splice(index, 1);
+        takeAt(this.items, index);
         if (control.isDisposed) return;
         control.parent = null;
         try {
@@ -107,7 +107,7 @@ export class ControlCollection {
     silentUnlink(control: ComponentBase) {
         const index = this.items.indexOf(control);
         if (index === -1) return;
-        this.items.splice(index, 1);
+        takeAt(this.items, index);
         (control as any)._leaveContainer = this.owner;
         control.parent = null;
     }
@@ -196,6 +196,10 @@ export class ControlCollection {
 }
 
 /** Owner için DOM'a eklenebilir gerçek element'i bulur. */
+function takeAt(items: ComponentBase[], index: number): void {
+    if (index === 0) items.shift(); else items.splice(index, 1);
+}
+
 function findAppendableElement(owner: ComponentBase): HTMLElement | Node | null {
     let c: ComponentBase | null = owner;
     while (c) {
