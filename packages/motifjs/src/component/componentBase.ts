@@ -449,7 +449,7 @@ const ComponentHelper = {
                 component._base._inactive = true;
                 ComponentHelper.callDeactivated(component);
                 if (!deep || component.isDisposed) { return; }
-                for (const c of component.controls.items.slice()) {
+                for (const c of childrenOf(component).slice()) {
                         if (c && !c.isDisposed && c.isVisible && !c.isWait) {
                                 ComponentHelper.deactivateTree(c, true);
                         }
@@ -460,7 +460,7 @@ const ComponentHelper = {
                 component._base._inactive = false;
                 ComponentHelper.callActivated(component);
                 if (!deep || component.isDisposed) { return; }
-                for (const c of component.controls.items.slice()) {
+                for (const c of childrenOf(component).slice()) {
                         if (c && !c.isDisposed && c.isVisible && !c.isWait) {
                                 ComponentHelper.activateTree(c, true);
                         }
@@ -897,8 +897,8 @@ function disposeShallow(c: any): void {
         c.motif.stopAnimations();
 
         c._base._deactivateBindings();
-        if (c.controls?.items?.length) {
-                for (const child of c.controls.items) {
+        if (childrenOf(c).length) {
+                for (const child of c._controls.items) {
                         try {
                                 (child as any)._base._disposeShallow();
                         } catch {
@@ -922,10 +922,10 @@ function deepCleanup(c: any): void {
         }
         c._eventHandlers = undefined;
 
-        try { c.class?._countsStore?.clear(); } catch { }
-        try { c.class?._watchersStore?.clear(); } catch { }
-        try { c.attr?._attrMapStore?.clear(); } catch { }
-        try { c.attr?._watchersStore?.clear(); } catch { }
+        try { c._class?._countsStore?.clear(); } catch { }
+        try { c._class?._watchersStore?.clear(); } catch { }
+        try { c._attr?._attrMapStore?.clear(); } catch { }
+        try { c._attr?._watchersStore?.clear(); } catch { }
         try {
                 if (c.motif.options) {
                         c.motif.options.cache = undefined;
@@ -967,8 +967,8 @@ function subtreeDisposesSync(c: any, root: boolean): boolean {
                         if (t.classes || (t.name && t.name.length > 0)) return false;
                 }
         }
-        const items = c.controls?.items;
-        if (items) {
+        const items = childrenOf(c);
+        if (items.length) {
                 for (let i = 0; i < items.length; i++) {
                         const child = items[i];
                         if (child && !child.isDisposed && !subtreeDisposesSync(child, false)) return false;
@@ -1007,7 +1007,7 @@ function disposeFinish(c: any, options: IDisposeOptions, asChild: boolean): void
         c.isDisposed = true;
         Disposable.prototype.dispose.call(c);
         if (asChild) {
-                c.controls.items = [];
+                if (c._controls) c._controls.items = [];
                 safeCall(() => { ComponentHelper.callDisposed.call(c, c); }, 'disposeAsync.callDisposed');
                 safeCall(() => { c._base._emiters?.clear(); }, 'disposeAsync.emiters');
                 if (options?.deep) {
@@ -1039,7 +1039,7 @@ async function disposeRemainderAsync(c: any, options: IDisposeOptions, asChild: 
         const childOptions: IDisposeOptions = { deep: options?.deep };
         await safeCallAsync(async () => {
                 if (c.isDisposed) { return; }
-                const ctrls = Array.from(c.controls.items) as any[];
+                const ctrls = Array.from(childrenOf(c)) as any[];
                 if (ctrls.length) {
                         await Promise.all(ctrls.map(child => asChild
                                 ? safeCallAsync(async () => { await child.disposeAsync(childOptions); }, 'disposeAsync.disposeAsyncChildren.handler')
@@ -1065,8 +1065,8 @@ function disposeRemainderSync(root: any, options: IDisposeOptions, asChild: bool
         for (let n = 0; n < nodes.length; n++) {
                 const node = nodes[n];
                 if (node.isDisposed) continue;
-                const items = node.controls?.items;
-                if (!items || items.length === 0) continue;
+                const items = childrenOf(node);
+                if (items.length === 0) continue;
                 const ctrls = Array.from(items) as any[];
                 for (let j = 0; j < ctrls.length; j++) {
                         const child = ctrls[j];
@@ -1190,6 +1190,20 @@ function controlsOwner(collection: ControlCollection): any {
         return (collection as any).owner;
 }
 
+const NO_CHILDREN: ComponentBase[] = Object.freeze([]) as any;
+
+function childrenOf(c: any): ComponentBase[] {
+        return c._controls?.items ?? NO_CHILDREN;
+}
+
+function createOwnedControls(c: ComponentBase): ControlCollection {
+        const controls = new ControlCollection(c);
+        controls.onAdd = ownerControlAdded;
+        controls.onAddBeforeBuild = ownerControlAddedBeforeBuild;
+        controls.onRemove = ownerControlRemoved;
+        return controls;
+}
+
 function ownerControlAdded(this: ControlCollection, c: ComponentBase) {
         const owner = controlsOwner(this);
         if (owner._eventHandlers?.has('controladded')) owner.motif.trigger('controladded', { control: c });
@@ -1270,7 +1284,13 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         public isPainting: boolean = false;
         public isPainted: boolean = false;
         public isVisible: boolean = true;
-        public controls: ControlCollection = new ControlCollection(this);
+        private _controls?: ControlCollection = undefined;
+        public get controls(): ControlCollection {
+                return this._controls ?? (this.isDisposed && !this.element ? this._controls! : (this._controls = createOwnedControls(this)));
+        }
+        public set controls(value: ControlCollection) {
+                this._controls = value;
+        }
 
         private _eventHandlers?: Map<string, Set<{
                 original: (sender: ComponentBase, e: EventArgs) => any,
@@ -1281,8 +1301,20 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 type?: string
         }>>;
         private _isWait: boolean = false;
-        public class: IClass<TElement> = new controlClass(this as any) as any as IClass<TElement>;
-        public attr: controlAttribute<TElement> = new controlAttribute(this as any);
+        private _class?: IClass<TElement> = undefined;
+        private _attr?: controlAttribute<TElement> = undefined;
+        public get class(): IClass<TElement> {
+                return this._class ?? (this.isDisposed && !this.element ? this._class! : (this._class = new controlClass(this as any) as any as IClass<TElement>));
+        }
+        public set class(value: IClass<TElement>) {
+                this._class = value;
+        }
+        public get attr(): controlAttribute<TElement> {
+                return this._attr ?? (this.isDisposed && !this.element ? this._attr! : (this._attr = new controlAttribute(this as any)));
+        }
+        public set attr(value: controlAttribute<TElement>) {
+                this._attr = value;
+        }
         public bindings = new BindingCollection(this);
         /** style(fn) izleyicisi: tek tek tutulur, yeniden çağrıda önceki durdurulur. */
         private _styleFx?: { stop: () => void; binding: IBaseBinding };
@@ -1336,6 +1368,11 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 } else {
                         this.element = element;
                 }
+                if ((this.element as any)?.nodeType !== 3) {
+                        this._controls ??= new ControlCollection(this);
+                        this._class ??= new controlClass(this as any) as any as IClass<TElement>;
+                        this._attr ??= new controlAttribute(this as any);
+                }
 
                 const refs = props ? extractRefs(props, this) : [];
 
@@ -1359,9 +1396,12 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
                 ComponentHelper.callOnInitializing(this);
                 if (this.isDisposed) return;
-                this.controls.onAdd = ownerControlAdded;
-                this.controls.onAddBeforeBuild = ownerControlAddedBeforeBuild;
-                this.controls.onRemove = ownerControlRemoved;
+                const controls = this._controls;
+                if (controls) {
+                        controls.onAdd = ownerControlAdded;
+                        controls.onAddBeforeBuild = ownerControlAddedBeforeBuild;
+                        controls.onRemove = ownerControlRemoved;
+                }
                 ComponentHelper.callOnInitialized(this);
 
                 const ctor = new.target as any;
@@ -1464,7 +1504,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         this._base._activateBindings();
                 }
 
-                for (const element of this.controls.items.slice()) {
+                for (const element of childrenOf(this).slice()) {
                         var target = isFragment ? this.motif.options.cache : this.element;
                         if (!element.isWait) {
                                 element.parent = this;
