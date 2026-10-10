@@ -1376,9 +1376,6 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 }
                 if ((this.element as any)?.nodeType !== 3) {
                         if (this._controls === undefined) this._controls = new ControlCollection(this);
-                        if (this._class === undefined) this._class = new controlClass(this as any) as any as IClass<TElement>;
-                        if (this._attr === undefined) this._attr = new controlAttribute(this as any);
-                        if (this._bindings === undefined) this._bindings = new BindingCollection(this);
                 }
 
                 const refs = props ? extractRefs(props, this) : [];
