@@ -100,8 +100,8 @@ describe('compiler contract', () => {
     });
 
     test('every compiled module is stamped with the contract version', () => {
-        expect(panel).toContain(`/*#__PURE__*/_mv(${1});`);
-        expect(grid).toContain(`/*#__PURE__*/_mv(${1});`);
+        expect(panel).toContain(`/*#__PURE__*/_mv(${2});`);
+        expect(grid).toContain(`/*#__PURE__*/_mv(${2});`);
     });
 
     test('the sender members the compiler calls are the listed ones and exist on a component', () => {
@@ -251,7 +251,7 @@ describe('motifCompiled', () => {
             motif.motifCompiled(99);
             motif.motifCompiled(99);
             expect(warn.mock.calls.map(c => String(c[0]))).toEqual([
-                '[motifjs] MJX121: This code was compiled for compiler contract 99, but the @motifx/core runtime implements contract 1. Install matching versions of @motifx/compiler and @motifx/core, and rebuild packages that ship compiled JSX.',
+                '[motifjs] MJX121: This code was compiled for compiler contract 99, but the @motifx/core runtime implements contract 2. Install matching versions of @motifx/compiler and @motifx/core, and rebuild packages that ship compiled JSX.',
             ]);
         } finally {
             delete (globalThis as any).__MOTIF_DEV__;

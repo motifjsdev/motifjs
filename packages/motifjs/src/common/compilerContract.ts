@@ -1,13 +1,14 @@
 import { reportWarning } from "./diagnostics";
 import { isDevLike } from "../devtools/devbus";
 
-export const COMPILER_CONTRACT = 1;
+export const COMPILER_CONTRACT = 2;
+const SUPPORTED_CONTRACTS: readonly number[] = [1, 2];
 
 const reported = new Set<number>();
 const pending = new Set<number>();
 
 export function motifCompiled(contract: number): void {
-    if (contract === COMPILER_CONTRACT || reported.has(contract)) return;
+    if (SUPPORTED_CONTRACTS.includes(contract) || reported.has(contract)) return;
     if (!isDevLike()) {
         pending.add(contract);
         return;

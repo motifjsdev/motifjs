@@ -28,8 +28,24 @@ function describeServiceToken(t: any): string {
 
 type TransitionApi = ComponentBaseOptions<any>['transition'];
 
+const F_BUILT = 1;
+const F_INITIALIZED = 2;
+const F_DISPOSED = 4;
+const F_CONFIGURED = 8;
+const F_PAINTING = 16;
+const F_PAINTED = 32;
+const F_HIDDEN = 64;
+const F_WAIT = 128;
+const F_POSTCONFIG = 256;
+const F_PREBOUND = 512;
+const F_DISPOSED_FIRED = 1024;
+
+function optionsOf(c: any): any {
+        return c?._motif?.options;
+}
+
 function peekTransition(c: any): TransitionApi | undefined {
-        return c?.motif?.options?.[TRANSITION_SLOT];
+        return c?._motif?.options?.[TRANSITION_SLOT];
 }
 
 /**WAAPI keyframe (transitionIn) YA DA CSS class transition (name/classes) tanımlı olarak enter animasyonu varmı */
@@ -47,17 +63,17 @@ function enterModeOf(container: any): TransitionMode {
                 if (mode) return mode;
                 const node = c.element as Node | null;
                 if (!node || node.nodeType !== Node.COMMENT_NODE) break;
-                c = c.parent ?? c._base?._leaveContainer;
+                c = c.parent ?? c._leaveContainer;
         }
         return transitionSettings.mode;
 }
 
 function leaveModeOf(c: any): TransitionMode {
-        return enterModeOf(c.parent ?? c._base?._leaveContainer);
+        return enterModeOf(c.parent ?? c._leaveContainer);
 }
 
 function wantsEnterTransition(c: any): boolean {
-        const o = c?.motif?.options;
+        const o = c?._motif?.options;
         const t = o?.[TRANSITION_SLOT];
         return !!(o?.transitionIn || (t && (t.classes || (t.name && t.name.length > 0))));
 }
@@ -327,11 +343,12 @@ interface BaseCtx extends LifecycleStorage {
 }
 
 function fireLifecycle(component: any, name: string, ev: EventArgs): void {
-        const base = component._base;
+        const base = component._baseCtx;
         if (base) base._emiters?.fire(name, ev);
 }
 
 function runHooks(base: any, listName: keyof LifecycleStorage, sender: any, ev: EventArgs, label: string): void {
+        if (!base) return;
         let slot: HookSlot | undefined = base[listName];
         if (!slot) return;
         let from = 0;
@@ -350,9 +367,10 @@ function runHooks(base: any, listName: keyof LifecycleStorage, sender: any, ev: 
 
 function hasLifecycleHook(component: any, hook: string, listName: keyof LifecycleStorage, lowerName: string, legacyProp?: string): boolean {
         if (component[hook]) return true;
-        if (component._base[listName]) return true;
+        const base = component._baseCtx;
+        if (base?.[listName]) return true;
         if (legacyProp && component[legacyProp]) return true;
-        return !!component._base._emiters?.hasListeners(lowerName);
+        return !!base?._emiters?.hasListeners(lowerName);
 }
 
 const RESERVED_METHODS = ['build', 'setState', 'reState', 'setText', 'style', 'dispose', 'disposeAsync', 'using', 'doWork', 'getService', '$', 'useModel', 'context', 'siblings', 'serviceProvider', 'isWait'];
@@ -409,13 +427,17 @@ const ComponentHelper = {
                         callReported(() => component.initializeComponent(sender, ev), 'MJX122', 'initializeComponent');
                 }
                 // 2) aggregated extra initializeComponent handlers (örn, from props)
-                runHooks(component._base, '_initializeComponentHandlers', sender, ev, 'initializeComponent');
+                const compiled = component._init;
+                if (compiled) {
+                        callReported(() => compiled(sender, ev), 'MJX122', 'initializeComponent');
+                }
+                runHooks(component._baseCtx, '_initializeComponentHandlers', sender, ev, 'initializeComponent');
                 // 3) class method  oninitializeComponent  
                 if (typeof component.oninitializeComponent === 'function') {
                         callReported(() => component.oninitializeComponent(sender, ev), 'MJX122', 'oninitializeComponent');
                 }
                 // 4) aggregated extra oninitializeComponent handlers (örn, from props)
-                runHooks(component._base, '_onInitializeComponentHandlers', sender, ev, 'oninitializeComponent');
+                runHooks(component._baseCtx, '_onInitializeComponentHandlers', sender, ev, 'oninitializeComponent');
         },
         callDisposing(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
@@ -424,7 +446,7 @@ const ComponentHelper = {
                 if (component.onDisposing) {
                         callReported(() => component.onDisposing(sender, ev), 'MJX122', 'onDisposing');
                 }
-                runHooks(component._base, '_onDisposingHandlers', sender, ev, 'onDisposing');
+                runHooks(component._baseCtx, '_onDisposingHandlers', sender, ev, 'onDisposing');
                 if (component.ondisposing) {
                         callReported(() => component.ondisposing(sender, ev), 'MJX122', 'ondisposing');
                 }
@@ -434,14 +456,14 @@ const ComponentHelper = {
                 if (!component || component.isDisposed) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onActivated) { callReported(() => component.onActivated(sender, ev), 'MJX122', 'onActivated'); }
-                runHooks(component._base, '_onActivatedHandlers', sender, ev, 'onActivated');
+                runHooks(component._baseCtx, '_onActivatedHandlers', sender, ev, 'onActivated');
                 fireLifecycle(component,'onactivated', ev);
         },
         callDeactivated(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onDeactivated) { callReported(() => component.onDeactivated(sender, ev), 'MJX122', 'onDeactivated'); }
-                runHooks(component._base, '_onDeactivatedHandlers', sender, ev, 'onDeactivated');
+                runHooks(component._baseCtx, '_onDeactivatedHandlers', sender, ev, 'onDeactivated');
                 fireLifecycle(component,'ondeactivated', ev);
         },
         deactivateTree(component: ComponentBase | any, deep: boolean = true) {
@@ -467,12 +489,13 @@ const ComponentHelper = {
                 }
         },
         callDisposed(component: ComponentBase | any) {
-                if (!component || !component._base || component._base._disposedFired) { return; }
-                component._base._disposedFired = true;
+                if (!component || (component._flags & F_DISPOSED_FIRED) !== 0) { return; }
+                if (component.isDisposed && !component.element && component._baseCtx === undefined) { return; }
+                component._flags |= F_DISPOSED_FIRED;
                 if (hasLifecycleHook(component, 'onDisposed', '_onDisposedHandlers', 'ondisposed', 'ondisposed')) {
                         const sender = component, ev = { cancel: false } as EventArgs;
                         if (component.onDisposed) { callReported(() => component.onDisposed(sender, ev), 'MJX122', 'onDisposed'); }
-                        runHooks(component._base, '_onDisposedHandlers', sender, ev, 'onDisposed');
+                        runHooks(component._baseCtx, '_onDisposedHandlers', sender, ev, 'onDisposed');
                         if (component.ondisposed) { callReported(() => component.ondisposed(sender, ev), 'MJX122', 'ondisposed'); }
                         fireLifecycle(component,'ondisposed', ev);
                 }
@@ -483,16 +506,16 @@ const ComponentHelper = {
                 if (hasLifecycleHook(component, 'onBuilt', '_onBuiltHandlers', 'onbuilt', 'onbuilt')) {
                         const sender = component, ev = { cancel: false } as EventArgs;
                         if (component.onBuilt) { callReported(() => component.onBuilt(sender, ev), 'MJX122', 'onBuilt'); }
-                        runHooks(component._base, '_onBuiltHandlers', sender, ev, 'onBuilt');
+                        runHooks(component._baseCtx, '_onBuiltHandlers', sender, ev, 'onBuilt');
                         if (component.onbuilt) { callReported(() => component.onbuilt(sender, ev), 'MJX122', 'onbuilt'); }
                         fireLifecycle(component,'onbuilt', ev);
                 }
                 try { (globalThis as any).__MOTIF_DEVTOOLS_BUS__?.publish?.('component:mounted', { id: (component as any).id, type: component.constructor?.name }); } catch { }
         },
         scheduleMounted(component: ComponentBase | any) {
-                if (!component || component.isDisposed || component._base._mountedScheduled) { return; }
+                if (!component || component.isDisposed || component._baseCtx?._mountedScheduled) { return; }
                 const hasHook = typeof component.onMounted === 'function'
-                        || !!component._base._onMountedHandlers
+                        || !!component._baseCtx?._onMountedHandlers
                         || typeof component.onmounted === 'function';
                 if (!hasHook) { return; }
                 component._base._mountedScheduled = true;
@@ -511,7 +534,7 @@ const ComponentHelper = {
                 component._base._mountedFired = true;
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onMounted) { callReported(() => component.onMounted(sender, ev), 'MJX122', 'onMounted'); }
-                runHooks(component._base, '_onMountedHandlers', sender, ev, 'onMounted');
+                runHooks(component._baseCtx, '_onMountedHandlers', sender, ev, 'onMounted');
                 if (component.onmounted) { callReported(() => component.onmounted(sender, ev), 'MJX122', 'onmounted'); }
                 fireLifecycle(component,'onmounted', ev);
         },
@@ -520,36 +543,37 @@ const ComponentHelper = {
                 if (!hasLifecycleHook(component, 'onBuilding', '_onBuildingHandlers', 'onbuilding')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onBuilding) { callReported(() => component.onBuilding(sender, ev), 'MJX122', 'onBuilding'); }
-                runHooks(component._base, '_onBuildingHandlers', sender, ev, 'onBuilding');
+                runHooks(component._baseCtx, '_onBuildingHandlers', sender, ev, 'onBuilding');
                 fireLifecycle(component,'onbuilding', ev);
         },
         callConfig(component: ComponentBase | any) {
                 if (!component || component.isDisposed || component.isConfigured) { return; }
                 component.isConfigured = true;
 
-                if (component.motif.options._preconfig) {
-                        safeCallSilent(() => component.motif.options._preconfig(component), 'Component._preconfig');
+                const preconfig = component._motif?.options?._preconfig;
+                if (preconfig) {
+                        safeCallSilent(() => preconfig(component), 'Component._preconfig');
                 }
 
                 if (!hasLifecycleHook(component, 'onConfig', '_onConfigHandlers', 'onconfig')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onConfig) { callReported(() => component.onConfig(sender, ev), 'MJX122', 'onConfig'); }
-                runHooks(component._base, '_onConfigHandlers', sender, ev, 'onConfig');
+                runHooks(component._baseCtx, '_onConfigHandlers', sender, ev, 'onConfig');
                 fireLifecycle(component,'onconfig', ev);
         },
         callConfigured(component: ComponentBase | any) {
-                if (component.motif.options && component.motif.options._postconfigdone) {
+                if ((component._flags & F_POSTCONFIG) !== 0) {
                         return;
                 }
-                if (component?._base?._configDeferred && !component.isConfigured) {
+                if (component?._baseCtx?._configDeferred && !component.isConfigured) {
                         ComponentHelper.callConfig(component);
                 }
-                component.motif.options._postconfigdone = true;
+                component._flags |= F_POSTCONFIG;
                 if (!component || component.isDisposed) { return; }
                 if (!hasLifecycleHook(component, 'onConfigured', '_onConfiguredHandlers', 'onconfigured')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onConfigured) { callReported(() => component.onConfigured(sender, ev), 'MJX122', 'onConfigured'); }
-                runHooks(component._base, '_onConfiguredHandlers', sender, ev, 'onConfigured');
+                runHooks(component._baseCtx, '_onConfiguredHandlers', sender, ev, 'onConfigured');
                 fireLifecycle(component,'onconfigured', ev);
         },
         callOnInitialized(component: ComponentBase | any) {
@@ -558,7 +582,7 @@ const ComponentHelper = {
                 if (!hasLifecycleHook(component, 'onInitialized', '_onInitializedHandlers', 'oninitialized')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onInitialized) { callReported(() => component.onInitialized(sender, ev), 'MJX122', 'onInitialized'); }
-                runHooks(component._base, '_onInitializedHandlers', sender, ev, 'onInitialized');
+                runHooks(component._baseCtx, '_onInitializedHandlers', sender, ev, 'onInitialized');
                 fireLifecycle(component,'oninitialized', ev);
         },
         callOnInitializing(component: ComponentBase | any) {
@@ -566,7 +590,7 @@ const ComponentHelper = {
                 if (!hasLifecycleHook(component, 'onInitializing', '_onInitializingHandlers', 'oninitializing')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onInitializing) { callReported(() => component.onInitializing(sender, ev), 'MJX122', 'onInitializing'); }
-                runHooks(component._base, '_onInitializingHandlers', sender, ev, 'onInitializing');
+                runHooks(component._baseCtx, '_onInitializingHandlers', sender, ev, 'onInitializing');
                 fireLifecycle(component,'oninitializing', ev);
         },
         callVisibilityChanged(component: ComponentBase | any, visible: boolean) {
@@ -574,7 +598,7 @@ const ComponentHelper = {
                 if (!hasLifecycleHook(component, 'onVisibilityChanged', '_onVisibilityChangedHandlers', 'onvisibilitychanged')) { return; }
                 const sender = component, ev: VisibilityChangedEventArgs = { cancel: false, visible };
                 if (component.onVisibilityChanged) { callReported(() => component.onVisibilityChanged(sender, ev), 'MJX122', 'onVisibilityChanged'); }
-                runHooks(component._base, '_onVisibilityChangedHandlers', sender, ev, 'onVisibilityChanged');
+                runHooks(component._baseCtx, '_onVisibilityChangedHandlers', sender, ev, 'onVisibilityChanged');
                 fireLifecycle(component,'onvisibilitychanged', ev);
         },
         findFragmentContent(c: ComponentBase) {
@@ -602,7 +626,7 @@ const ComponentHelper = {
                 if (this.isDisposed || c?.isDisposed) { return; }
                 ComponentHelper.callConfigured(c);
                 if (c.isDisposed) return;
-                c._base._activatePreBindings();
+                activatePreBindings(c);
                 if (c.isWait) {
                         if (this.isBuilt) placeTrace(this, c);
                         return;
@@ -614,7 +638,7 @@ const ComponentHelper = {
                 if (c.isWait) {
                         return;
                 }
-                const enterSeq = c._base._enterSeq;
+                const enterSeq = (c as any)._baseCtx?._enterSeq;
                 if (!c.isBuilt) {
                         c.build();
                 } else if (c.parent != this) {
@@ -694,7 +718,7 @@ const ComponentHelper = {
                         if (ownTrace && ownTrace.parentNode) ownTrace.parentNode.removeChild(ownTrace);
                 }
                 if (c.isVisible) {
-                        const enteredInBuild = !cisBuilt && c._base._enterSeq !== enterSeq;
+                        const enteredInBuild = !cisBuilt && (c as any)._baseCtx?._enterSeq !== enterSeq;
                         !enteredInBuild && wantsEnterTransition(c) && c.motif.options.transition.enterTransition(() => { });
                         if (cisBuilt) {
                                 ComponentHelper.activateTree(c);
@@ -764,11 +788,11 @@ const ComponentHelper = {
 }
 
 function keepsTrace(c: ComponentBase): boolean {
-        return c.motif.options?.hideStrategy !== 'detach';
+        return optionsOf(c)?.hideStrategy !== 'detach';
 }
 
 export function domAnchor(c: ComponentBase, host: Node): Node | null {
-        const trace = c.motif.options?.placeholder as Node | undefined;
+        const trace = optionsOf(c)?.placeholder as Node | undefined;
         if (trace && trace.parentNode === host) return trace;
         const node = c.element as unknown as Node | null;
         return node && node.parentNode === host ? node : null;
@@ -781,7 +805,7 @@ function followingAnchor(owner: ComponentBase, start: number, host: Node): Node 
                 if (anchor) return anchor;
         }
         if ((owner.element as unknown as Node).nodeType === Node.COMMENT_NODE) {
-                const close = owner.motif.options.closeFragment as unknown as Node | undefined;
+                const close = optionsOf(owner)?.closeFragment as unknown as Node | undefined;
                 return close && close.parentNode === host ? close : null;
         }
         return null;
@@ -800,7 +824,7 @@ function placeTrace(owner: ComponentBase, c: ComponentBase): void {
 }
 
 function removeComponentDom(c: any, node: Node, alsoPlaceholder: boolean): void {
-        const opts = c.motif?.options;
+        const opts = optionsOf(c);
         const parent = node.parentNode;
         if (node.nodeType === Node.COMMENT_NODE) {
                 if (parent) {
@@ -890,24 +914,24 @@ function disposeShallow(c: any): void {
         if (c.isDisposed) return;
         ComponentHelper.callDisposing.call(c, c);
         try {
-                c._base._offAll();
+                offAll(c);
         } catch {
 
         }
         c.motif.stopAnimations();
 
-        c._base._deactivateBindings();
+        deactivateBindings(c);
         if (childrenOf(c).length) {
                 for (const child of c._controls.items) {
                         try {
-                                (child as any)._base._disposeShallow();
+                                disposeShallow(child);
                         } catch {
 
                         }
                 }
         }
         ComponentHelper.callDisposed.call(c, c);
-        safeCall(() => { c._base._emiters?.clear(); }, 'disposeShallow.emiters');
+        safeCall(() => { c._baseCtx?._emiters?.clear(); }, 'disposeShallow.emiters');
         c.isDisposed = true;
         Disposable.prototype.dispose.call(c);
 }
@@ -927,10 +951,11 @@ function deepCleanup(c: any): void {
         try { c._attr?._attrMapStore?.clear(); } catch { }
         try { c._attr?._watchersStore?.clear(); } catch { }
         try {
-                if (c.motif.options) {
-                        c.motif.options.cache = undefined;
-                        c.motif.options.closeFragment = undefined;
-                        c.motif.options.placeholder = undefined;
+                const opts = c._motif?.options;
+                if (opts) {
+                        opts.cache = undefined;
+                        opts.closeFragment = undefined;
+                        opts.placeholder = undefined;
                 }
         } catch {
 
@@ -942,14 +967,15 @@ function deepCleanup(c: any): void {
         try { c.attr = undefined; } catch { }
         try { c.parent = null; } catch { }
 
-        try { c.motif.options = undefined; } catch { }
+        try { if (c._motif) c._motif.options = undefined; } catch { }
         const keys = Object.keys(c);
         for (let i = 0; i < keys.length; i++) {
                 const key = keys[i];
-                if (key === 'motif') continue;
+                if (key === '_motif' || key === '_flags') continue;
                 try { c[key] = undefined; } catch { }
         }
-        c.isDisposed = true;
+        c._store = null;
+        c._flags = F_DISPOSED | F_HIDDEN | F_DISPOSED_FIRED | F_POSTCONFIG | F_PREBOUND;
 }
 
 const DISPOSE_STARTED = Promise.resolve();
@@ -957,7 +983,7 @@ const DISPOSE_STARTED = Promise.resolve();
 function subtreeDisposesSync(c: any, root: boolean): boolean {
         if (!root && c._disposing && !c.isDisposed) return false;
         if (c.disposeAsync !== ComponentBase.prototype.disposeAsync) return false;
-        const opts = c.motif?.options;
+        const opts = optionsOf(c);
         if (opts) {
                 if (opts.transitionOut) return false;
                 const t = opts[TRANSITION_SLOT] as TransitionApi | undefined;
@@ -998,8 +1024,8 @@ function disposePrefix(c: any, options: IDisposeOptions, asChild: boolean): void
                 c.motif.options.transition.skipNextLeave = true;
         }
         safeCall(() => { ComponentHelper.callDisposing.call(c, c); }, ctx + '.callDisposing');
-        c._base._offAll();
-        c._base._deactivateBindings();
+        offAll(c);
+        deactivateBindings(c);
         safeCall(() => { c.parent?.controls?.silentDetach?.(c, true); }, ctx + '.silentDetach');
 }
 
@@ -1009,17 +1035,17 @@ function disposeFinish(c: any, options: IDisposeOptions, asChild: boolean): void
         if (asChild) {
                 if (c._controls) c._controls.items = [];
                 safeCall(() => { ComponentHelper.callDisposed.call(c, c); }, 'disposeAsync.callDisposed');
-                safeCall(() => { c._base._emiters?.clear(); }, 'disposeAsync.emiters');
+                safeCall(() => { c._baseCtx?._emiters?.clear(); }, 'disposeAsync.emiters');
                 if (options?.deep) {
-                        c._base._deepCleanup();
+                        deepCleanup(c);
                 }
                 return;
         }
         c.element = null;
         safeCall(() => { ComponentHelper.callDisposed.call(c, c); }, 'dispose.callDisposed');
-        safeCall(() => { c._base._emiters?.clear(); }, 'dispose.emiters');
-        c._base._offAll();
-        c._base._deepCleanup();
+        safeCall(() => { c._baseCtx?._emiters?.clear(); }, 'dispose.emiters');
+        offAll(c);
+        deepCleanup(c);
 }
 
 async function disposeRemainderAsync(c: any, options: IDisposeOptions, asChild: boolean, leave: Promise<void> | undefined): Promise<void> {
@@ -1031,7 +1057,7 @@ async function disposeRemainderAsync(c: any, options: IDisposeOptions, asChild: 
                 } else if (peekTransition(c)?.skipNextLeave) {
                         await c.motif.stopAnimations();
                 }
-                await c._base._detachDomWithAnimationAsync();
+                await detachDomWithAnimationAsync(c);
         }
         if (!asChild && c.constructor.name !== 'TransportTo') {
                 await disposeContentBlocks(c);
@@ -1117,7 +1143,35 @@ const BASE_PROTO = {
                 return base._emiters ??= new ComponentEmiter(base.owner);
         },
         _offAll(this: BaseCtx): void {
-                const c: any = this.owner;
+                offAll(this.owner);
+        },
+        _deactivateBindings(this: BaseCtx): void {
+                deactivateBindings(this.owner);
+        },
+        _activateBindings(this: BaseCtx): void {
+                activateBindings(this.owner);
+        },
+        _reactivateBindings(this: BaseCtx): void {
+                reactivateBindings(this.owner);
+        },
+        _activatePreBindings(this: BaseCtx): void {
+                activatePreBindings(this.owner);
+        },
+        _detachDomWithAnimation(this: BaseCtx): void {
+                detachDomWithAnimation(this.owner);
+        },
+        _detachDomWithAnimationAsync(this: BaseCtx): Promise<void> {
+                return detachDomWithAnimationAsync(this.owner);
+        },
+        _disposeShallow(this: BaseCtx): void {
+                disposeShallow(this.owner);
+        },
+        _deepCleanup(this: BaseCtx): void {
+                deepCleanup(this.owner);
+        },
+};
+
+function offAll(c: any): void {
                 if (!c._eventHandlers) return;
                 for (const [full, set] of c._eventHandlers) {
                         const name = full.split(":")[0];
@@ -1140,49 +1194,35 @@ const BASE_PROTO = {
                 }
                 c._eventHandlers.clear();
                 c._eventHandlers = undefined;
-        },
-        _deactivateBindings(this: BaseCtx): void {
-                const c: any = this.owner;
-                try { if (c._bindings?._items?.length) c._bindings.deactivateAll(); } catch { }
-        },
-        _activateBindings(this: BaseCtx): void {
-                const c: any = this.owner;
-                try { c._bindings?.activateAll(); } catch { }
-        },
-        _reactivateBindings(this: BaseCtx): void {
-                const c: any = this.owner;
-                try { c._bindings?.reActivateAll(); } catch { }
-        },
-        _activatePreBindings(this: BaseCtx): void {
-                if (this.prebinding_Activated) return;
-                const c: any = this.owner;
-                const registered = c._bindings?._items as IBaseBinding[] | undefined;
-                if (registered && registered.length > 0) {
-                        c._bindings.items.filter((x: IBaseBinding) => x.propertyName == "isWait" || x.propertyName == "display").forEach((b: IBaseBinding) => {
-                                b.activate();
-                        }
-                        );
+}
+
+function deactivateBindings(c: any): void {
+        try { if (c._bindings?._items?.length) c._bindings.deactivateAll(); } catch { }
+}
+
+function activateBindings(c: any): void {
+        try { c._bindings?.activateAll(); } catch { }
+}
+
+function reactivateBindings(c: any): void {
+        try { c._bindings?.reActivateAll(); } catch { }
+}
+
+function activatePreBindings(c: any): void {
+        if ((c._flags & F_PREBOUND) !== 0) return;
+        const registered = c._bindings?._items as IBaseBinding[] | undefined;
+        if (registered && registered.length > 0) {
+                c._bindings.items.filter((x: IBaseBinding) => x.propertyName == "isWait" || x.propertyName == "display").forEach((b: IBaseBinding) => {
+                        b.activate();
                 }
-                this.prebinding_Activated = true;
-        },
-        _detachDomWithAnimation(this: BaseCtx): void {
-                detachDomWithAnimation(this.owner);
-        },
-        _detachDomWithAnimationAsync(this: BaseCtx): Promise<void> {
-                return detachDomWithAnimationAsync(this.owner);
-        },
-        _disposeShallow(this: BaseCtx): void {
-                disposeShallow(this.owner);
-        },
-        _deepCleanup(this: BaseCtx): void {
-                deepCleanup(this.owner);
-        },
-};
+                );
+        }
+        c._flags |= F_PREBOUND;
+}
 
 function createBaseCtx(owner: ComponentBase): BaseCtx {
         const base: BaseCtx = Object.create(BASE_PROTO);
         base.owner = owner;
-        base.prebinding_Activated = false;
         return base;
 }
 
@@ -1191,6 +1231,7 @@ function controlsOwner(collection: ControlCollection): any {
 }
 
 const NO_CHILDREN: ComponentBase[] = Object.freeze([]) as any;
+const NO_BINDINGS: IBaseBinding[] = Object.freeze([]) as any;
 
 function childrenOf(c: any): ComponentBase[] {
         return c._controls?.items ?? NO_CHILDREN;
@@ -1273,17 +1314,59 @@ function createScopedContext(app: Application, owner: ComponentBase): Applicatio
 
 export abstract class ComponentBase<TElement extends ElementType = any, TProps extends object = any> extends Disposable {
 
-        public readonly motif: ComponentMotif<this, TProps> = new ComponentMotif<this, TProps>(this, new ComponentOptionsImpl(this) as unknown as ComponentMotif<this, TProps>['options']);
+        private _motif?: ComponentMotif<this, TProps> = undefined;
+        public get motif(): ComponentMotif<this, TProps> {
+                return this._motif !== undefined ? this._motif : (this._motif = new ComponentMotif<this, TProps>(this, (this.isDisposed && !this.element ? undefined : new ComponentOptionsImpl(this)) as unknown as ComponentMotif<this, TProps>['options']));
+        }
+        public set motif(value: ComponentMotif<this, TProps>) {
+                this._motif = value;
+        }
 
         public element: TElement;
         public props: TProps;
-        public isBuilt: boolean = false;
-        public isInitialized: boolean = false;
-        public isDisposed: boolean = false;
-        public isConfigured: boolean = false;
-        public isPainting: boolean = false;
-        public isPainted: boolean = false;
-        public isVisible: boolean = true;
+        private _flags: number = 0;
+        public get isBuilt(): boolean {
+                return (this._flags & F_BUILT) !== 0;
+        }
+        public set isBuilt(value: boolean) {
+                this._flags = value ? this._flags | F_BUILT : this._flags & ~F_BUILT;
+        }
+        public get isInitialized(): boolean {
+                return (this._flags & F_INITIALIZED) !== 0;
+        }
+        public set isInitialized(value: boolean) {
+                this._flags = value ? this._flags | F_INITIALIZED : this._flags & ~F_INITIALIZED;
+        }
+        public get isDisposed(): boolean {
+                return (this._flags & F_DISPOSED) !== 0;
+        }
+        public set isDisposed(value: boolean) {
+                this._flags = value ? this._flags | F_DISPOSED : this._flags & ~F_DISPOSED;
+        }
+        public get isConfigured(): boolean {
+                return (this._flags & F_CONFIGURED) !== 0;
+        }
+        public set isConfigured(value: boolean) {
+                this._flags = value ? this._flags | F_CONFIGURED : this._flags & ~F_CONFIGURED;
+        }
+        public get isPainting(): boolean {
+                return (this._flags & F_PAINTING) !== 0;
+        }
+        public set isPainting(value: boolean) {
+                this._flags = value ? this._flags | F_PAINTING : this._flags & ~F_PAINTING;
+        }
+        public get isPainted(): boolean {
+                return (this._flags & F_PAINTED) !== 0;
+        }
+        public set isPainted(value: boolean) {
+                this._flags = value ? this._flags | F_PAINTED : this._flags & ~F_PAINTED;
+        }
+        public get isVisible(): boolean {
+                return (this._flags & F_HIDDEN) === 0;
+        }
+        public set isVisible(value: boolean) {
+                this._flags = value ? this._flags & ~F_HIDDEN : this._flags | F_HIDDEN;
+        }
         private _controls?: ControlCollection = undefined;
         public get controls(): ControlCollection {
                 return this._controls !== undefined || (this.isDisposed && !this.element) ? this._controls! : (this._controls = createOwnedControls(this));
@@ -1300,7 +1383,6 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 capture?: boolean,
                 type?: string
         }>>;
-        private _isWait: boolean = false;
         private _class?: IClass<TElement> = undefined;
         private _attr?: controlAttribute<TElement> = undefined;
         public get class(): IClass<TElement> {
@@ -1344,7 +1426,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 } catch { return false; }
         }
         public set isWait(value: boolean) {
-                this._isWait = value;
+                this._flags = value ? this._flags | F_WAIT : this._flags & ~F_WAIT;
                 if (this.isBuilt) {
                         if (value) {
                                 this.motif.hide();
@@ -1359,7 +1441,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
         }
         public get isWait(): boolean {
-                return this._isWait;
+                return (this._flags & F_WAIT) !== 0;
         }
 
         constructor(element: TElement, props: TProps = {} as TProps) {
@@ -1380,7 +1462,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
                 const refs = props ? extractRefs(props, this) : [];
 
-                props && ParseProps(props, this);
+                if (props && ParseProps(props, this)) props = {} as TProps;
                 applyComponentOptions((props as any)?.options, this);
                 this.props = props;
 
@@ -1424,7 +1506,12 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
 
         public childs?: any[];
-        protected _base: BaseCtx = createBaseCtx(this);
+        private _baseCtx?: BaseCtx = undefined;
+        private _init?: (sender: ComponentBase, e: EventArgs) => void = undefined;
+        private _leaveContainer?: ComponentBase = undefined;
+        protected get _base(): BaseCtx {
+                return this._baseCtx !== undefined || (this.isDisposed && !this.element) ? this._baseCtx! : (this._baseCtx = createBaseCtx(this));
+        }
         public parent: ComponentBase | null = null;
         public onElementCreating?(): TElement;
         public initializeComponent?(sender: ComponentBase): void;
@@ -1465,7 +1552,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         public build(building: boolean = true) {
                 checkReservedMembers(this);
                 ComponentHelper.callConfigured(this);
-                this._base._activatePreBindings();
+                activatePreBindings(this);
                 if (this.isDisposed || !this.element || this.isWait) { return; }
                 if (this.isBuilt || this.isWait) {
                         return;
@@ -1497,18 +1584,19 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         if (this.isDisposed) { return; }
                 }
 
-                const deferredSelectValue = (this.element as any)?.nodeName === 'SELECT'
+                const deferredSelectValue: IBaseBinding[] = (this.element as any)?.nodeName === 'SELECT'
                         ? this.bindings.items.filter(b => b.propertyName === 'value')
-                        : [];
+                        : NO_BINDINGS;
                 if (deferredSelectValue.length) {
                         try {
                                 this.bindings.items.filter(b => !deferredSelectValue.includes(b)).forEach(b => b.activate());
                         } catch { }
                 } else {
-                        this._base._activateBindings();
+                        activateBindings(this);
                 }
 
-                for (const element of childrenOf(this).slice()) {
+                const kids = childrenOf(this);
+                for (const element of kids.length ? kids.slice() : kids) {
                         var target = isFragment ? this.motif.options.cache : this.element;
                         if (!element.isWait) {
                                 element.parent = this;
@@ -1522,19 +1610,21 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 continue;
                         }
                         if (building) {
-                                if (element.motif.options.cache) {
-                                        ph.appendChild(element.motif.options.cache);
+                                const cache = optionsOf(element)?.cache;
+                                if (cache) {
+                                        ph.appendChild(cache);
                                 } else {
                                         ph.appendChild(element.element);
                                 }
                         } else {
-                                if (element.motif.options.cache) {
-                                        (target as any).appendChild(element.motif.options.cache);
+                                const cache = optionsOf(element)?.cache;
+                                if (cache) {
+                                        (target as any).appendChild(cache);
                                 } else {
                                         (target as any).appendChild(element.element);
                                 }
                         }
-                        if (element._base?._inactive && element.isVisible) {
+                        if ((element as any)._baseCtx?._inactive && element.isVisible) {
                                 ComponentHelper.activateTree(element);
                         }
 
@@ -1593,11 +1683,11 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 this.controls.forEach(c => {
                         c.setState();
                 });
-                this._base._reactivateBindings();
+                reactivateBindings(this);
         }
 
         public reState() {
-                this._base._reactivateBindings();
+                reactivateBindings(this);
                 this.controls.forEach(c => {
                         c.reState();
                 });
@@ -2271,8 +2361,19 @@ function collectLifecycleHandlers(component: ComponentBase, lowerKey: string, va
         if (!listName) return false;
         const fns: any[] = Array.isArray(value) ? value : [value];
         if (fns.length === 0 || !fns.every(fn => typeof fn === 'function')) return false;
-        const base = (component as any)._base;
-        for (const fn of fns) {
+        const target = component as any;
+        let from = 0;
+        if (listName === '_initializeComponentHandlers') {
+                if (target._init === undefined && !target._baseCtx?._initializeComponentHandlers) {
+                        target._init = fns[0];
+                        from = 1;
+                }
+        }
+        if (from >= fns.length) return true;
+        const base = target._base;
+        for (let i = from; i < fns.length; i++) {
+                const fn = fns[i];
+                if (listName === '_initializeComponentHandlers' && fn === target._init) continue;
                 const slot: HookSlot | undefined = base[listName];
                 if (slot === undefined) base[listName] = fn;
                 else if (typeof slot === 'function') { if (slot !== fn) base[listName] = [slot, fn]; }
@@ -2281,10 +2382,10 @@ function collectLifecycleHandlers(component: ComponentBase, lowerKey: string, va
         return true;
 }
 
-export function ParseProps(props: any, component: ComponentBase): any {
+export function ParseProps(props: any, component: ComponentBase): boolean {
         if (props) {
                 var keys = Object.keys(props);
-                if (keys.length === 0) return;
+                if (keys.length === 0) return false;
                 keys.forEach(key => {
                         if (key == 'initializeComponent' || key == 'oninitializeComponent' || key.startsWith('on')) {
                                 if (collectLifecycleHandlers(component, key.toLowerCase(), props[key])) {
@@ -2335,13 +2436,17 @@ export function ParseProps(props: any, component: ComponentBase): any {
                         } else if (key.startsWith("preconfig")) {
                                 component.motif.options._preconfig = props[key];
                                 delete props[key];
+                        } else if (key === '__childExpr') {
+                                delete props[key];
                         } else {
                                 // var callback = props[key];
                                 // if (typeof callback === "function") {
                                 // } else {
                         }
                 });
+                return typeof props === 'object' && Reflect.ownKeys(props).length === 0;
         }
+        return false;
 }
 
 const _transitionSources = new WeakMap<ComponentBase, any>();

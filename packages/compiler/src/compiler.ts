@@ -312,6 +312,18 @@ export default class Compiler {
                                         path.node.body = [...setOriginal, cls];
                                     }
                                     state.set('filename', filename);
+                                    path.traverse({
+                                        CallExpression(call) {
+                                            const node = call.node;
+                                            if (!t.isIdentifier(node.callee, { name: motifComponent() }) || node.arguments.length !== 2) return;
+                                            const [tag, props] = node.arguments;
+                                            if (!t.isStringLiteral(tag) || !t.isObjectExpression(props) || props.properties.length !== 1) return;
+                                            const only = props.properties[0];
+                                            if (!t.isObjectProperty(only) || only.computed || !t.isIdentifier(only.key, { name: 'initializeComponent' })) return;
+                                            if (!t.isArrowFunctionExpression(only.value) && !t.isFunctionExpression(only.value)) return;
+                                            node.arguments[1] = only.value;
+                                        }
+                                    });
                                     absorbGeneratedCoreImports(topLevel, coreImports);
 
                                     if (coreImports.size > 0) {
