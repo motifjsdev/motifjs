@@ -41,6 +41,45 @@ describe('parts of a text component', () => {
         expect(typeof t.attr.add).toBe('function');
         expect(t.attr).toBe(t.attr);
         expect(t.bindings.items).toEqual([]);
+        expect(t.bindings).toBe(t.bindings);
+        root.dispose();
+    });
+
+    test('a bound text has its binding and a static text has none', async () => {
+        const st = reactive({ name: 'Ada' });
+        const P = evalJsx(`function P(){ return <p>A {st.name}</p>; }`, 'P', { st });
+        const { root, el } = mount(P());
+        const [fixed, bound] = root.controls.items[0].controls.items;
+        expect(isText(fixed) && isText(bound)).toBe(true);
+        expect(fixed.bindings.items).toHaveLength(0);
+        expect(bound.bindings.items.map(b => b.propertyName)).toEqual(['textContent']);
+        st.name = 'Lin';
+        await settle();
+        expect(el.textContent).toBe('A Lin');
+        root.dispose();
+    });
+
+    test('a binding added to a built text component', async () => {
+        const st = reactive({ v: 'bir' });
+        const { root, el } = mount('x');
+        const t = root.controls.items[0];
+        t.bindings.add('textContent', st, 'v');
+        await settle();
+        const first = el.textContent;
+        st.v = 'iki';
+        await settle();
+        expect([first, el.textContent]).toEqual(['bir', 'iki']);
+        root.dispose();
+    });
+
+    test('a method text keeps its place among siblings', async () => {
+        const st = reactive({ n: 1 });
+        const P = evalJsx(`function P(){ return <p><b>a</b>{() => st.n}<i>c</i></p>; }`, 'P', { st });
+        const { root, el } = mount(P());
+        expect(el.innerHTML).toBe('<p><b>a</b>1<i>c</i></p>');
+        st.n = 2;
+        await settle();
+        expect(el.innerHTML).toBe('<p><b>a</b>2<i>c</i></p>');
         root.dispose();
     });
 
@@ -77,6 +116,16 @@ describe('parts of a text component', () => {
         const cls: any = { add() { } };
         (c as any).class = cls;
         expect(c.class).toBe(cls);
+    });
+});
+
+describe('a part set to null', () => {
+    test.each(['controls', 'class', 'attr', 'bindings'])('%s stays null on a text and an element component', member => {
+        const t: any = new Component(document.createTextNode('a'));
+        const e: any = new Component('div');
+        t[member] = null;
+        e[member] = null;
+        expect([t[member], e[member]]).toEqual([null, null]);
     });
 });
 
@@ -147,6 +196,7 @@ describe('text components on dispose', () => {
         expect(t.controls).toBeUndefined();
         expect(t.class).toBeUndefined();
         expect(t.attr).toBeUndefined();
+        expect(t.bindings).toBeUndefined();
         root.dispose();
     });
 

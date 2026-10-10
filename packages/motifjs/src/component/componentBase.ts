@@ -1143,22 +1143,22 @@ const BASE_PROTO = {
         },
         _deactivateBindings(this: BaseCtx): void {
                 const c: any = this.owner;
-                try { if (c.bindings?._items?.length) c.bindings.deactivateAll(); } catch { }
+                try { if (c._bindings?._items?.length) c._bindings.deactivateAll(); } catch { }
         },
         _activateBindings(this: BaseCtx): void {
                 const c: any = this.owner;
-                try { c.bindings?.activateAll(); } catch { }
+                try { c._bindings?.activateAll(); } catch { }
         },
         _reactivateBindings(this: BaseCtx): void {
                 const c: any = this.owner;
-                try { c.bindings?.reActivateAll(); } catch { }
+                try { c._bindings?.reActivateAll(); } catch { }
         },
         _activatePreBindings(this: BaseCtx): void {
                 if (this.prebinding_Activated) return;
                 const c: any = this.owner;
-                const registered = c.bindings?._items as IBaseBinding[] | undefined;
+                const registered = c._bindings?._items as IBaseBinding[] | undefined;
                 if (registered && registered.length > 0) {
-                        c.bindings.items.filter((x: IBaseBinding) => x.propertyName == "isWait" || x.propertyName == "display").forEach((b: IBaseBinding) => {
+                        c._bindings.items.filter((x: IBaseBinding) => x.propertyName == "isWait" || x.propertyName == "display").forEach((b: IBaseBinding) => {
                                 b.activate();
                         }
                         );
@@ -1286,7 +1286,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         public isVisible: boolean = true;
         private _controls?: ControlCollection = undefined;
         public get controls(): ControlCollection {
-                return this._controls ?? (this.isDisposed && !this.element ? this._controls! : (this._controls = createOwnedControls(this)));
+                return this._controls !== undefined || (this.isDisposed && !this.element) ? this._controls! : (this._controls = createOwnedControls(this));
         }
         public set controls(value: ControlCollection) {
                 this._controls = value;
@@ -1304,18 +1304,24 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         private _class?: IClass<TElement> = undefined;
         private _attr?: controlAttribute<TElement> = undefined;
         public get class(): IClass<TElement> {
-                return this._class ?? (this.isDisposed && !this.element ? this._class! : (this._class = new controlClass(this as any) as any as IClass<TElement>));
+                return this._class !== undefined || (this.isDisposed && !this.element) ? this._class! : (this._class = new controlClass(this as any) as any as IClass<TElement>);
         }
         public set class(value: IClass<TElement>) {
                 this._class = value;
         }
         public get attr(): controlAttribute<TElement> {
-                return this._attr ?? (this.isDisposed && !this.element ? this._attr! : (this._attr = new controlAttribute(this as any)));
+                return this._attr !== undefined || (this.isDisposed && !this.element) ? this._attr! : (this._attr = new controlAttribute(this as any));
         }
         public set attr(value: controlAttribute<TElement>) {
                 this._attr = value;
         }
-        public bindings = new BindingCollection(this);
+        private _bindings?: BindingCollection = undefined;
+        public get bindings(): BindingCollection {
+                return this._bindings !== undefined || (this.isDisposed && !this.element) ? this._bindings! : (this._bindings = new BindingCollection(this));
+        }
+        public set bindings(value: BindingCollection) {
+                this._bindings = value;
+        }
         /** style(fn) izleyicisi: tek tek tutulur, yeniden çağrıda önceki durdurulur. */
         private _styleFx?: { stop: () => void; binding: IBaseBinding };
 
@@ -1369,9 +1375,10 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         this.element = element;
                 }
                 if ((this.element as any)?.nodeType !== 3) {
-                        this._controls ??= new ControlCollection(this);
-                        this._class ??= new controlClass(this as any) as any as IClass<TElement>;
-                        this._attr ??= new controlAttribute(this as any);
+                        if (this._controls === undefined) this._controls = new ControlCollection(this);
+                        if (this._class === undefined) this._class = new controlClass(this as any) as any as IClass<TElement>;
+                        if (this._attr === undefined) this._attr = new controlAttribute(this as any);
+                        if (this._bindings === undefined) this._bindings = new BindingCollection(this);
                 }
 
                 const refs = props ? extractRefs(props, this) : [];
