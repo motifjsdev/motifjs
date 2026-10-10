@@ -1,7 +1,7 @@
 import { reportWarning } from "./diagnostics";
 import { isDevLike } from "../devtools/devbus";
 
-export const COMPILER_CONTRACT = 2;
+export const COMPILER_CONTRACT = 1;
 const SUPPORTED_CONTRACTS: readonly number[] = [1, 2];
 
 const reported = new Set<number>();

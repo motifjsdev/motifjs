@@ -221,7 +221,7 @@ function resolveChildExpression(probe: any): any {
     return undefined;
 }
 
-export function motifComponent(element: unknown, props?: any) {
+export function motifComponent(element: unknown, props?: any, lone?: number) {
 
     // Etiket adı: element yaratımı (HTML/SVG) ve spread prop uygulaması Component ctor'ının string parametresinde
     if (typeof element === "string") {
@@ -229,6 +229,14 @@ export function motifComponent(element: unknown, props?: any) {
             const compiled = new Component(element);
             (compiled as any)._init = props;
             return compiled;
+        }
+        if (lone === 1 && props !== null && typeof props === "object") {
+            const init = props.initializeComponent;
+            if (typeof init === "function") {
+                const compiled = new Component(element);
+                (compiled as any)._init = init;
+                return compiled;
+            }
         }
         if (element === "text" && props && props.__childExpr) {
             const resolved = resolveChildExpression(props.__childExpr);

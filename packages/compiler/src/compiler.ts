@@ -321,7 +321,7 @@ export default class Compiler {
                                             const only = props.properties[0];
                                             if (!t.isObjectProperty(only) || only.computed || !t.isIdentifier(only.key, { name: 'initializeComponent' })) return;
                                             if (!t.isArrowFunctionExpression(only.value) && !t.isFunctionExpression(only.value)) return;
-                                            node.arguments[1] = only.value;
+                                            node.arguments.push(t.numericLiteral(1));
                                         }
                                     });
                                     absorbGeneratedCoreImports(topLevel, coreImports);

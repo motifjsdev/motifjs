@@ -3,7 +3,7 @@ export const motifComponent = () => { return "_mc" }
 export const motifFragment = () => { return "_mf" }
 export const motifFunctionComponent = () => { return "_mfc" }
 export const motifCompiled = () => { return "_mv" }
-export const COMPILER_CONTRACT = 2;
+export const COMPILER_CONTRACT = 1;
 
 export type State = {
     get: (name: string) => any;

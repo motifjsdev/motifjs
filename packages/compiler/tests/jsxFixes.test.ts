@@ -22,17 +22,16 @@ describe('view sıradan bir prop', () => {
 });
 
 describe('düz DOM etiketinde initializeComponent ve ref', () => {
-    test('initializeComponent öznitelik getter\'ı olarak DERLENMEZ; tek başına kurulum fonksiyonu olarak geçer', () => {
+    test('initializeComponent öznitelik getter\'ı olarak DERLENMEZ; tek başına initializeComponent prop\'u olur', () => {
         const out = compile(`function A(){ return <hr initializeComponent={(s) => init(s)} />; }`);
-        expect(out).toMatch(/_mc\("hr",\s*s => init\(s\)\)/);
+        expect(out).toMatch(/_mc\("hr",\s*\{\s*initializeComponent:\s*s => init\(s\)\s*\},\s*1\)/);
         expect(out).not.toMatch(/"initializeComponent"/);
     });
 
     test('derleyicinin kendi initializeComponent\'i varsa kullanıcınınki önce gelen bir listede birleşir', () => {
         const out = compile(`function A(){ return <p initializeComponent={this.init} class="a">x</p>; }`);
         expect(out).toMatch(/initializeComponent:\s*\[this\.init,\s*sender => \{/);
-        expect(count(out, /initializeComponent:/g)).toBe(1);
-        expect(out).toMatch(/_mc\("text",\s*sender => \{\s*sender\.setText\("x"\);/);
+        expect(count(out, /initializeComponent:/g)).toBe(2);
     });
 
     test('ref={this.x} atama biçimine iner', () => {

@@ -1395,9 +1395,6 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         public get motif(): ComponentMotif<this, TProps> {
                 return this._motif !== undefined ? this._motif : (this._motif = new ComponentMotif<this, TProps>(this, (this.isDisposed && !this.element ? undefined : new ComponentOptionsImpl(this)) as unknown as ComponentMotif<this, TProps>['options']));
         }
-        public set motif(value: ComponentMotif<this, TProps>) {
-                this._motif = value;
-        }
 
         public element: TElement;
         public props: TProps;
@@ -2294,6 +2291,13 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         //         return this;
 
 }
+
+Object.defineProperty(ComponentBase.prototype, 'motif', {
+        ...Object.getOwnPropertyDescriptor(ComponentBase.prototype, 'motif'),
+        set(this: any, value: unknown) {
+                this._motif = value;
+        },
+});
 
 
 function findContentBlocks(root: ComponentBase, results: ComponentBase[] = []): ComponentBase[] {
