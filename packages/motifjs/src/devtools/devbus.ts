@@ -44,6 +44,10 @@ export function setDevtoolsEnabled(enabled: boolean) {
 
 export function isEnabled(): boolean { return state.enabled; }
 
+export function devtoolsBus(): { publish?: (type: string, payload?: any) => void } | undefined {
+    return state.enabled ? (globalThis as any).__MOTIF_DEVTOOLS_BUS__ : undefined;
+}
+
 export function on(listener: (ev: DevEvent) => void): () => void {
     state.listeners.add(listener);
     return () => { state.listeners.delete(listener); };
@@ -55,7 +59,7 @@ export function emit(type: string, payload?: any) {
         try { l(ev); } catch { }
     }
     try {
-        const bus = (globalThis as any).__MOTIF_DEVTOOLS_BUS__;
+        const bus = devtoolsBus();
         if (bus && typeof bus.publish === 'function') {
             bus.publish('devtools:' + type, payload);
         }

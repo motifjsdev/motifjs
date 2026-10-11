@@ -1,3 +1,5 @@
+import { devtoolsBus } from "../devtools/devbus";
+
 function rethrowLater(error: any): void {
 	setTimeout(() => { throw error; }, 0);
 }
@@ -31,7 +33,7 @@ export class ErrorHandler {
 		}
 
 		try {
-			const bus = (globalThis as any).__MOTIF_DEVTOOLS_BUS__;
+			const bus = devtoolsBus();
 			if (bus && typeof bus.publish === 'function') {
 				bus.publish('error:caught', { context: (error as any).code ?? error.name, error: this.serializeError(error) });
 			}
@@ -46,7 +48,7 @@ export class ErrorHandler {
 		}
 
 		try {
-			const bus = (globalThis as any).__MOTIF_DEVTOOLS_BUS__;
+			const bus = devtoolsBus();
 			if (bus && typeof bus.publish === 'function') {
 				bus.publish('error:caught', { context, error: this.serializeError(error) });
 			}

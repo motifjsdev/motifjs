@@ -117,6 +117,7 @@ export class Application {
         safeCallSilent(() => {
             engine.startGc();
         }, 'Application.run.engine.startGc');
+        safeCallSilent(() => { ensureDevtoolsFlagInitialized(); }, 'Application.run.devtools');
         let target: HTMLElement | null;
         if (typeof host === 'string') {
             target = document.querySelector(host) as HTMLElement | null;

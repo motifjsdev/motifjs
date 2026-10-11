@@ -17,7 +17,7 @@ import { deferUntilEntered, isTransitionMode, pendingLeaves, trackEnter, trackLe
 import { lazyBindMethods } from "../common/lazyBind";
 import { trackedCleanup } from "../disposable/Cleanup";
 import type { MotifDomEventProps } from "../jsx-runtime";
-import { isDevLike } from "../devtools/devbus";
+import { devtoolsBus, isDevLike } from "../devtools/devbus";
 
 /** DI token'ını okunur biçime çevirir (dev uyarıları için). */
 function describeServiceToken(t: any): string {
@@ -511,7 +511,7 @@ const ComponentHelper = {
                         if (component.ondisposed) { callReported(() => component.ondisposed(sender, ev), 'MJX122', 'ondisposed'); }
                         fireLifecycle(component, 'ondisposed', ev);
                 }
-                try { (globalThis as any).__MOTIF_DEVTOOLS_BUS__?.publish?.('component:disposed', { id: (component as any).id, type: component.constructor?.name }); } catch { }
+                try { devtoolsBus()?.publish?.('component:disposed', { id: (component as any).id, type: component.constructor?.name }); } catch { }
         },
         callBuilt(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
@@ -522,7 +522,7 @@ const ComponentHelper = {
                         if (component.onbuilt) { callReported(() => component.onbuilt(sender, ev), 'MJX122', 'onbuilt'); }
                         fireLifecycle(component, 'onbuilt', ev);
                 }
-                try { (globalThis as any).__MOTIF_DEVTOOLS_BUS__?.publish?.('component:mounted', { id: (component as any).id, type: component.constructor?.name }); } catch { }
+                try { devtoolsBus()?.publish?.('component:mounted', { id: (component as any).id, type: component.constructor?.name }); } catch { }
         },
         scheduleMounted(component: ComponentBase | any) {
                 if (!component || component.isDisposed || component._baseCtx?._mountedScheduled) { return; }
