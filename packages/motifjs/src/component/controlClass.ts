@@ -13,9 +13,24 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
     private _countsStore?: Map<string, number>;
     private _staticSetStore?: Set<string>;
     private _watchersStore?: Map<string, { stop: () => void, binding?: IBaseBinding, set: Set<string> }>;
+    private _plain?: string;
     private _watcherSeq = 0;
-    private get _counts(): Map<string, number> { return this._countsStore ??= new Map(); }
-    private get _staticSet(): Set<string> { return this._staticSetStore ??= new Set(); }
+    private get _counts(): Map<string, number> {
+        if (this._plain !== undefined) this._promote();
+        return this._countsStore ??= new Map();
+    }
+    private get _staticSet(): Set<string> {
+        if (this._plain !== undefined) this._promote();
+        return this._staticSetStore ??= new Set();
+    }
+
+    private _promote(): void {
+        const names = this._plain!.split(' ');
+        this._plain = undefined;
+        const set = this._staticSetStore ??= new Set();
+        const counts = this._countsStore ??= new Map();
+        for (const cls of names) { set.add(cls); counts.set(cls, (counts.get(cls) || 0) + 1); }
+    }
     private get _watchers(): Map<string, { stop: () => void, binding?: IBaseBinding, set: Set<string> }> { return this._watchersStore ??= new Map(); }
 
     add(...values: (string | any[] | {} | Function)[]): ComponentBase {
@@ -26,11 +41,27 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
                 this._addStaticFromArray(value);
             } else if (value && typeof value === 'object') {
                 this._addStaticFromObject(value as Record<string, any>);
+            } else if (typeof value === 'string' && value !== '' && !/\s/.test(value)) {
+                this._addStaticName(value);
             } else {
                 this._addStaticNames(this._splitClasses(String(value ?? '')));
             }
         }
         return this._parent;
+    }
+
+    private _addStaticName(cls: string) {
+        if (this._countsStore !== undefined || this._staticSetStore !== undefined) {
+            this._addStaticNames([cls]);
+            return;
+        }
+        const plain = this._plain;
+        if (plain !== undefined && hasName(plain, cls)) return;
+        this._plain = plain === undefined ? cls : plain + ' ' + cls;
+        const el = this._getElement();
+        if (!el) return;
+        if (!el.hasAttribute('class')) el.setAttribute('class', cls);
+        else { try { (el as any).classList.add(cls); } catch { } }
     }
 
     remove(classNames: string | string[]): ComponentBase {
@@ -273,4 +304,14 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
         rec.binding = binding;
         this._watchers.set(id, rec);
     }
+}
+
+function hasName(list: string, name: string): boolean {
+    let i = list.indexOf(name);
+    while (i !== -1) {
+        const end = i + name.length;
+        if ((i === 0 || list.charCodeAt(i - 1) === 32) && (end === list.length || list.charCodeAt(end) === 32)) return true;
+        i = list.indexOf(name, i + 1);
+    }
+    return false;
 }
