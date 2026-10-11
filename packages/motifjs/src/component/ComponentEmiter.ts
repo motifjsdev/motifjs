@@ -1,5 +1,6 @@
 import { Emitter, Event as DelegateEvent } from "../delegate";
-import { disposableCore, IDisposable } from "../disposable";
+import { IDisposable } from "../disposable";
+import { trackedCleanup } from "../disposable/Cleanup";
 import { ComponentBase } from "../";
 import { EventArgs } from "./types";
 import { callReported } from "../common/diagnostics";
@@ -95,7 +96,7 @@ export class ComponentEmiter {
             let set = sources.get(lower);
             if (!set) { set = new Set(); sources.set(lower, set); }
             set.add(disp);
-            this.component.motif.register(disposableCore.toDisposable(() => {
+            this.component.motif.register(trackedCleanup(() => {
                 try { disp?.dispose(); } catch { }
                 try { set?.delete(disp!); } catch { }
             }));

@@ -1,5 +1,6 @@
 import type { ComponentBase } from "./componentBase";
-import { disposableCore, IDisposable } from "..";
+import { IDisposable } from "..";
+import { trackedCleanup } from "../disposable/Cleanup";
 import type { ComponentBaseOptions, EventArgs, HtmlElementEvents } from "./types";
 
 export class ComponentMotif<TSelf extends ComponentBase = ComponentBase, TProps extends object = any> {
@@ -49,7 +50,7 @@ export class ComponentMotif<TSelf extends ComponentBase = ComponentBase, TProps 
         }
 
         public setDisposable(c: () => void): void {
-                this._component['_register'](disposableCore.toDisposable(c));
+                this._component['_register'](trackedCleanup(c));
         }
 
         public stopAnimations(): Promise<void> {

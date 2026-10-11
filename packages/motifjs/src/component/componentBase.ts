@@ -1,4 +1,4 @@
-import { ControlCollection, dom, Disposable, disposableCore, IClass, IDisposable, Application, isExactMatch, startsWithPath, reactive, safeCallSilent, safeCallSilentAsync, safeCall, safeCallAsync } from "..";
+import { ControlCollection, dom, Disposable, IClass, IDisposable, Application, isExactMatch, startsWithPath, reactive, safeCallSilent, safeCallSilentAsync, safeCall, safeCallAsync } from "..";
 import { ServiceProvider } from "..";
 import { BindingCollection, IBaseBinding } from "../bindings";
 import { effect } from "../store/reactivity-core";
@@ -15,6 +15,7 @@ import { contentBlocks as liveContentBlocks } from "./contentBlockRegistry";
 import { OPTIONS_OWNER, TRANSITION_SLOT } from "./optionsSlots";
 import { deferUntilEntered, isTransitionMode, pendingLeaves, trackEnter, trackLeave, transitionSettings, TransitionMode } from "../common/transitionRegistry";
 import { callMethod0, callMethod1, callMethod2, lazyBindMethods } from "../common/lazyBind";
+import { trackedCleanup } from "../disposable/Cleanup";
 import type { MotifDomEventProps } from "../jsx-runtime";
 import { isDevLike } from "../devtools/devbus";
 
@@ -253,7 +254,7 @@ class ComponentOptionsImpl {
                                 ComponentHelper.routerClassing.call(ins, value);
                         });
                         if (ins.isDisposed) { off(); return; }
-                        ins.motif.register(disposableCore.toDisposable(off));
+                        ins.motif.register(trackedCleanup(off));
                         ComponentHelper.routerClassing.call(ins, value);
                 } catch (error) {
                         reportError('MJX105', error);
@@ -537,7 +538,7 @@ const ComponentHelper = {
                         ComponentHelper.callMounted(component);
                 });
                 if (stop) {
-                        component._register(disposableCore.toDisposable(stop));
+                        component._register(trackedCleanup(stop));
                 }
         },
         callMounted(component: ComponentBase | any) {
@@ -1673,7 +1674,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         public _trackContextSubscription(off: () => void): () => void {
                 if (typeof off !== 'function') { return off; }
                 if (this.isDisposed) { off(); return off; }
-                const d = this._register(disposableCore.toDisposable(off));
+                const d = this._register(trackedCleanup(off));
                 return () => { this._disposables.detach(d); off(); };
         }
 
@@ -2060,7 +2061,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                         callReported(() => (cb as any).length <= 1 ? (cb as any)(ev) : cb(this, ev as any), 'MJX122', 'x:mounted');
                                 });
                                 if (stop) {
-                                        sub = this._register(disposableCore.toDisposable(stop));
+                                        sub = this._register(trackedCleanup(stop));
                                         const subs: Map<Function, Set<IDisposable>> = this._base._mountedSubs ??= new Map();
                                         let set = subs.get(cb);
                                         if (!set) { set = new Set(); subs.set(cb, set); }

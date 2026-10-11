@@ -1,6 +1,7 @@
 
 
-import { Component, ComponentBase, Frame, motifFragment, toDisposable } from "../";
+import { Component, ComponentBase, Frame, motifFragment } from "../";
+import { quietCleanup } from "../disposable/Cleanup";
 import { dom } from "../";
 import { effect, untracked } from "../";
 import { Binding, BindingFormatInfo, IBaseBinding, IBindingCollection, ListBinding, ListBindingOptions, readModelValue } from "./";
@@ -32,9 +33,7 @@ export class BindingCollection implements IBindingCollection {
             this._branchScope.push(stop);
             return;
         }
-        this._component.motif.register(toDisposable(() => {
-            try { stop(); } catch { }
-        }));
+        this._component.motif.register(quietCleanup(stop));
     }
 
     when(computeFn: () => any, renderFn: (isTrue: boolean) => any) {
@@ -177,9 +176,7 @@ export class BindingCollection implements IBindingCollection {
             }
             frame.navigate(result == null ? motifFragment() : result as any);
         });
-        host.motif.register(toDisposable(() => {
-            try { stop(); } catch { }
-        }));
+        host.motif.register(quietCleanup(stop));
     }
 
     ternary(conditionFn: () => any, trueFn: (frame: Frame) => any, falseFn: (frame: Frame) => any) {
@@ -242,9 +239,7 @@ export class BindingCollection implements IBindingCollection {
         const ef = effect(() => {
             cb();
         });
-        this._component.motif.register(toDisposable(() => {
-            try { ef(); } catch { }
-        }));
+        this._component.motif.register(quietCleanup(ef));
     }
     remove(binding: IBaseBinding): void {
         const index = this._items.indexOf(binding);
@@ -422,9 +417,7 @@ export class BindingCollection implements IBindingCollection {
                 frame.navigate(motifFragment());
             }
         });
-        this._component.motif.register(toDisposable(() => {
-            try { ef(); } catch { }
-        }));
+        this._component.motif.register(quietCleanup(ef));
 
         return null as any;
     }

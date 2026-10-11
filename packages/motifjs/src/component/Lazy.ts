@@ -1,7 +1,7 @@
 import { ComponentBase, IBaseProp } from ".";
 import { Component, assertLoadedComponent, resolveToComponent, unwrapModule } from "./Component";
 import { Frame } from "./Frame";
-import { disposableCore } from "../disposable";
+import { trackedCleanup } from "../disposable/Cleanup";
 import { motifError, reportError } from "../common/diagnostics";
 
 export interface LazyOptions<T = any> { 
@@ -52,7 +52,7 @@ export function Lazy(props: any): Component {
         try { timers.forEach(id => { try { clearTimeout(id); } catch { } }); } catch { }
         try { timers.clear(); } catch { }
     };
-    try { frame.motif.register(disposableCore.toDisposable(() => clearAllTimers())); } catch { }
+    try { frame.motif.register(trackedCleanup(() => clearAllTimers())); } catch { }
     const initial = opts.Placeholderview ?? opts.Loaderview;
     if (initial != null) {
         frame.navigate(resolveToComponent(initial));
@@ -92,7 +92,7 @@ export function Lazy(props: any): Component {
 
     const retry = normalizeRetry(opts.retry);
     const cleanups = new Set<() => void>();
-    try { frame.motif.register(disposableCore.toDisposable(() => { cleanups.forEach(c => { try { c(); } catch { } }); cleanups.clear(); })); } catch { }
+    try { frame.motif.register(trackedCleanup(() => { cleanups.forEach(c => { try { c(); } catch { } }); cleanups.clear(); })); } catch { }
 
     const waitBeforeRetry = (attempt: number): Promise<boolean> => new Promise<boolean>(resolve => {
         let settled = false;
