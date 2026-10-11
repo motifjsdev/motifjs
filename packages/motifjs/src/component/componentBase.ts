@@ -450,21 +450,21 @@ const ComponentHelper = {
                 if (component.ondisposing) {
                         callReported(() => component.ondisposing(sender, ev), 'MJX122', 'ondisposing');
                 }
-                fireLifecycle(component,'ondisposing', ev);
+                fireLifecycle(component, 'ondisposing', ev);
         },
         callActivated(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onActivated) { callReported(() => component.onActivated(sender, ev), 'MJX122', 'onActivated'); }
                 runHooks(component._baseCtx, '_onActivatedHandlers', sender, ev, 'onActivated');
-                fireLifecycle(component,'onactivated', ev);
+                fireLifecycle(component, 'onactivated', ev);
         },
         callDeactivated(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onDeactivated) { callReported(() => component.onDeactivated(sender, ev), 'MJX122', 'onDeactivated'); }
                 runHooks(component._baseCtx, '_onDeactivatedHandlers', sender, ev, 'onDeactivated');
-                fireLifecycle(component,'ondeactivated', ev);
+                fireLifecycle(component, 'ondeactivated', ev);
         },
         deactivateTree(component: ComponentBase | any, deep: boolean = true) {
                 if (!component || component.isDisposed || !component.isBuilt || !component._base || component._base._inactive) { return; }
@@ -497,7 +497,7 @@ const ComponentHelper = {
                         if (component.onDisposed) { callReported(() => component.onDisposed(sender, ev), 'MJX122', 'onDisposed'); }
                         runHooks(component._baseCtx, '_onDisposedHandlers', sender, ev, 'onDisposed');
                         if (component.ondisposed) { callReported(() => component.ondisposed(sender, ev), 'MJX122', 'ondisposed'); }
-                        fireLifecycle(component,'ondisposed', ev);
+                        fireLifecycle(component, 'ondisposed', ev);
                 }
                 try { (globalThis as any).__MOTIF_DEVTOOLS_BUS__?.publish?.('component:disposed', { id: (component as any).id, type: component.constructor?.name }); } catch { }
         },
@@ -508,7 +508,7 @@ const ComponentHelper = {
                         if (component.onBuilt) { callReported(() => component.onBuilt(sender, ev), 'MJX122', 'onBuilt'); }
                         runHooks(component._baseCtx, '_onBuiltHandlers', sender, ev, 'onBuilt');
                         if (component.onbuilt) { callReported(() => component.onbuilt(sender, ev), 'MJX122', 'onbuilt'); }
-                        fireLifecycle(component,'onbuilt', ev);
+                        fireLifecycle(component, 'onbuilt', ev);
                 }
                 try { (globalThis as any).__MOTIF_DEVTOOLS_BUS__?.publish?.('component:mounted', { id: (component as any).id, type: component.constructor?.name }); } catch { }
         },
@@ -536,7 +536,7 @@ const ComponentHelper = {
                 if (component.onMounted) { callReported(() => component.onMounted(sender, ev), 'MJX122', 'onMounted'); }
                 runHooks(component._baseCtx, '_onMountedHandlers', sender, ev, 'onMounted');
                 if (component.onmounted) { callReported(() => component.onmounted(sender, ev), 'MJX122', 'onmounted'); }
-                fireLifecycle(component,'onmounted', ev);
+                fireLifecycle(component, 'onmounted', ev);
         },
         callBuilding(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
@@ -544,7 +544,7 @@ const ComponentHelper = {
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onBuilding) { callReported(() => component.onBuilding(sender, ev), 'MJX122', 'onBuilding'); }
                 runHooks(component._baseCtx, '_onBuildingHandlers', sender, ev, 'onBuilding');
-                fireLifecycle(component,'onbuilding', ev);
+                fireLifecycle(component, 'onbuilding', ev);
         },
         callConfig(component: ComponentBase | any) {
                 if (!component || component.isDisposed || component.isConfigured) { return; }
@@ -559,7 +559,7 @@ const ComponentHelper = {
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onConfig) { callReported(() => component.onConfig(sender, ev), 'MJX122', 'onConfig'); }
                 runHooks(component._baseCtx, '_onConfigHandlers', sender, ev, 'onConfig');
-                fireLifecycle(component,'onconfig', ev);
+                fireLifecycle(component, 'onconfig', ev);
         },
         callConfigured(component: ComponentBase | any) {
                 if ((component._flags & F_POSTCONFIG) !== 0) {
@@ -574,7 +574,7 @@ const ComponentHelper = {
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onConfigured) { callReported(() => component.onConfigured(sender, ev), 'MJX122', 'onConfigured'); }
                 runHooks(component._baseCtx, '_onConfiguredHandlers', sender, ev, 'onConfigured');
-                fireLifecycle(component,'onconfigured', ev);
+                fireLifecycle(component, 'onconfigured', ev);
         },
         callOnInitialized(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
@@ -583,7 +583,7 @@ const ComponentHelper = {
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onInitialized) { callReported(() => component.onInitialized(sender, ev), 'MJX122', 'onInitialized'); }
                 runHooks(component._baseCtx, '_onInitializedHandlers', sender, ev, 'onInitialized');
-                fireLifecycle(component,'oninitialized', ev);
+                fireLifecycle(component, 'oninitialized', ev);
         },
         callOnInitializing(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
@@ -591,7 +591,7 @@ const ComponentHelper = {
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onInitializing) { callReported(() => component.onInitializing(sender, ev), 'MJX122', 'onInitializing'); }
                 runHooks(component._baseCtx, '_onInitializingHandlers', sender, ev, 'onInitializing');
-                fireLifecycle(component,'oninitializing', ev);
+                fireLifecycle(component, 'oninitializing', ev);
         },
         callVisibilityChanged(component: ComponentBase | any, visible: boolean) {
                 if (!component || component.isDisposed) { return; }
@@ -599,7 +599,7 @@ const ComponentHelper = {
                 const sender = component, ev: VisibilityChangedEventArgs = { cancel: false, visible };
                 if (component.onVisibilityChanged) { callReported(() => component.onVisibilityChanged(sender, ev), 'MJX122', 'onVisibilityChanged'); }
                 runHooks(component._baseCtx, '_onVisibilityChangedHandlers', sender, ev, 'onVisibilityChanged');
-                fireLifecycle(component,'onvisibilitychanged', ev);
+                fireLifecycle(component, 'onvisibilitychanged', ev);
         },
         findFragmentContent(c: ComponentBase) {
                 const controlElement = c.element.nodeType == Node.COMMENT_NODE
@@ -1262,15 +1262,15 @@ function hasEventKey(c: any, key: string): boolean {
 }
 
 function offAll(c: any): void {
-                const head: EventRecord | undefined = c._eventHandlers;
-                if (head === undefined) return;
-                for (let r: EventRecord | undefined = head; r !== undefined; r = r.next) {
-                        if ((r.flags & (EV_DOM | EV_REMOVED)) !== EV_DOM) { continue; }
-                        try {
-                                (c.element as any).removeEventListener(r.type, r, (r.flags & EV_CAPTURE) !== 0);
-                        } catch { }
-                }
-                c._eventHandlers = undefined;
+        const head: EventRecord | undefined = c._eventHandlers;
+        if (head === undefined) return;
+        for (let r: EventRecord | undefined = head; r !== undefined; r = r.next) {
+                if ((r.flags & (EV_DOM | EV_REMOVED)) !== EV_DOM) { continue; }
+                try {
+                        (c.element as any).removeEventListener(r.type, r, (r.flags & EV_CAPTURE) !== 0);
+                } catch { }
+        }
+        c._eventHandlers = undefined;
 }
 
 function deactivateBindings(c: any): void {
@@ -1704,11 +1704,12 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 this.motif.options.transition.enterTransition(() => { });
                         } else {
                                 const seq = this._base._enterSeq;
-                                queueMicrotask(() => {
-                                        if (!this.isDisposed && this.isVisible && this.motif.options?.transition && this._base._enterSeq === seq) {
-                                                this.motif.options.transition.enterTransition(() => { });
-                                        }
-                                });
+                                // queueMicrotask(() => {
+
+                                // });
+                                if (!this.isDisposed && this.isVisible && this.motif.options?.transition && this._base._enterSeq === seq) {
+                                        this.motif.options.transition.enterTransition(() => { });
+                                }
                         }
                 } else {
                         clearNavDirection(this);
