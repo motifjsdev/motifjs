@@ -39,6 +39,7 @@ const F_WAIT = 128;
 const F_POSTCONFIG = 256;
 const F_PREBOUND = 512;
 const F_DISPOSED_FIRED = 1024;
+const F_BUILDING = 2048;
 
 function optionsOf(c: any): any {
         return c?._motif?.options;
@@ -1502,7 +1503,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         }
                         return;
                 }
-                if (value === false && this.parent && this.parent.isBuilt) {
+                if (value === false && this.parent && this.parent.isBuilt && (this._flags & F_BUILDING) === 0) {
                         ComponentHelper.internalBuild.call(this.parent, this);
                 }
 
@@ -1624,127 +1625,130 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 if (this.isBuilt || this.isWait) {
                         return;
                 }
-
-                ComponentHelper.callBuilding(this);
-                if (this.isDisposed) { return; }
-                var ph: any = this.element;
-                if (building) {
-                        ph = dom.createDocumentFragment();
-                }
-                const isFragment = (typeof this.element !== 'string' && (this.element as unknown as Node).nodeType === Node.COMMENT_NODE);
-                if (isFragment) {
-                        this.motif.options.cache = dom.createDocumentFragment();
-                        (this.element as any).textContent = "[";
-                        this.motif.options.cache!.appendChild(this.element as unknown as Node);
-                }
-                if (this.isBuilt) {
-                        return;
-                }
-
-
-                ComponentHelper.callInitializeComponent(this);
-                if (this.isDisposed) { return; }
-
-                if (this.view) {
-                        const templ = this.view();
-                        this.controls.add(templ);
+                this._flags |= F_BUILDING;
+                try {
+                        ComponentHelper.callBuilding(this);
                         if (this.isDisposed) { return; }
-                }
-
-                const deferredSelectValue: IBaseBinding[] = (this.element as any)?.nodeName === 'SELECT'
-                        ? this.bindings.items.filter(b => b.propertyName === 'value')
-                        : NO_BINDINGS;
-                if (deferredSelectValue.length) {
-                        try {
-                                this.bindings.items.filter(b => !deferredSelectValue.includes(b)).forEach(b => b.activate());
-                        } catch { }
-                } else {
-                        activateBindings(this);
-                }
-
-                const kids = childrenOf(this);
-                for (const element of kids.length ? kids.slice() : kids) {
-                        var target = isFragment ? this.motif.options.cache : this.element;
-                        if (!element.isWait) {
-                                element.parent = this;
-                                element.build(false);
-                        }
-                        if (element.isWait) {
-                                if (keepsTrace(element)) {
-                                        const opts: any = element.motif.options;
-                                        (building ? ph : target as any).appendChild(opts.placeholder ?? (opts.placeholder = dom.createComment("h")));
-                                }
-                                continue;
-                        }
+                        var ph: any = this.element;
                         if (building) {
-                                const cache = optionsOf(element)?.cache;
-                                if (cache) {
-                                        ph.appendChild(cache);
-                                } else {
-                                        ph.appendChild(element.element);
-                                }
+                                ph = dom.createDocumentFragment();
+                        }
+                        const isFragment = (typeof this.element !== 'string' && (this.element as unknown as Node).nodeType === Node.COMMENT_NODE);
+                        if (isFragment) {
+                                this.motif.options.cache = dom.createDocumentFragment();
+                                (this.element as any).textContent = "[";
+                                this.motif.options.cache!.appendChild(this.element as unknown as Node);
+                        }
+                        if (this.isBuilt) {
+                                return;
+                        }
+
+
+                        ComponentHelper.callInitializeComponent(this);
+                        if (this.isDisposed) { return; }
+
+                        if (this.view) {
+                                const templ = this.view();
+                                this.controls.add(templ);
+                                if (this.isDisposed) { return; }
+                        }
+
+                        const deferredSelectValue: IBaseBinding[] = (this.element as any)?.nodeName === 'SELECT'
+                                ? this.bindings.items.filter(b => b.propertyName === 'value')
+                                : NO_BINDINGS;
+                        if (deferredSelectValue.length) {
+                                try {
+                                        this.bindings.items.filter(b => !deferredSelectValue.includes(b)).forEach(b => b.activate());
+                                } catch { }
                         } else {
-                                const cache = optionsOf(element)?.cache;
-                                if (cache) {
-                                        (target as any).appendChild(cache);
-                                } else {
-                                        (target as any).appendChild(element.element);
-                                }
-                        }
-                        if ((element as any)._baseCtx?._inactive && element.isVisible) {
-                                ComponentHelper.activateTree(element);
+                                activateBindings(this);
                         }
 
-                }
-
-                if (this.isDisposed) { return; }
-                if (wantsEnterTransition(this)) {
-                        const node = this.element as unknown as Node | null;
-                        if (node && (node as any).isConnected) {
-                                this.motif.options.transition.enterTransition(() => { });
-                        } else {
-                                const seq = this._base._enterSeq;
-                                // queueMicrotask(() => {
-
-                                // });
-                                if (!this.isDisposed && this.isVisible && this.motif.options?.transition && this._base._enterSeq === seq) {
-                                        this.motif.options.transition.enterTransition(() => { });
-                                }
-                        }
-                } else {
-                        clearNavDirection(this);
-                }
-                if (building) {
-                        try {
+                        const kids = childrenOf(this);
+                        for (const element of kids.length ? kids.slice() : kids) {
                                 var target = isFragment ? this.motif.options.cache : this.element;
-                                if ((target as any).nodeType === Node.TEXT_NODE) {
-                                        (target as Text).appendData(ph.textContent);
-                                } else {
-                                        if ((target as any).appendChild) {
-                                                (target as any).appendChild(ph);
+                                if (!element.isWait) {
+                                        element.parent = this;
+                                        element.build(false);
+                                }
+                                if (element.isWait) {
+                                        if (keepsTrace(element)) {
+                                                const opts: any = element.motif.options;
+                                                (building ? ph : target as any).appendChild(opts.placeholder ?? (opts.placeholder = dom.createComment("h")));
+                                        }
+                                        continue;
+                                }
+                                if (building) {
+                                        const cache = optionsOf(element)?.cache;
+                                        if (cache) {
+                                                ph.appendChild(cache);
                                         } else {
-                                                (target as any).append(ph);
+                                                ph.appendChild(element.element);
+                                        }
+                                } else {
+                                        const cache = optionsOf(element)?.cache;
+                                        if (cache) {
+                                                (target as any).appendChild(cache);
+                                        } else {
+                                                (target as any).appendChild(element.element);
                                         }
                                 }
-                        } catch (error) {
+                                if ((element as any)._baseCtx?._inactive && element.isVisible) {
+                                        ComponentHelper.activateTree(element);
+                                }
+
                         }
 
-                }
-                if (deferredSelectValue.length) {
-                        try { deferredSelectValue.forEach(b => b.activate()); } catch { }
-                }
-                if (isFragment) {
-                        this.motif.options.closeFragment = dom.createComment("]");
-                        this.motif.options.cache!.appendChild(this.motif.options.closeFragment!);
-                        if ((this.element as Node).nodeType === Node.COMMENT_NODE && this.motif.options.closeFragment) {
-                                fragmentCloseMarkers.set(this.element as Comment, this.motif.options.closeFragment);
+                        if (this.isDisposed) { return; }
+                        if (wantsEnterTransition(this)) {
+                                const node = this.element as unknown as Node | null;
+                                if (node && (node as any).isConnected) {
+                                        this.motif.options.transition.enterTransition(() => { });
+                                } else {
+                                        const seq = this._base._enterSeq;
+                                        // queueMicrotask(() => {
+
+                                        // });
+                                        if (!this.isDisposed && this.isVisible && this.motif.options?.transition && this._base._enterSeq === seq) {
+                                                this.motif.options.transition.enterTransition(() => { });
+                                        }
+                                }
+                        } else {
+                                clearNavDirection(this);
                         }
+                        if (building) {
+                                try {
+                                        var target = isFragment ? this.motif.options.cache : this.element;
+                                        if ((target as any).nodeType === Node.TEXT_NODE) {
+                                                (target as Text).appendData(ph.textContent);
+                                        } else {
+                                                if ((target as any).appendChild) {
+                                                        (target as any).appendChild(ph);
+                                                } else {
+                                                        (target as any).append(ph);
+                                                }
+                                        }
+                                } catch (error) {
+                                }
+
+                        }
+                        if (deferredSelectValue.length) {
+                                try { deferredSelectValue.forEach(b => b.activate()); } catch { }
+                        }
+                        if (isFragment) {
+                                this.motif.options.closeFragment = dom.createComment("]");
+                                this.motif.options.cache!.appendChild(this.motif.options.closeFragment!);
+                                if ((this.element as Node).nodeType === Node.COMMENT_NODE && this.motif.options.closeFragment) {
+                                        fragmentCloseMarkers.set(this.element as Comment, this.motif.options.closeFragment);
+                                }
+                        }
+
+                        this.isBuilt = true;
+                        ComponentHelper.callBuilt(this);
+                        ComponentHelper.scheduleMounted(this);
+                } finally {
+                        this._flags &= ~F_BUILDING;
                 }
-
-                this.isBuilt = true;
-                ComponentHelper.callBuilt(this);
-                ComponentHelper.scheduleMounted(this);
-
         }
 
         public setState() {
