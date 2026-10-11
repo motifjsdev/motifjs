@@ -1065,7 +1065,7 @@ function disposePrefix(c: any, options: IDisposeOptions, asChild: boolean): void
                 c.motif.options.transition.skipNextLeave = true;
         }
         safeCall(() => { ComponentHelper.callDisposing.call(c, c); }, ctx + '.callDisposing');
-        offAll(c);
+        offAll(c, asChild && c._keepElementOnDispose !== true && (c.element as Node | null)?.isConnected === false);
         deactivateBindings(c);
         safeCall(() => { c.parent?.controls?.silentDetach?.(c, true); }, ctx + '.silentDetach');
 }
@@ -1243,6 +1243,7 @@ class EventRecord {
 
         handleEvent(ev: Event): void {
                 const flags = this.flags;
+                if ((flags & EV_REMOVED) !== 0) return;
                 const owner = this.owner;
                 if ((flags & EV_SELF) !== 0 && ev.target !== owner.element) return;
                 if ((flags & EV_TRUSTED) !== 0 && !ev.isTrusted) return;
@@ -1307,11 +1308,17 @@ function hasEventKey(c: any, key: string): boolean {
         return false;
 }
 
-function offAll(c: any): void {
+function offAll(c: any, detached = false): void {
         const head: EventRecord | undefined = c._eventHandlers;
         if (head === undefined) return;
         for (let r: EventRecord | undefined = head; r !== undefined; r = r.next) {
                 if ((r.flags & (EV_DOM | EV_REMOVED)) !== EV_DOM) { continue; }
+                if (detached) {
+                        r.flags |= EV_REMOVED;
+                        r.owner = undefined;
+                        r.original = undefined as any;
+                        continue;
+                }
                 try {
                         (c.element as any).removeEventListener(r.type, r, (r.flags & EV_CAPTURE) !== 0);
                 } catch { }
