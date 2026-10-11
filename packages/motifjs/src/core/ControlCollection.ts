@@ -5,7 +5,7 @@ import { dom } from "../";
 import { Component, ComponentBase, resolveComponent, notifyDeactivated } from "../";
 import { reportError } from "../common/diagnostics";
 import { pushTight } from "../common/pushTight";
-import { checkReservedMembers, domAnchor } from "../component/componentBase";
+import { checkReservedMembers, domAnchor, setLeaveContainer } from "../component/componentBase";
 
 export class ControlCollection {
     constructor(private owner: ComponentBase) {
@@ -85,7 +85,7 @@ export class ControlCollection {
         if (index === -1) return Promise.resolve();
         takeAt(this.items, index);
         if (control.isDisposed) return Promise.resolve();
-        (control as any)._leaveContainer = this.owner;
+        setLeaveContainer(control, this.owner);
         control.parent = null;
         return runLeaveThenDetach(control, () => { if (this.onRemove) this.onRemove(control); });
     }
@@ -109,7 +109,7 @@ export class ControlCollection {
         const index = this.items.indexOf(control);
         if (index === -1) return;
         takeAt(this.items, index);
-        (control as any)._leaveContainer = this.owner;
+        setLeaveContainer(control, this.owner);
         control.parent = null;
     }
 

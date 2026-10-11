@@ -2,6 +2,7 @@ import { ComponentBase, motifFragment, resolveComponent } from "../";
 import { effect, untracked } from "../";
 import { getRaw } from "../store/common";
 import { motifError, reportWarning } from "../common/diagnostics";
+import { isListAdopted, noteListAdopted } from "../component/componentBase";
 import { IBaseBinding } from "./";
 
 
@@ -93,9 +94,7 @@ export class ListBinding implements IBaseBinding {
         try { (component as any)._base.itemRef = item; } catch { }
         try { (component.motif.options as any).__fromList = true; } catch { }
 
-        if (typeof (component as any).__listAdopted === 'undefined') {
-            (component as any).__listAdopted = component.parent !== null && component.parent !== undefined;
-        }
+        noteListAdopted(component);
 
         return component;
     }
@@ -150,7 +149,7 @@ export class ListBinding implements IBaseBinding {
             const claimed = new Set<ComponentBase>();
             const positionalReuse = new Map<number, ComponentBase>();
             const isReusable = (c: ComponentBase | undefined): c is ComponentBase =>
-                !!c && !c.isDisposed && !claimed.has(c) && !(c as any).__listAdopted;
+                !!c && !c.isDisposed && !claimed.has(c) && !isListAdopted(c);
 
             const shared = Math.min(items.length, prevItems.length);
             for (let i = 0; i < shared; i++) {
@@ -230,7 +229,7 @@ export class ListBinding implements IBaseBinding {
             });
 
             this._rendered.forEach(comp => {
-                if (!usedComponents.has(comp) && !(comp as any).__listAdopted) {
+                if (!usedComponents.has(comp) && !isListAdopted(comp)) {
                     try { comp.dispose(); } catch { }
                 }
             });

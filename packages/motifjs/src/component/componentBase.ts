@@ -40,6 +40,8 @@ const F_POSTCONFIG = 256;
 const F_PREBOUND = 512;
 const F_DISPOSED_FIRED = 1024;
 const F_BUILDING = 2048;
+const F_LIST_SEEN = 4096;
+const F_LIST_ADOPTED = 8192;
 
 function optionsOf(c: any): any {
         return c?._motif?.options;
@@ -64,13 +66,13 @@ function enterModeOf(container: any): TransitionMode {
                 if (mode) return mode;
                 const node = c.element as Node | null;
                 if (!node || node.nodeType !== Node.COMMENT_NODE) break;
-                c = c.parent ?? c._leaveContainer;
+                c = c.parent ?? c._baseCtx?._leaveContainer;
         }
         return transitionSettings.mode;
 }
 
 function leaveModeOf(c: any): TransitionMode {
-        return enterModeOf(c.parent ?? c._leaveContainer);
+        return enterModeOf(c.parent ?? c._baseCtx?._leaveContainer);
 }
 
 function wantsEnterTransition(c: any): boolean {
@@ -952,8 +954,8 @@ function deepCleanup(c: any): void {
 
         try { c._class?._countsStore?.clear(); } catch { }
         try { c._class?._watchersStore?.clear(); } catch { }
-        try { c._attr?._attrMapStore?.clear(); } catch { }
-        try { c._attr?._watchersStore?.clear(); } catch { }
+        try { c._baseCtx?._attr?._attrMapStore?.clear(); } catch { }
+        try { c._baseCtx?._attr?._watchersStore?.clear(); } catch { }
         try {
                 const opts = c._motif?.options;
                 if (opts) {
@@ -1340,6 +1342,20 @@ function activatePreBindings(c: any): void {
         c._flags |= F_PREBOUND;
 }
 
+export function setLeaveContainer(c: any, owner: ComponentBase): void {
+        (c._baseCtx ?? (c._baseCtx = createBaseCtx(c)))._leaveContainer = owner;
+}
+
+export function noteListAdopted(c: any): void {
+        const f = c._flags;
+        if ((f & F_LIST_SEEN) !== 0) return;
+        c._flags = f | F_LIST_SEEN | (c.parent !== null && c.parent !== undefined ? F_LIST_ADOPTED : 0);
+}
+
+export function isListAdopted(c: any): boolean {
+        return (c._flags & F_LIST_ADOPTED) !== 0;
+}
+
 function createBaseCtx(owner: ComponentBase): BaseCtx {
         const base: BaseCtx = Object.create(BASE_PROTO);
         base.owner = owner;
@@ -1494,7 +1510,6 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
         private _eventHandlers?: EventRecord;
         private _class?: IClass<TElement> = undefined;
-        private _attr?: controlAttribute<TElement> = undefined;
         public get class(): IClass<TElement> {
                 return this._class !== undefined || (this.isDisposed && !this.element) ? this._class! : (this._class = new controlClass(this as any) as any as IClass<TElement>);
         }
@@ -1502,10 +1517,14 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 this._class = value;
         }
         public get attr(): controlAttribute<TElement> {
-                return this._attr !== undefined || (this.isDisposed && !this.element) ? this._attr! : (this._attr = new controlAttribute(this as any));
+                const base = this._baseCtx;
+                const attr = base !== undefined ? base._attr : undefined;
+                return attr !== undefined || (this.isDisposed && !this.element) ? attr : (this._base._attr = new controlAttribute(this as any));
         }
         public set attr(value: controlAttribute<TElement>) {
-                this._attr = value;
+                const base = this._baseCtx;
+                if (base !== undefined) base._attr = value;
+                else if (value !== undefined) this._base._attr = value;
         }
         private _bindings?: BindingCollection = undefined;
         public get bindings(): BindingCollection {
@@ -1619,7 +1638,6 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         public childs?: any[];
         private _baseCtx?: BaseCtx = undefined;
         private _init?: (sender: ComponentBase, e: EventArgs) => void = undefined;
-        private _leaveContainer?: ComponentBase = undefined;
         protected get _base(): BaseCtx {
                 return this._baseCtx !== undefined || (this.isDisposed && !this.element) ? this._baseCtx! : (this._baseCtx = createBaseCtx(this));
         }
