@@ -12,12 +12,23 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
     }
     private _countsStore?: Map<string, number>;
     private _staticSetStore?: Set<string>;
-    private _watchersStore?: Map<string, { stop: () => void, binding?: IBaseBinding, set: Set<string> }>;
+    private _watchersStore?: Map<string, WatchRecord>;
+    private _watcherOne?: WatchRecord;
+    private _sole?: string;
     private _plain?: string;
     private _watcherSeq = 0;
     private get _counts(): Map<string, number> {
         if (this._plain !== undefined) this._promote();
-        return this._countsStore ??= new Map();
+        return this._countsStore ?? this._createCounts();
+    }
+    private _createCounts(): Map<string, number> {
+        const counts = this._countsStore = new Map<string, number>();
+        if (this._sole !== undefined) {
+            const one = this._watcherOne;
+            this._sole = undefined;
+            if (one !== undefined) for (const cls of one.set) counts.set(cls, (counts.get(cls) || 0) + 1);
+        }
+        return counts;
     }
     private get _staticSet(): Set<string> {
         if (this._plain !== undefined) this._promote();
@@ -28,10 +39,25 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
         const names = this._plain!.split(' ');
         this._plain = undefined;
         const set = this._staticSetStore ??= new Set();
-        const counts = this._countsStore ??= new Map();
+        const counts = this._countsStore ?? this._createCounts();
         for (const cls of names) { set.add(cls); counts.set(cls, (counts.get(cls) || 0) + 1); }
     }
-    private get _watchers(): Map<string, { stop: () => void, binding?: IBaseBinding, set: Set<string> }> { return this._watchersStore ??= new Map(); }
+    private _watcherEntries(): [string, WatchRecord][] {
+        if (this._watchersStore !== undefined) return Array.from(this._watchersStore.entries());
+        const one = this._watcherOne;
+        return one !== undefined ? [[one.id, one]] : [];
+    }
+    private _dropWatcher(id: string): void {
+        if (this._watchersStore !== undefined) this._watchersStore.delete(id);
+        else if (this._watcherOne !== undefined && this._watcherOne.id === id) this._watcherOne = undefined;
+    }
+    private _keepWatcher(rec: WatchRecord): void {
+        if (this._watchersStore !== undefined) { this._watchersStore.set(rec.id, rec); return; }
+        const one = this._watcherOne;
+        if (one === undefined) { this._watcherOne = rec; return; }
+        this._watcherOne = undefined;
+        this._watchersStore = new Map([[one.id, one], [rec.id, rec]]);
+    }
 
     add(...values: (string | any[] | {} | Function)[]): ComponentBase {
         for (const value of values) {
@@ -51,7 +77,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
     }
 
     private _addStaticName(cls: string) {
-        if (this._countsStore !== undefined || this._staticSetStore !== undefined) {
+        if (this._countsStore !== undefined || this._staticSetStore !== undefined || this._sole !== undefined) {
             this._addStaticNames([cls]);
             return;
         }
@@ -76,12 +102,12 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
             this._applySourceDiff('static', prev, new Set(this._staticSet), el);
         } else {
             if (classNames === '**') {
-                for (const [id, w] of Array.from(this._watchers.entries())) {
+                for (const [id, w] of this._watcherEntries()) {
                     const prev = new Set(w.set);
                     this._applySourceDiff(id, prev, new Set(), el);
                     try { w.binding && this._parent.bindings.remove(w.binding); } catch { }
                     try { w.stop(); } catch { }
-                    this._watchers.delete(id);
+                    this._dropWatcher(id);
                 }
                 const prev = new Set(this._staticSet);
                 this._staticSet.clear();
@@ -167,6 +193,15 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
     }
 
     private _applySourceDiff(sourceId: string, prev: Set<string>, next: Set<string>, el: Element | null) {
+        if (this._countsStore === undefined && this._plain === undefined && this._sole === sourceId) {
+            for (const cls of prev) {
+                if (!next.has(cls) && el) { try { (el as any).classList.remove(cls); } catch { } }
+            }
+            for (const cls of next) {
+                if (!prev.has(cls) && el) { try { (el as any).classList.add(cls); } catch { } }
+            }
+            return;
+        }
 
         for (const cls of prev) {
             if (!next.has(cls)) {
@@ -266,8 +301,9 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
 
     private _addReactive(fn: Function, key?: any) {
         const id = `fx#${++this._watcherSeq}`;
-        const rec = { stop: () => { }, binding: undefined as undefined | IBaseBinding, set: new Set<string>() };
+        const rec: WatchRecord = { id, stop: () => { }, binding: undefined, set: new Set<string>() };
         const el = this._getElement();
+        if (this._countsStore === undefined && this._staticSetStore === undefined && this._plain === undefined && this._sole === undefined && this._watcherOne === undefined && this._watchersStore === undefined) this._sole = id;
         const run = () => effect(() => {
             let next: Set<string>;
             try {
@@ -302,9 +338,11 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
         try { this._parent.bindings.add(binding); } catch { }
         rec.stop = stop;
         rec.binding = binding;
-        this._watchers.set(id, rec);
+        this._keepWatcher(rec);
     }
 }
+
+type WatchRecord = { id: string, stop: () => void, binding?: IBaseBinding, set: Set<string> };
 
 function hasName(list: string, name: string): boolean {
     let i = list.indexOf(name);
