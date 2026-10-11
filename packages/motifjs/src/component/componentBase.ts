@@ -14,7 +14,7 @@ import { pinServiceOwner, recordServiceOwner, retireServiceOwner, unpinServiceOw
 import { contentBlocks as liveContentBlocks } from "./contentBlockRegistry";
 import { OPTIONS_OWNER, TRANSITION_SLOT } from "./optionsSlots";
 import { deferUntilEntered, isTransitionMode, pendingLeaves, trackEnter, trackLeave, transitionSettings, TransitionMode } from "../common/transitionRegistry";
-import { callMethod0, callMethod1, callMethod2, lazyBindMethods } from "../common/lazyBind";
+import { lazyBindMethods } from "../common/lazyBind";
 import { trackedCleanup } from "../disposable/Cleanup";
 import type { MotifDomEventProps } from "../jsx-runtime";
 import { isDevLike } from "../devtools/devbus";
@@ -347,7 +347,7 @@ interface BaseCtx extends LifecycleStorage {
 
 function fireLifecycle(component: any, name: string, ev: EventArgs): void {
         const base = component._baseCtx;
-        if (base && base._emiters != null) callMethod2(base._emiters, ComponentEmiter.prototype, 'fire', name, ev);
+        if (base) base._emiters?.fire(name, ev);
 }
 
 function runHooks(base: any, listName: keyof LifecycleStorage, sender: any, ev: EventArgs, label: string): void {
@@ -943,7 +943,7 @@ function disposeShallow(c: any): void {
                 }
         }
         ComponentHelper.callDisposed.call(c, c);
-        safeCall(() => { const em = c._baseCtx?._emiters; if (em != null) callMethod0(em, ComponentEmiter.prototype, 'clear'); }, 'disposeShallow.emiters');
+        safeCall(() => { c._baseCtx?._emiters?.clear(); }, 'disposeShallow.emiters');
         c.isDisposed = true;
         Disposable.prototype.dispose.call(c);
 }
@@ -1076,7 +1076,7 @@ function disposeFinish(c: any, options: IDisposeOptions, asChild: boolean): void
         if (asChild) {
                 if (c._controls) c._controls.items = [];
                 safeCall(() => { ComponentHelper.callDisposed.call(c, c); }, 'disposeAsync.callDisposed');
-                safeCall(() => { const em = c._baseCtx?._emiters; if (em != null) callMethod0(em, ComponentEmiter.prototype, 'clear'); }, 'disposeAsync.emiters');
+                safeCall(() => { c._baseCtx?._emiters?.clear(); }, 'disposeAsync.emiters');
                 if (options?.deep) {
                         deepCleanup(c);
                 }
@@ -1084,7 +1084,7 @@ function disposeFinish(c: any, options: IDisposeOptions, asChild: boolean): void
         }
         c.element = null;
         safeCall(() => { ComponentHelper.callDisposed.call(c, c); }, 'dispose.callDisposed');
-        safeCall(() => { const em = c._baseCtx?._emiters; if (em != null) callMethod0(em, ComponentEmiter.prototype, 'clear'); }, 'dispose.emiters');
+        safeCall(() => { c._baseCtx?._emiters?.clear(); }, 'dispose.emiters');
         offAll(c);
         deepCleanup(c);
 }
@@ -1320,15 +1320,15 @@ function offAll(c: any): void {
 }
 
 function deactivateBindings(c: any): void {
-        try { if (c._bindings?._items?.length) callMethod0(c._bindings, BindingCollection.prototype, 'deactivateAll'); } catch { }
+        try { if (c._bindings?._items?.length) c._bindings.deactivateAll(); } catch { }
 }
 
 function activateBindings(c: any): void {
-        try { const b = c._bindings; if (b != null) callMethod0(b, BindingCollection.prototype, 'activateAll'); } catch { }
+        try { c._bindings?.activateAll(); } catch { }
 }
 
 function reactivateBindings(c: any): void {
-        try { const b = c._bindings; if (b != null) callMethod0(b, BindingCollection.prototype, 'reActivateAll'); } catch { }
+        try { c._bindings?.reActivateAll(); } catch { }
 }
 
 function activatePreBindings(c: any): void {
@@ -1876,7 +1876,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 },
                                 deactivate() { stop(); }
                         } as any;
-                        try { callMethod1(this.bindings, BindingCollection.prototype, 'add', binding); } catch { }
+                        try { this.bindings.add(binding); } catch { }
                         this._styleFx = { stop, binding };
                         return this;
                 }
@@ -1893,7 +1893,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 if (!fx) return;
                 this._styleFx = undefined;
                 try { fx.stop(); } catch { }
-                try { callMethod1(this.bindings, BindingCollection.prototype, 'remove', fx.binding); } catch { }
+                try { this.bindings.remove(fx.binding); } catch { }
         }
 
         private _addHandler(event: any, handler: (sender: ComponentBase, e: EventArgs) => void) {
@@ -2070,7 +2070,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 return this;
                         }
                         if (LIFECYCLE_X_EVENTS.has(xName)) {
-                                callMethod2(this._base.emiters, ComponentEmiter.prototype, 'on', "on" + xName, cb as any);
+                                this._base.emiters.on("on" + xName, cb as any);
                                 return this;
                         }
                 }
@@ -2141,7 +2141,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 return this;
                         }
                         if (LIFECYCLE_X_EVENTS.has(xName)) {
-                                { const em = this._base._emiters; if (em != null) callMethod2(em, ComponentEmiter.prototype, 'off', "on" + xName, cb as any); }
+                                this._base._emiters?.off("on" + xName, cb as any);
                         }
                         return this;
                 }
@@ -2525,10 +2525,10 @@ export function ParseProps(props: any, component: ComponentBase): boolean {
 
                                 var nkey = key.replace("x-", "on");
                                 if (key.toLowerCase() == "x-wait") {
-                                        callMethod1(component.bindings, BindingCollection.prototype, 'wait', props[key]);
+                                        component.bindings.wait(props[key]);
 
                                 } else if (key.toLowerCase() == "x-display") {
-                                        callMethod1(component.bindings, BindingCollection.prototype, 'display', props[key]);
+                                        component.bindings.display(props[key]);
                                 } else {
                                         if (collectLifecycleHandlers(component, nkey.toLowerCase(), props[key])) {
                                                 delete props[key];
@@ -2592,7 +2592,7 @@ export function applyTransitionProp(value: any, component: ComponentBase): void 
         if (_transitionSources.get(component) === value) return;
         _transitionSources.set(component, value);
         if (typeof value === 'function') {
-                callMethod1(component.bindings, BindingCollection.prototype, 'watch', () => {
+                component.bindings.watch(() => {
                         const current = value();
                         if (component.isDisposed) return;
                         setTransition(component, current, true);
@@ -2685,7 +2685,7 @@ export function applyPlainElementProps(props: any, component: ComponentBase): vo
                 } else if (key === 'style') {
                         component.style(v);
                 } else if (key === 'value' || key === 'checked' || key === 'selected') {
-                        callMethod2(component.bindings, BindingCollection.prototype, 'add', key, v);
+                        component.bindings.add(key, v);
                 } else {
                         (attrs ??= {})[key] = v;
                 }

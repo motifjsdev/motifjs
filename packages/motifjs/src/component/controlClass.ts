@@ -2,8 +2,6 @@ import { IClass } from "../";
 import { ComponentBase } from "./";
 import { effect } from "../store/reactivity-core";
 import { IBaseBinding } from "../bindings";
-import { BindingCollection } from "../bindings/BindingCollection";
-import { callMethod1 } from "../common/lazyBind";
 
 
 
@@ -81,7 +79,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
                 for (const [id, w] of Array.from(this._watchers.entries())) {
                     const prev = new Set(w.set);
                     this._applySourceDiff(id, prev, new Set(), el);
-                    try { w.binding && callMethod1(this._parent.bindings, BindingCollection.prototype, 'remove', w.binding); } catch { }
+                    try { w.binding && this._parent.bindings.remove(w.binding); } catch { }
                     try { w.stop(); } catch { }
                     this._watchers.delete(id);
                 }
@@ -301,7 +299,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
                 current = run();
             }
         } as any;
-        try { callMethod1(this._parent.bindings, BindingCollection.prototype, 'add', binding); } catch { }
+        try { this._parent.bindings.add(binding); } catch { }
         rec.stop = stop;
         rec.binding = binding;
         this._watchers.set(id, rec);

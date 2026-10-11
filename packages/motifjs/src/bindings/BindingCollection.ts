@@ -6,7 +6,7 @@ import { dom } from "../";
 import { effect, untracked } from "../";
 import { Binding, BindingFormatInfo, IBaseBinding, IBindingCollection, ListBinding, ListBindingOptions, readModelValue } from "./";
 import { reportError } from "../common/diagnostics";
-import { callMethod2, callMethod3, lazyBindMethods } from "../common/lazyBind";
+import { lazyBindMethods } from "../common/lazyBind";
 import { pushTight } from "../common/pushTight";
 
 function resolveValue(value: any): any {
@@ -65,12 +65,12 @@ export class BindingCollection implements IBindingCollection {
     }
 
     text(cb: any) {
-        callMethod2(this, BindingCollection.prototype, "add", "textContent", cb);
+        this.add("textContent", cb);
     };
 
 
     value(fn: () => any) {
-        callMethod2(this, BindingCollection.prototype, "add", "value", fn);
+        this.add("value", fn);
     };
 
     add(propertyName: string, dataSource: any): IBaseBinding;
@@ -182,7 +182,7 @@ export class BindingCollection implements IBindingCollection {
     ternary(conditionFn: () => any, trueFn: (frame: Frame) => any, falseFn: (frame: Frame) => any) {
         const frame = new Frame();
         this._component.controls.add(frame);
-        callMethod3(this, BindingCollection.prototype, '_ternaryCallTop',
+        this._ternaryCallTop(
             conditionFn,
             () => { trueFn(frame); },
             () => { falseFn(frame); }

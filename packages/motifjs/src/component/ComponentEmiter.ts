@@ -4,7 +4,7 @@ import { trackedCleanup } from "../disposable/Cleanup";
 import { ComponentBase } from "../";
 import { EventArgs } from "./types";
 import { callReported } from "../common/diagnostics";
-import { callMethod1, callMethod2, lazyBindMethods } from "../common/lazyBind";
+import { lazyBindMethods } from "../common/lazyBind";
 
 export class ComponentEmiter {
 
@@ -32,7 +32,7 @@ export class ComponentEmiter {
     public on(event: any, cb: (sender: ComponentBase | this, ev: any) => any) {
 
         try {
-            callMethod2(this, ComponentEmiter.prototype, 'createEvent', event, cb);
+            this.createEvent(event, cb);
         } catch {
         }
     }
@@ -68,7 +68,7 @@ export class ComponentEmiter {
             return res;
         };
 
-        const emitter: Emitter<EventArgs> = callMethod1(this, ComponentEmiter.prototype, 'getOrCreateEmitter', lowerFull);
+        const emitter = this.getOrCreateEmitter(lowerFull);
         const disp = emitter.event((e) => invoke(e));
 
         const listeners = this._listenerDisposables ??= new Map();
@@ -81,7 +81,7 @@ export class ComponentEmiter {
 
     public addSource(event: string, source: Emitter<EventArgs> | DelegateEvent<EventArgs>) {
         const lower = String(event).toLowerCase();
-        const target: Emitter<EventArgs> = callMethod1(this, ComponentEmiter.prototype, 'getOrCreateEmitter', lower);
+        const target = this.getOrCreateEmitter(lower);
         const forward = (ev: DelegateEvent<EventArgs>) => ev(e => target.fire(e));
         let disp: IDisposable | undefined;
         try {
@@ -115,7 +115,7 @@ export class ComponentEmiter {
             this._emitters?.delete(lower);
             this._listenerDisposables?.delete(lower);
         } else if (this._emitters) {
-            for (const key of Array.from(this._emitters.keys())) { callMethod1(this, ComponentEmiter.prototype, 'clear', key); }
+            for (const key of Array.from(this._emitters.keys())) { this.clear(key); }
         }
         return this;
     }
