@@ -86,7 +86,7 @@ export function runInConstructionScope<T>(scope: ServiceProvider | undefined, cr
     }
 }
 
-export async function recordServiceOwner(owner: object) {
+export function recordServiceOwner(owner: object): void {
     if (constructionScope && constructionScope._pending) builtIn.set(owner, constructionScope);
 }
 
