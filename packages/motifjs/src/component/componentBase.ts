@@ -1009,6 +1009,31 @@ function subtreeDisposesSync(c: any, root: boolean): boolean {
 }
 
 const teardownApplications = new WeakMap<object, Application>();
+let teardownSeen = false;
+let contextOverridden = false;
+let lastCheckedCtor: Function | undefined;
+const checkedCtors = new WeakSet<Function>();
+let baseContextGetter: Function | undefined;
+
+function noteContextOverride(ctor: Function): void {
+        if (contextOverridden || ctor === lastCheckedCtor) return;
+        lastCheckedCtor = ctor;
+        if (checkedCtors.has(ctor)) return;
+        checkedCtors.add(ctor);
+        baseContextGetter ??= Object.getOwnPropertyDescriptor(ComponentBase.prototype, 'context')!.get;
+        if ((ctor.prototype as any).__lookupGetter__('context') !== baseContextGetter) contextOverridden = true;
+}
+
+function applicationOf(c: any): Application | undefined {
+        const parent = c.parent;
+        let app: any;
+        if (parent) {
+                baseContextGetter ??= Object.getOwnPropertyDescriptor(ComponentBase.prototype, 'context')!.get;
+                if (parent.__lookupGetter__('context') === baseContextGetter) app = applicationOf(parent);
+                else { const ctx: any = parent.context; app = ctx?.[RAW_APPLICATION] ?? ctx; }
+        }
+        return app ?? teardownApplications.get(c) ?? Application.main;
+}
 
 function owningApplication(c: any): Application | null {
         for (let p = c; p; p = p.parent) {
@@ -1023,7 +1048,7 @@ function disposePrefix(c: any, options: IDisposeOptions, asChild: boolean): void
         const ctx = asChild ? 'disposeAsync' : 'dispose';
         if (Application._disposingCount > 0) {
                 const app = owningApplication(c);
-                if (app && app.state === 'disposing') teardownApplications.set(c, app);
+                if (app && app.state === 'disposing') { teardownApplications.set(c, app); teardownSeen = true; }
         }
         if (!asChild && options?.skipLeaveTransition) {
                 c.motif.options.transition.skipNextLeave = true;
@@ -1523,6 +1548,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
         constructor(element: TElement, props: TProps = {} as TProps) {
                 super();
+                noteContextOverride(new.target);
                 const asComponentRoot = constructingComponentRoot;
                 constructingComponentRoot = false;
                 recordServiceOwner(this);
@@ -1610,8 +1636,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         private _scopedContext?: Application;
 
         public get context(): Application {
-                const parentCtx: any = this.parent?.context;
-                const app: Application = parentCtx?.[RAW_APPLICATION] ?? parentCtx ?? teardownApplications.get(this) ?? Application.main;
+                const app: Application = (contextOverridden || teardownSeen ? applicationOf(this) : Application.main) as Application;
                 if (!app) { return app; }
                 if ((this._scopedContext as any)?.[RAW_APPLICATION] !== app) {
                         this._scopedContext = createScopedContext(app, this);
