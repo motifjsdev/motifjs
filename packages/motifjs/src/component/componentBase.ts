@@ -247,12 +247,11 @@ class ComponentOptionsImpl {
         set enableRouterClassing(value: RouterClassingSettings) {
                 try {
                         const ins = this[OPTIONS_OWNER];
-                        const callback = ins.context.onRouterChanged(() => {
+                        const off = contextApplication(ins)!.onRouterChanged(() => {
                                 ComponentHelper.routerClassing.call(ins, value);
                         });
-                        ins.motif.register(disposableCore.toDisposable(() => {
-                                callback();
-                        }));
+                        if (ins.isDisposed) { off(); return; }
+                        ins.motif.register(disposableCore.toDisposable(off));
                         ComponentHelper.routerClassing.call(ins, value);
                 } catch (error) {
                         reportError('MJX105', error);
@@ -757,7 +756,7 @@ const ComponentHelper = {
                         const path = value.path;
                         if (this.isDisposed) return;
 
-                        const router = this.context?.router;
+                        const router = contextApplication(this)?.router;
                         if (!router) return;
 
                         const requestPath = router.uri.startsWith('/') ? router.uri : '/' + router.uri;
@@ -1033,6 +1032,15 @@ function applicationOf(c: any): Application | undefined {
                 else { const ctx: any = parent.context; app = ctx?.[RAW_APPLICATION] ?? ctx; }
         }
         return app ?? teardownApplications.get(c) ?? Application.main;
+}
+
+function contextApplication(c: any): Application | undefined {
+        baseContextGetter ??= Object.getOwnPropertyDescriptor(ComponentBase.prototype, 'context')!.get;
+        if (c.__lookupGetter__('context') !== baseContextGetter) {
+                const ctx = c.context;
+                return ctx?.[RAW_APPLICATION] ?? ctx;
+        }
+        return contextOverridden || teardownSeen ? applicationOf(c) : Application.main;
 }
 
 function owningApplication(c: any): Application | null {
