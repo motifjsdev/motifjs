@@ -1767,12 +1767,11 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                         this.motif.options.transition.enterTransition(() => { });
                                 } else {
                                         const seq = this._base._enterSeq;
-                                        // queueMicrotask(() => {
-
-                                        // });
-                                        if (!this.isDisposed && this.isVisible && this.motif.options?.transition && this._base._enterSeq === seq) {
-                                                this.motif.options.transition.enterTransition(() => { });
-                                        }
+                                        queueMicrotask(() => {
+                                                if (!this.isDisposed && this.isVisible && this.motif.options?.transition && this._base._enterSeq === seq) {
+                                                        this.motif.options.transition.enterTransition(() => { });
+                                                }
+                                        });
                                 }
                         } else {
                                 clearNavDirection(this);
