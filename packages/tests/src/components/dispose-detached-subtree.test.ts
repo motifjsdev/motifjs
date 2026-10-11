@@ -29,7 +29,7 @@ function tree(log: string[], probe?: (name: string, c: ComponentBase, phase: str
 describe('disposing a subtree', () => {
     afterEach(() => { document.body.innerHTML = ''; });
 
-    test('ondisposing and ondisposed run level by level, by subtree height', async () => {
+    test('onDisposing and onDisposed run level by level, by subtree height', async () => {
         const log: string[] = [];
         const { el, app } = host();
         const t = tree(log);

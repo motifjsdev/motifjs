@@ -60,7 +60,7 @@ describe('eşzamanlı bertaraf', () => {
         ['dispose + dispose', (c: Component) => [c.dispose(), c.dispose()]],
     ] as const)('%s: hata yok, kancalar bir kez', async (_name, run) => {
         let disposing = 0, disposed = 0;
-        const c = new Component('div', { ondisposing: () => { disposing++; }, ondisposed: () => { disposed++; } } as any);
+        const c = new Component('div', { onDisposing: () => { disposing++; }, onDisposed: () => { disposed++; } } as any);
         c.controls.add(new Component('span'));
         c.build();
         await Promise.all(run(c));

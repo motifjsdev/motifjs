@@ -70,14 +70,12 @@ describe('lifecycle handlers given as props', () => {
 });
 
 describe('order between the kinds of hooks', () => {
-    test('class method, prop handlers, lower case method, x: listener', async () => {
+    test('class method, prop handlers, x: listener', async () => {
         const log: string[] = [];
         class Probe extends Component<HTMLDivElement> {
             constructor(props: any) { super('div', props); }
             onBuilt() { log.push('built:method'); }
-            onbuilt() { log.push('built:lower'); }
             onDisposing() { log.push('disposing:method'); }
-            ondisposing() { log.push('disposing:lower'); }
             initializeComponent() { log.push('init:method'); }
             oninitializeComponent() { log.push('init:on-method'); }
         }
@@ -92,9 +90,22 @@ describe('order between the kinds of hooks', () => {
         await drive(c);
         expect(log).toEqual([
             'init:method', 'init:p1', 'init:on-method', 'init:on-p1',
-            'built:method', 'built:p1', 'built:p2', 'built:lower', 'built:x',
-            'disposing:method', 'disposing:p1', 'disposing:lower', 'disposing:x',
+            'built:method', 'built:p1', 'built:p2', 'built:x',
+            'disposing:method', 'disposing:p1', 'disposing:x',
         ]);
+    });
+
+    test('a lower case method name is not a hook', async () => {
+        const log: string[] = [];
+        class Probe extends Component<HTMLDivElement> {
+            constructor() { super('div'); }
+            onbuilt() { log.push('built:lower'); }
+            onmounted() { log.push('mounted:lower'); }
+            ondisposing() { log.push('disposing:lower'); }
+            ondisposed() { log.push('disposed:lower'); }
+        }
+        await drive(new Probe());
+        expect(log).toEqual([]);
     });
 });
 

@@ -368,11 +368,10 @@ function runHooks(base: any, listName: keyof LifecycleStorage, sender: any, ev: 
         }
 }
 
-function hasLifecycleHook(component: any, hook: string, listName: keyof LifecycleStorage, lowerName: string, legacyProp?: string): boolean {
+function hasLifecycleHook(component: any, hook: string, listName: keyof LifecycleStorage, lowerName: string): boolean {
         if (component[hook]) return true;
         const base = component._baseCtx;
         if (base?.[listName]) return true;
-        if (legacyProp && component[legacyProp]) return true;
         return !!base?._emiters?.hasListeners(lowerName);
 }
 
@@ -453,15 +452,12 @@ const ComponentHelper = {
         },
         callDisposing(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
-                if (!hasLifecycleHook(component, 'onDisposing', '_onDisposingHandlers', 'ondisposing', 'ondisposing')) { return; }
+                if (!hasLifecycleHook(component, 'onDisposing', '_onDisposingHandlers', 'ondisposing')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onDisposing) {
                         callReported(() => component.onDisposing(sender, ev), 'MJX122', 'onDisposing');
                 }
                 runHooks(component._baseCtx, '_onDisposingHandlers', sender, ev, 'onDisposing');
-                if (component.ondisposing) {
-                        callReported(() => component.ondisposing(sender, ev), 'MJX122', 'ondisposing');
-                }
                 fireLifecycle(component, 'ondisposing', ev);
         },
         callActivated(component: ComponentBase | any) {
@@ -504,22 +500,20 @@ const ComponentHelper = {
                 if (!component || (component._flags & F_DISPOSED_FIRED) !== 0) { return; }
                 if (component.isDisposed && !component.element && component._baseCtx === undefined) { return; }
                 component._flags |= F_DISPOSED_FIRED;
-                if (hasLifecycleHook(component, 'onDisposed', '_onDisposedHandlers', 'ondisposed', 'ondisposed')) {
+                if (hasLifecycleHook(component, 'onDisposed', '_onDisposedHandlers', 'ondisposed')) {
                         const sender = component, ev = { cancel: false } as EventArgs;
                         if (component.onDisposed) { callReported(() => component.onDisposed(sender, ev), 'MJX122', 'onDisposed'); }
                         runHooks(component._baseCtx, '_onDisposedHandlers', sender, ev, 'onDisposed');
-                        if (component.ondisposed) { callReported(() => component.ondisposed(sender, ev), 'MJX122', 'ondisposed'); }
                         fireLifecycle(component, 'ondisposed', ev);
                 }
                 try { devtoolsBus()?.publish?.('component:disposed', { id: (component as any).id, type: component.constructor?.name }); } catch { }
         },
         callBuilt(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
-                if (hasLifecycleHook(component, 'onBuilt', '_onBuiltHandlers', 'onbuilt', 'onbuilt')) {
+                if (hasLifecycleHook(component, 'onBuilt', '_onBuiltHandlers', 'onbuilt')) {
                         const sender = component, ev = { cancel: false } as EventArgs;
                         if (component.onBuilt) { callReported(() => component.onBuilt(sender, ev), 'MJX122', 'onBuilt'); }
                         runHooks(component._baseCtx, '_onBuiltHandlers', sender, ev, 'onBuilt');
-                        if (component.onbuilt) { callReported(() => component.onbuilt(sender, ev), 'MJX122', 'onbuilt'); }
                         fireLifecycle(component, 'onbuilt', ev);
                 }
                 try { devtoolsBus()?.publish?.('component:mounted', { id: (component as any).id, type: component.constructor?.name }); } catch { }
@@ -527,8 +521,7 @@ const ComponentHelper = {
         scheduleMounted(component: ComponentBase | any) {
                 if (!component || component.isDisposed || component._baseCtx?._mountedScheduled) { return; }
                 const hasHook = typeof component.onMounted === 'function'
-                        || !!component._baseCtx?._onMountedHandlers
-                        || typeof component.onmounted === 'function';
+                        || !!component._baseCtx?._onMountedHandlers;
                 if (!hasHook) { return; }
                 component._base._mountedScheduled = true;
                 const el = component.element as Element | null;
@@ -547,7 +540,6 @@ const ComponentHelper = {
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onMounted) { callReported(() => component.onMounted(sender, ev), 'MJX122', 'onMounted'); }
                 runHooks(component._baseCtx, '_onMountedHandlers', sender, ev, 'onMounted');
-                if (component.onmounted) { callReported(() => component.onmounted(sender, ev), 'MJX122', 'onmounted'); }
                 fireLifecycle(component, 'onmounted', ev);
         },
         callBuilding(component: ComponentBase | any) {
@@ -2515,15 +2507,6 @@ export function ParseProps(props: any, component: ComponentBase): boolean {
                         } else if (key === 'transition') {
                                 applyTransitionProp(props[key], component);
                                 delete props[key];
-                        } else if (componentMethods.hasOwnProperty(key.toLowerCase()) || componentMethods.hasOwnProperty("on" + key.toLowerCase())) {
-                                var eventKey;
-                                if (!key.toLowerCase().startsWith("on") && key.toLowerCase() !== "initializecomponent") {
-                                        eventKey = "on" + key;
-                                } else {
-                                        eventKey = key;
-                                }
-                                (component as any)[eventKey] = props[key];
-                                delete props[key];
                         } else if (key.startsWith("on")) {
 
                                 component.motif.on(key as any, props[key]);
@@ -2737,23 +2720,6 @@ export function applyFallthroughProps(props: any, component: ComponentBase): voi
         }
         if (subset) applyPlainElementProps(subset, component);
 }
-
-const componentMethods: Record<string, unknown> = {
-        "oninitializecomponent": (sender: ComponentBase, e: EventArgs) => { },
-        "initializecomponent": (sender: ComponentBase, e: EventArgs) => { },
-        "onconfigured": (sender: ComponentBase, e: EventArgs) => { },
-        "onconfig": (sender: ComponentBase, e: EventArgs) => { },
-        "onbuilding": (sender: ComponentBase, e: EventArgs) => { },
-        "onbuilt": (sender: ComponentBase, e: EventArgs) => { },
-        "onmounted": (sender: ComponentBase, e: EventArgs) => { },
-        "oninitializing": (sender: ComponentBase, e: EventArgs) => { },
-        "oninitialized": (sender: ComponentBase, e: EventArgs) => { },
-        "ondisposing": (sender: ComponentBase, e: EventArgs) => { },
-        "ondisposed": (sender: ComponentBase, e: EventArgs) => { },
-        "onvisibilitychanged": (sender: ComponentBase, e: EventArgs) => { },
-        "ondeactivated": (sender: ComponentBase, e: EventArgs) => { },
-        "onactivated": (sender: ComponentBase, e: EventArgs) => { },
-};
 
 
 function findAppendableComponent(component: ComponentBase): ComponentBase | null | undefined {

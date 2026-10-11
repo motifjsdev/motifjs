@@ -157,7 +157,6 @@ describe('x-initializing / x-initialized on a function component tag', () => {
     test.each([
         ['x-initializing', 'x-initialized'],
         ['x:initializing', 'x:initialized'],
-        ['oninitializing', 'oninitialized'],
         ['onInitializing', 'onInitialized'],
     ])('%s / %s fire once on the returned root', async (a, b) => {
         const log: any[] = [];
@@ -174,7 +173,7 @@ describe('x-initializing / x-initialized on a function component tag', () => {
 
     test('the order of tag hooks matches the class tag order', async () => {
         const seq: Record<string, string[]> = { cls: [], fn: [] };
-        const hooks = (k: string) => `ref={() => seq.${k}.push('ref')} x-initializing={() => seq.${k}.push('initializing')} x-initialized={() => seq.${k}.push('initialized')} onconfig={() => seq.${k}.push('config')} onbuilding={() => seq.${k}.push('building')} initializeComponent={() => seq.${k}.push('initializeComponent')} onbuilt={() => seq.${k}.push('built')}`;
+        const hooks = (k: string) => `ref={() => seq.${k}.push('ref')} x-initializing={() => seq.${k}.push('initializing')} x-initialized={() => seq.${k}.push('initialized')} onConfig={() => seq.${k}.push('config')} onBuilding={() => seq.${k}.push('building')} initializeComponent={() => seq.${k}.push('initializeComponent')} onBuilt={() => seq.${k}.push('built')}`;
         const A = evalJsx(`
             class Box extends Component {
                 constructor(p){ super('article', p); }
@@ -197,7 +196,7 @@ describe('x-initializing / x-initialized on a function component tag', () => {
         const log: string[] = [];
         const A = evalJsx(`
             function Spread(props){ return <nav {...props} />; }
-            function A(){ return <div><Spread x-initializing={() => log.push('initializing')} oninitialized={() => log.push('initialized')} /></div>; }`, 'A', { log });
+            function A(){ return <div><Spread x-initializing={() => log.push('initializing')} onInitialized={() => log.push('initialized')} /></div>; }`, 'A', { log });
         const { root } = mount(A());
         expect(log).toEqual(['initializing', 'initialized']);
         await root.dispose();

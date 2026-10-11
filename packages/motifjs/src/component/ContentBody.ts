@@ -64,15 +64,11 @@ export class ContentBlock extends Component<any, ContentBlockProps> {
         }
 
     }
-    ondisposing(sender: Component<any, ContentBlockProps>) {
-        // var cb = ContentBodyCollectionHandable.get(this.props.target);
-        // if (cb) {
-    }
 
 }
 interface ContentBodyProps {
     name: string,
-    onconfig?: any
+    onConfig?: any
 }
 export class ContentBody extends Component<any, ContentBodyProps> {
     constructor(props: ContentBodyProps) {
@@ -80,7 +76,7 @@ export class ContentBody extends Component<any, ContentBodyProps> {
         ContentBodyCollectionHandable.set(this.props.name, this);
         this.context.fire(changeBodyCollectionHandler);
     }
-    ondisposing(sender: Component<any, ContentBodyProps>) {
+    onDisposing(sender: Component<any, ContentBodyProps>) {
         if (ContentBodyCollectionHandable.get(this.props.name) === this) {
             ContentBodyCollectionHandable.delete(this.props.name);
         }

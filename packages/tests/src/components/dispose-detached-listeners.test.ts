@@ -126,11 +126,11 @@ describe('listeners inside a disposed subtree', () => {
         expect(errors).toEqual([]);
     });
 
-    test('listeners added in ondisposing of a child are removed with the others', async () => {
+    test('listeners added in onDisposing of a child are removed with the others', async () => {
         const log: string[] = [];
         const { app } = host();
         const root = new Component('div');
-        const child = new Component('b', { ondisposing: () => { child.motif.on('click', () => { log.push('late'); }); } } as any);
+        const child = new Component('b', { onDisposing: () => { child.motif.on('click', () => { log.push('late'); }); } } as any);
         child.motif.on('click', () => { log.push('early'); });
         root.controls.add(child);
         app.controls.add(root);

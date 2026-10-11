@@ -182,9 +182,9 @@ describe('initializeComponent and ref on a plain DOM tag', () => {
 describe('two spellings of one lifecycle hook on the same tag', () => {
     afterEach(() => { document.body.innerHTML = ''; });
 
-    test('onbuilt, x-built and x:built on a plain tag all run in source order', async () => {
+    test('onBuilt, x-built and x:built on a plain tag all run in source order', async () => {
         const log: string[] = [];
-        const A = evalJsx(`function A(){ return <div onbuilt={() => log.push('a')} x-built={() => log.push('b')} x:built={() => log.push('c')} />; }`, 'A', { log });
+        const A = evalJsx(`function A(){ return <div onBuilt={() => log.push('a')} x-built={() => log.push('b')} x:built={() => log.push('c')} />; }`, 'A', { log });
         const { root } = mount(A());
         expect(log).toEqual(['a', 'b', 'c']);
         await root.dispose();
@@ -204,7 +204,7 @@ describe('two spellings of one lifecycle hook on the same tag', () => {
             class Box extends Component {
                 constructor(p){ super('article', p); }
             }
-            function A(){ return <Box x-built={() => log.push('x')} onbuilt={() => log.push('on')} x-config={() => log.push('cfg1')} onconfig={() => log.push('cfg2')} />; }`, 'A', { log });
+            function A(){ return <Box x-built={() => log.push('x')} onBuilt={() => log.push('on')} x-config={() => log.push('cfg1')} onConfig={() => log.push('cfg2')} />; }`, 'A', { log });
         const { root } = mount(A());
         expect(log.filter(x => x.startsWith('cfg'))).toEqual(['cfg1', 'cfg2']);
         expect(log.filter(x => !x.startsWith('cfg'))).toEqual(['x', 'on']);
@@ -215,7 +215,7 @@ describe('two spellings of one lifecycle hook on the same tag', () => {
         const log: string[] = [];
         const A = evalJsx(`
             function Inner(){ return <section />; }
-            function A(){ return <div><Inner onbuilt={() => log.push('on')} x-built={() => log.push('x')} /></div>; }`, 'A', { log });
+            function A(){ return <div><Inner onBuilt={() => log.push('on')} x-built={() => log.push('x')} /></div>; }`, 'A', { log });
         const { root } = mount(A());
         await tick();
         expect(log).toEqual(['on', 'x']);
@@ -225,10 +225,10 @@ describe('two spellings of one lifecycle hook on the same tag', () => {
     test('mounted, config, disposing and disposed pairs all run', async () => {
         const log: string[] = [];
         const A = evalJsx(`function A(){ return <div
-            onconfig={() => log.push('config:1')} x:config={() => log.push('config:2')}
-            onmounted={() => log.push('mounted:1')} x-mounted={() => log.push('mounted:2')}
-            ondisposing={() => log.push('disposing:1')} x-disposing={() => log.push('disposing:2')}
-            ondisposed={() => log.push('disposed:1')} x:disposed={() => log.push('disposed:2')} />; }`, 'A', { log });
+            onConfig={() => log.push('config:1')} x:config={() => log.push('config:2')}
+            onMounted={() => log.push('mounted:1')} x-mounted={() => log.push('mounted:2')}
+            onDisposing={() => log.push('disposing:1')} x-disposing={() => log.push('disposing:2')}
+            onDisposed={() => log.push('disposed:1')} x:disposed={() => log.push('disposed:2')} />; }`, 'A', { log });
         const { root } = mount(A());
         await tick(20);
         expect(log.filter(x => x.startsWith('config'))).toEqual(['config:1', 'config:2']);
@@ -239,20 +239,21 @@ describe('two spellings of one lifecycle hook on the same tag', () => {
         expect(log.filter(x => x.startsWith('disposed'))).toEqual(['disposed:1', 'disposed:2']);
     });
 
-    test('the compiler emits one key per hook, never a duplicate', () => {
+    test('the compiler emits one camelCase key per hook, whatever the spelling, never a duplicate', () => {
         const code = compileOnly(`function A(){ return <div onbuilt={f} x-built={g} onmounted={m} x-mounted={n} onactivated={a} x:activated={b} />; }`);
-        expect(code.match(/onbuilt:/g)?.length).toBe(1);
-        expect(code.match(/onmounted:/g)?.length).toBe(1);
-        expect(code.match(/onactivated:/g)?.length).toBe(1);
-        expect(code).toContain('onbuilt: [f, g]');
+        expect(code.match(/onBuilt:/g)?.length).toBe(1);
+        expect(code.match(/onMounted:/g)?.length).toBe(1);
+        expect(code.match(/onActivated:/g)?.length).toBe(1);
+        expect(code).toContain('onBuilt: [f, g]');
+        expect(code).not.toMatch(/\bon(built|mounted|activated):/);
     });
 
     test('an array of handlers in props is collected in order', async () => {
         const log: string[] = [];
-        const c = new Component('div', { onbuilt: [() => log.push('1'), () => log.push('2')] } as any);
+        const c = new Component('div', { onBuilt: [() => log.push('1'), () => log.push('2')] } as any);
         const { root } = mount(c);
         expect(log).toEqual(['1', '2']);
-        expect((c.element as HTMLElement).hasAttribute('onbuilt')).toBe(false);
+        expect((c.element as HTMLElement).hasAttribute('onBuilt')).toBe(false);
         await root.dispose();
     });
 });
@@ -534,7 +535,7 @@ describe('custom event names with dashes and underscores', () => {
 describe('a single lifecycle spelling on a function component tag', () => {
     afterEach(() => { document.body.innerHTML = ''; });
 
-    test('x-built, x-mounted and onactivated reach the returned root without props forwarding', async () => {
+    test('x-built, x-mounted and onActivated reach the returned root without props forwarding', async () => {
         const log: any[] = [];
         const A = evalJsx(`
             function Inner(){ return <section />; }
@@ -557,7 +558,7 @@ describe('a single lifecycle spelling on a function component tag', () => {
             class Box extends Component {
                 constructor(p){ super('article', p); }
             }
-            function A(){ return <Box x-built={() => log.push('b')} onmounted={() => log.push('m')} />; }`, 'A', { log });
+            function A(){ return <Box x-built={() => log.push('b')} onMounted={() => log.push('m')} />; }`, 'A', { log });
         const { root } = mount(A());
         await tick(20);
         expect(log).toEqual(['b', 'm']);

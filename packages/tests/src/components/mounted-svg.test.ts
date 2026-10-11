@@ -34,13 +34,13 @@ describe('onMounted (A2)', () => {
         (x.element as HTMLElement | null)?.remove?.();
     });
 
-    it('supports the onmounted prop and fires immediately when already attached', async () => {
+    it('supports the onMounted prop and fires immediately when already attached', async () => {
         const host = document.createElement('div');
         document.body.appendChild(host);
         const parent = new Component(host);
         parent.build();
         let mounted = 0;
-        parent.controls.add(new Component('span', { onmounted: () => mounted++ }));
+        parent.controls.add(new Component('span', { onMounted: () => mounted++ }));
         await tick();
         expect(mounted).toBe(1);
         parent.dispose();
@@ -50,7 +50,7 @@ describe('onMounted (A2)', () => {
     it('disconnects the observer when a never-attached component is disposed', async () => {
         const disconnect = jest.spyOn(MutationObserver.prototype, 'disconnect');
         try {
-            const x = new Component('div', { onmounted: () => { } });
+            const x = new Component('div', { onMounted: () => { } });
             x.build();
             expect(disconnect).not.toHaveBeenCalled();
             await x.dispose();

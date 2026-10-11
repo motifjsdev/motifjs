@@ -104,6 +104,18 @@ function lifecycleHookOf(name: string): string | null {
     return hook !== null && LIFECYCLE_HOOKS.has(hook) ? hook : null;
 }
 
+const HOOK_KEYS: Record<string, string> = {
+    built: 'onBuilt', building: 'onBuilding', mounted: 'onMounted', config: 'onConfig', configured: 'onConfigured',
+    initializing: 'onInitializing', initialized: 'onInitialized', disposing: 'onDisposing', disposed: 'onDisposed',
+    visibilitychanged: 'onVisibilityChanged', activated: 'onActivated', deactivated: 'onDeactivated',
+};
+function hookKey(name: string): string {
+    const hook = lifecycleHookOf(name);
+    if (hook !== null) return HOOK_KEYS[hook];
+    if (name.toLowerCase() === 'oninitializecomponent') return 'oninitializeComponent';
+    return name;
+}
+
 /** `.some/.every/.find/...` gibi KISA DEVRE yapan dizi yüklemleri (MJX004). */
 const SHORT_CIRCUIT_ARRAY_METHODS = new Set(['some', 'every', 'find', 'findindex', 'findlast', 'findlastindex']);
 
@@ -405,13 +417,13 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                     if (value != null) {
                         var ce = makeComponentTraps(prop, name, value, path);
                         if (ce !== null) {
+                            ce.key = id(hookKey(name));
                             componentEvents.push(ce)
                             explainProp(prop, 'component-event', 'lifecycle', ce, 'n/a', DEPS.none, 'lifecycle hook; called once during component setup/build/dispose');
                         }
                     }
                 } else if (!plainTag && mergedHook !== null && value != null && t.isExpression(value)) {
-                    const key = name.toLowerCase().startsWith('on') ? name : 'on' + mergedHook;
-                    const lifecycleProp = t.objectProperty(t.isValidIdentifier(key) ? id(key) : t.stringLiteral(key), value);
+                    const lifecycleProp = t.objectProperty(id(HOOK_KEYS[mergedHook]), value);
                     componentEvents.push(lifecycleProp);
                     explainProp(prop, 'component-event', 'lifecycle', lifecycleProp, 'n/a', DEPS.none, 'lifecycle hook; on a component tag it is applied via runover to the tag\'s component (the returned root for a function component)');
                 } else if (isContextHandler(name.toLowerCase()) && value != null) {
@@ -533,7 +545,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                                 );
                             }
                             if (t.isExpression(value)) {
-                                objectExpression.push(t.objectProperty(id("on" + clearedName), value))
+                                objectExpression.push(t.objectProperty(id(hookKey("on" + clearedName)), value))
                             } else {
                                 objectProps.push(value)
                             }
@@ -625,7 +637,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                             if (name.includes("-") || name.includes(":")) {
                                 objectExpression.push(t.objectProperty(t.stringLiteral(name), value))
                             } else {
-                                objectExpression.push(t.objectProperty(id(name), value))
+                                objectExpression.push(t.objectProperty(id(hookKey(name)), value))
                             }
                             {
                                 const c = classifyPropValue(prop, value);
@@ -657,7 +669,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
 
     mergedHooks.forEach((entries, hook) => {
         if (entries.length === 0) return;
-        const merged = t.objectProperty(id('on' + hook), t.arrayExpression(entries.map(e => e.value)));
+        const merged = t.objectProperty(id(HOOK_KEYS[hook]), t.arrayExpression(entries.map(e => e.value)));
         componentEvents.push(merged);
         entries.forEach(e => explainProp(e.prop, 'component-event', 'lifecycle', merged, 'n/a', DEPS.none,
             'all spellings of the same hook on this tag are merged into one list; each is called once, in source order'));

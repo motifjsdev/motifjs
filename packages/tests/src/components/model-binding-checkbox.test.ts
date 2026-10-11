@@ -5,7 +5,7 @@
  * üzerinden değil.
  *
  * Hata: hedef DOM özelliği (`checked` mi `value` mı) bağ kurulurken bir kez seçiliyordu.
- * Derleyici `type` attribute'unu `initializeComponent` içinde uygular, `onconfig` (model bağının kurulduğu
+ * Derleyici `type` attribute'unu `initializeComponent` içinde uygular, `onConfig` (model bağının kurulduğu
  * yer) ise `initializeComponent`'tan ÖNCE çalışır; o anda `input.type` hâlâ 'text' görünür. Sonuç:
  * `el.value = true` → DOM "true" dizgesine çevirir, geri yazma da modele boolean yerine
  * "true"/"false" dizgesi koyar.
@@ -14,10 +14,10 @@ import { Component, ComponentBase, reactive } from '@motifx/core';
 
 const tick = () => new Promise<void>(r => setTimeout(r, 0));
 
-/** Derleyici çıktısını taklit eder: `type` `initializeComponent` içinde, model bağı `onconfig` içinde. */
+/** Derleyici çıktısını taklit eder: `type` `initializeComponent` içinde, model bağı `onConfig` içinde. */
 function makeInput(type: string, bind: (s: ComponentBase) => void) {
     return new Component('input', {
-        onconfig: (s: ComponentBase) => bind(s),
+        onConfig: (s: ComponentBase) => bind(s),
         initializeComponent: (s: ComponentBase) => { s.attr.add({ type }); }
     } as any);
 }

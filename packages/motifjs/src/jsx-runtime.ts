@@ -1,4 +1,4 @@
-﻿import type { ComponentBase, ElementType, EventArgs, IBaseProp } from "./";
+﻿import type { ComponentBase, ElementType, EventArgs, IBaseProp, VisibilityChangedEventArgs } from "./";
 
 type motifPrimitive = string | number | boolean | Node | Text | Element | null | undefined;
 
@@ -52,14 +52,19 @@ type MethodLikeProps = {
     showPopover?: any;
     hidePopover?: any;
     togglePopover?: any;
-    "onconfig"?: (sender: ComponentBase, e: EventArgs) => void;
-    "onbuilding"?: (sender: ComponentBase, e: EventArgs) => void;
-    "onbuilt"?: (sender: ComponentBase, e: EventArgs) => void;
+    onConfig?: (sender: ComponentBase, e: EventArgs) => void;
+    onBuilding?: (sender: ComponentBase, e: EventArgs) => void;
+    onBuilt?: (sender: ComponentBase, e: EventArgs) => void;
     /** Element canlı DOM'a (document) bağlandığında bir kez; focus/ölçüm gibi işler için. */
-    "onmounted"?: (sender: ComponentBase, e: EventArgs) => void;
-    "onconfigured"?: (sender: ComponentBase, e: EventArgs) => void;
-    "oninitializing"?: (sender: ComponentBase, e: EventArgs) => void;
-    "oninitialized"?: (sender: ComponentBase, e: EventArgs) => void;
+    onMounted?: (sender: ComponentBase, e: EventArgs) => void;
+    onConfigured?: (sender: ComponentBase, e: EventArgs) => void;
+    onInitializing?: (sender: ComponentBase, e: EventArgs) => void;
+    onInitialized?: (sender: ComponentBase, e: EventArgs) => void;
+    onDisposing?: (sender: ComponentBase, e: EventArgs) => void;
+    onDisposed?: (sender: ComponentBase, e: EventArgs) => void;
+    onVisibilityChanged?: (sender: ComponentBase, e: VisibilityChangedEventArgs) => void;
+    onActivated?: (sender: ComponentBase, e: EventArgs) => void;
+    onDeactivated?: (sender: ComponentBase, e: EventArgs) => void;
 };
 type MethodLikeKeys = keyof MethodLikeProps;
 
@@ -137,14 +142,19 @@ export type __attr = {
     "x-configured"?: (sender: ComponentBase, e: EventArgs) => void;
     "x-initializing"?: (sender: ComponentBase, e: EventArgs) => void;
     "x-initialized"?: (sender: ComponentBase, e: EventArgs) => void;
-    "onbuilding"?: (sender: ComponentBase, e: EventArgs) => void;
-    "onbuilt"?: (sender: ComponentBase, e: EventArgs) => void;
+    onBuilding?: (sender: ComponentBase, e: EventArgs) => void;
+    onBuilt?: (sender: ComponentBase, e: EventArgs) => void;
     /** Element canlı DOM'a (document) bağlandığında bir kez;*/
-    "onmounted"?: (sender: ComponentBase, e: EventArgs) => void;
-    "onconfig"?: (sender: ComponentBase, e: EventArgs) => void;
-    "onconfigured"?: (sender: ComponentBase, e: EventArgs) => void;
-    "oninitializing"?: (sender: ComponentBase, e: EventArgs) => void;
-    "oninitialized"?: (sender: ComponentBase, e: EventArgs) => void;
+    onMounted?: (sender: ComponentBase, e: EventArgs) => void;
+    onConfig?: (sender: ComponentBase, e: EventArgs) => void;
+    onConfigured?: (sender: ComponentBase, e: EventArgs) => void;
+    onInitializing?: (sender: ComponentBase, e: EventArgs) => void;
+    onInitialized?: (sender: ComponentBase, e: EventArgs) => void;
+    onDisposing?: (sender: ComponentBase, e: EventArgs) => void;
+    onDisposed?: (sender: ComponentBase, e: EventArgs) => void;
+    onVisibilityChanged?: (sender: ComponentBase, e: VisibilityChangedEventArgs) => void;
+    onActivated?: (sender: ComponentBase, e: EventArgs) => void;
+    onDeactivated?: (sender: ComponentBase, e: EventArgs) => void;
     "x-style"?: MotifStyle;
 }
 export namespace JSX {

@@ -58,13 +58,13 @@ describe('framework props on function components (S4)', () => {
             title: 'x',
             runover: {
                 initializeComponent: (s: ComponentBase) => { order.push('initializeComponent'); s.class.add('outer'); },
-                onbuilt: () => { order.push('onbuilt'); }
+                onBuilt: () => { order.push('onBuilt'); }
             },
             childs: []
         }) as any);
         await tick();
 
-        expect(order).toEqual(['initializeComponent', 'onbuilt']);
+        expect(order).toEqual(['initializeComponent', 'onBuilt']);
         expect(host.element.querySelector('.badge')!.classList.contains('outer')).toBe(true);
     });
 

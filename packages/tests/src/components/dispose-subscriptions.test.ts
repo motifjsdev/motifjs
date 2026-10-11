@@ -2,24 +2,24 @@
  * @jest-environment jsdom
  *
  * Bertaraf sırasında olay abonelikleri ve disposing kancaları:
- *  - `ondisposing` işleyicisi dispose() ve disposeAsync() yollarında TAM BİR KEZ çalışır
+ *  - `onDisposing` işleyicisi dispose() ve disposeAsync() yollarında TAM BİR KEZ çalışır
  *    (disposeAsync eskiden işleyicileri callDisposing'den sonra elle bir kez daha koşuyordu).
  *  - `this.context.on(...)` / `onRouterChanged(...)` abonelikleri bileşen bertaraf edilince
  *    kendiliğinden kalkar; elle iptal edilen abonelik bertarafta sorun çıkarmaz.
  */
 import { Application, Component, Transporter } from '@motifx/core';
 
-describe('ondisposing tek sefer çalışır', () => {
+describe('onDisposing tek sefer çalışır', () => {
     test('dispose() yolunda', async () => {
         let n = 0;
-        const c = new Component('div', { ondisposing: () => { n++; } });
+        const c = new Component('div', { onDisposing: () => { n++; } });
         await c.dispose();
         expect(n).toBe(1);
     });
 
     test('disposeAsync() yolunda', async () => {
         let n = 0;
-        const c = new Component('div', { ondisposing: () => { n++; } });
+        const c = new Component('div', { onDisposing: () => { n++; } });
         await c.disposeAsync();
         expect(n).toBe(1);
     });
@@ -27,7 +27,7 @@ describe('ondisposing tek sefer çalışır', () => {
     test('ebeveyn bertaraf edilince çocuk (disposeAsync yolu)', async () => {
         let n = 0;
         const parent = new Component('div');
-        parent.controls.add(new Component('span', { ondisposing: () => { n++; } }));
+        parent.controls.add(new Component('span', { onDisposing: () => { n++; } }));
         await parent.dispose();
         expect(n).toBe(1);
     });

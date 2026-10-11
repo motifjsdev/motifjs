@@ -34,8 +34,8 @@ describe('x-wait semantics vs bindings.when', () => {
         let disposeCount = 0;
         const child = new Component('span', {
             'x-wait': () => st.hidden,
-            onbuilt: () => { buildCount++; },
-            ondisposed: () => { disposeCount++; },
+            onBuilt: () => { buildCount++; },
+            onDisposed: () => { disposeCount++; },
         } as any);
         (child.element as unknown as HTMLElement).id = 'target';
         host.controls.add(child);
@@ -75,7 +75,7 @@ describe('x-wait semantics vs bindings.when', () => {
         let disposed = 0;
         host.bindings.when(() => st.show, () => {
             created++;
-            const c = new Component('span', { ondisposed: () => { disposed++; } } as any);
+            const c = new Component('span', { onDisposed: () => { disposed++; } } as any);
             (c.element as unknown as HTMLElement).id = 'w';
             return c as any;
         });
@@ -115,7 +115,7 @@ describe('x-wait semantics vs bindings.when', () => {
         const host = mount();
 
         let childBuilt = 0;
-        const inner = new Component('b', { onbuilt: () => { childBuilt++; } } as any);
+        const inner = new Component('b', { onBuilt: () => { childBuilt++; } } as any);
         (inner.element as unknown as HTMLElement).id = 'inner';
         const outer = new Component('div', { 'x-wait': () => st.hidden } as any);
         outer.controls.add(inner);

@@ -6,7 +6,7 @@ const originalUpper = String.prototype.toLocaleUpperCase;
 
 function makeInput(type: string, bind: (s: ComponentBase) => void) {
     return new Component('input', {
-        onconfig: (s: ComponentBase) => bind(s),
+        onConfig: (s: ComponentBase) => bind(s),
         initializeComponent: (s: ComponentBase) => { s.attr.add({ type }); }
     } as any);
 }

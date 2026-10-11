@@ -159,7 +159,7 @@ export class Hooks extends Component<HTMLDivElement> {
     built = 0;
     view() {
         return <>
-            <em ref={this.x} x-wait={() => this.s.on} onmounted={() => { this.mounted++; }} transition={{ name: 'fx' }} options={{ hideStrategy: 'detach', disableDisposal: true }} />
+            <em ref={this.x} x-wait={() => this.s.on} onMounted={() => { this.mounted++; }} transition={{ name: 'fx' }} options={{ hideStrategy: 'detach', disableDisposal: true }} />
             <Card x-display={() => this.s.on} ref={this.y} onBuilt={() => { this.built++; }}>kid</Card>
         </>;
     }
@@ -168,7 +168,7 @@ export class Dot extends Component<SVGCircleElement> { }
 export function Card(props: any) { return <article>{props.childs}</article>; }
 `;
 
-const FRAMEWORK_KEYS = ['elementNamespace', 'onmounted', 'options', 'preconfig', 'ref', 'transition'];
+const FRAMEWORK_KEYS = ['elementNamespace', 'onMounted', 'options', 'preconfig', 'ref', 'transition'];
 
 describe('compiler contract: framework props', () => {
     const hooks = compile(HOOKS, 'Hooks.tsx');

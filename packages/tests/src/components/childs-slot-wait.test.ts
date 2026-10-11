@@ -22,7 +22,7 @@ const source = `
 import { Component, reactive } from '@motifx/core';
 const log = [];
 const gate = reactive({ wait: true });
-function Child() { return <span class="kid" onbuilt={() => log.push('built')} ondisposed={() => log.push('disposed')}>c</span>; }
+function Child() { return <span class="kid" onBuilt={() => log.push('built')} onDisposed={() => log.push('disposed')}>c</span>; }
 
 class Tagged extends Component<HTMLDivElement> {
   view() { return <div class="inner" x-wait={() => gate.wait}>{this.childs}</div>; }

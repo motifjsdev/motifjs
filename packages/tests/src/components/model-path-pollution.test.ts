@@ -7,7 +7,7 @@ const tick = () => new Promise<void>(r => setTimeout(r, 0));
 
 function textInput(bind: (s: ComponentBase) => void) {
     return new Component('input', {
-        onconfig: (s: ComponentBase) => bind(s),
+        onConfig: (s: ComponentBase) => bind(s),
         initializeComponent: (s: ComponentBase) => { s.attr.add({ type: 'text' }); }
     } as any);
 }
