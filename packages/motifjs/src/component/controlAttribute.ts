@@ -3,6 +3,8 @@ import { ComponentBase } from "../";
 import { effect } from "../store/reactivity-core";
 import { Binding, IBaseBinding } from "../bindings";
 import { isComponentLike } from "./componentBase";
+import { BindingCollection } from "../bindings/BindingCollection";
+import { callMethod1 } from "../common/lazyBind";
 
 export type ElementTypes = Node | Element | HTMLElement | Text | DocumentFragment | Comment | HTMLDivElement;
 
@@ -51,7 +53,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
         const stopper = this._watchers.get(key);
         if (stopper) {
             try { stopper.stop(); } catch { }
-            try { stopper.binding && this._parent.bindings.remove(stopper.binding); } catch { }
+            try { stopper.binding && callMethod1(this._parent.bindings, BindingCollection.prototype, 'remove', stopper.binding); } catch { }
             this._watchers.delete(key);
         }
         this._attrMap.delete(key);
@@ -85,7 +87,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
             const stopper = this._watchers.get(key);
             if (stopper) {
                 try { stopper.stop(); } catch { }
-                try { stopper.binding && this._parent.bindings.remove(stopper.binding); } catch { }
+                try { stopper.binding && callMethod1(this._parent.bindings, BindingCollection.prototype, 'remove', stopper.binding); } catch { }
                 this._watchers.delete(key);
             }
             const run = () => effect(() => {
@@ -105,7 +107,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                     current = run();
                 }
             } as any;
-            try { this._parent.bindings.add(binding); } catch { }
+            try { callMethod1(this._parent.bindings, BindingCollection.prototype, 'add', binding); } catch { }
             this._watchers.set(key, { stop, binding });
         } else {
             this._applyValue(key, values);
