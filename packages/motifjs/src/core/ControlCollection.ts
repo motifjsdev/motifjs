@@ -4,6 +4,7 @@ import { TRANSITION_SLOT } from "../component/optionsSlots";
 import { dom } from "../";
 import { Component, ComponentBase, resolveComponent, notifyDeactivated } from "../";
 import { reportError } from "../common/diagnostics";
+import { pushTight } from "../common/pushTight";
 import { checkReservedMembers, domAnchor } from "../component/componentBase";
 
 export class ControlCollection {
@@ -47,7 +48,7 @@ export class ControlCollection {
         if (index != undefined && index >= 0) {
             this.items.splice(index, 0, control);
         } else {
-            this.items.push(control);
+            pushTight(this.items, control);
         }
         control.parent = this.owner;
 

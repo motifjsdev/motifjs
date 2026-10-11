@@ -6,6 +6,7 @@ import { effect, untracked } from "../";
 import { Binding, BindingFormatInfo, IBaseBinding, IBindingCollection, ListBinding, ListBindingOptions, readModelValue } from "./";
 import { reportError } from "../common/diagnostics";
 import { lazyBindMethods } from "../common/lazyBind";
+import { pushTight } from "../common/pushTight";
 
 function resolveValue(value: any): any {
     return typeof value === 'function' ? resolveValue(value()) : value;
@@ -89,7 +90,7 @@ export class BindingCollection implements IBindingCollection {
             binding = new Binding(this._component, propertyName, dataSource, dataMember, formatString, formatInfo);
         }
 
-        this._items.push(binding);
+        pushTight(this._items, binding);
 
         if (this._component.isBuilt) {
             (binding as Binding).activate();
@@ -99,7 +100,7 @@ export class BindingCollection implements IBindingCollection {
 
     wait(predicate: () => any): IBaseBinding {
         const binding = new Binding(this._component, 'isWait', predicate);
-        this._items.push(binding);
+        pushTight(this._items, binding);
         if (this._component.isBuilt) {
             (binding as Binding).activate();
         }
@@ -108,7 +109,7 @@ export class BindingCollection implements IBindingCollection {
 
     display(predicate: () => any): IBaseBinding {
         const binding = new Binding(this._component, 'isWait', () => !resolveValue(predicate()));
-        this._items.push(binding);
+        pushTight(this._items, binding);
         if (this._component.isBuilt) {
             (binding as Binding).activate();
         }
@@ -117,7 +118,7 @@ export class BindingCollection implements IBindingCollection {
 
     html(predicate: () => any): IBaseBinding {
         const binding = new Binding(this._component, 'innerHTML', predicate);
-        this._items.push(binding);
+        pushTight(this._items, binding);
         if (this._component.isBuilt) {
             binding.activate();
         }
@@ -127,7 +128,7 @@ export class BindingCollection implements IBindingCollection {
     list(itemsFn: () => any[] | Iterable<any>, renderFn: (item: any, index: number) => ComponentBase, options: ListBindingOptions): IBaseBinding;
     list(itemsFn: () => any[] | Iterable<any>, renderFn: (item: any, index: number) => ComponentBase, options?: ListBindingOptions): IBaseBinding {
         const binding = new ListBinding(this._component, itemsFn, renderFn, options);
-        this._items.push(binding);
+        pushTight(this._items, binding);
         if (this._component.isBuilt) {
             binding.activate();
         }
@@ -138,7 +139,7 @@ export class BindingCollection implements IBindingCollection {
     loop(itemsFn: () => any[] | Iterable<any>, renderFn: (item: any, index: number) => ComponentBase, options: ListBindingOptions): IBaseBinding;
     loop(itemsFn: () => any[] | Iterable<any>, renderFn: (item: any, index: number) => ComponentBase, options?: ListBindingOptions): IBaseBinding {
         const binding = new ListBinding(this._component, itemsFn, renderFn, options);
-        this._items.push(binding);
+        pushTight(this._items, binding);
         if (this._component.isBuilt) {
             binding.activate();
         }
@@ -356,7 +357,7 @@ export class BindingCollection implements IBindingCollection {
             this._component.motif.on('change' as any, writeBack as any);
         }
 
-        this._items.push(binding);
+        pushTight(this._items, binding);
         if (this._component.isBuilt) {
             (binding as Binding).activate();
         }

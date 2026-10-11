@@ -2,6 +2,7 @@
 import { LeakMonitor } from "../common";
 import { reportError, reportWarning } from "../common/diagnostics";
 import { getRaw, followTracking } from "./common";
+import { pushTight } from "../common/pushTight";
 
 export type EffectFn = () => void;
 
@@ -59,7 +60,7 @@ export function track(target: object, key: string | symbol) {
     if (!dep) deps.set(key, (dep = new Set()));
     if (!dep.has(effect)) {
         dep.add(effect);
-        effect.deps.push([rawTarget, key]);
+        pushTight(effect.deps, [rawTarget, key]);
         if (leakEnabled && leakMonitor && leakThreshold > 0) {
             try {
                 const cleanup = leakMonitor.check(dep.size);
