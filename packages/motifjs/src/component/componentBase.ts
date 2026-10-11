@@ -418,6 +418,14 @@ export function checkReservedMembers(c: ComponentBase): void {
         }
 }
 
+function releaseInitializers(c: any): void {
+        c._init = undefined;
+        const base = c._baseCtx;
+        if (base === undefined) return;
+        if (base._initializeComponentHandlers !== undefined) base._initializeComponentHandlers = undefined;
+        if (base._onInitializeComponentHandlers !== undefined) base._onInitializeComponentHandlers = undefined;
+}
+
 const ComponentHelper = {
         callInitializeComponent(component: ComponentBase | any) {
                 const sender = component;
@@ -439,6 +447,7 @@ const ComponentHelper = {
                 }
                 // 4) aggregated extra oninitializeComponent handlers (örn, from props)
                 runHooks(component._baseCtx, '_onInitializeComponentHandlers', sender, ev, 'oninitializeComponent');
+                releaseInitializers(component);
         },
         callDisposing(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
