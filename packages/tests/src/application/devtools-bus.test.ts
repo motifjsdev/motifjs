@@ -40,21 +40,21 @@ describe('devtools events', () => {
         const c = new Component('section');
         app!.getAppShell().controls.add(c);
         await tick();
-        const id = (c as any).id;
+        const index = app!.getAppShell().controls.items.indexOf(c);
         await c.dispose();
-        return id;
+        return index;
     }
 
-    test('a component publishes mounted and disposed with its type', async () => {
+    test('a component publishes disposed with its path, type and tag, and no mounted', async () => {
         app = Application.CreateBuilder().build();
         app.useDevelopment(true);
         listen();
         app.run(host, new Component('div'));
         await tick();
         events.length = 0;
-        const id = await mountAndDispose();
-        expect(events).toContainEqual({ type: 'component:mounted', payload: { id, type: 'Component' } });
-        expect(events).toContainEqual({ type: 'component:disposed', payload: { id, type: 'Component' } });
+        const index = await mountAndDispose();
+        expect(types()).not.toContain('component:mounted');
+        expect(events).toContainEqual({ type: 'component:disposed', payload: expect.objectContaining({ path: [index], type: 'Component', tag: 'section' }) });
     });
 
     test('a navigation publishes start and end', async () => {

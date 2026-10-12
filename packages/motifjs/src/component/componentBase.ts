@@ -17,7 +17,8 @@ import { deferUntilEntered, isTransitionMode, pendingLeaves, trackEnter, trackLe
 import { lazyBindMethods } from "../common/lazyBind";
 import { trackedCleanup } from "../disposable/Cleanup";
 import type { MotifDomEventProps } from "../jsx-runtime";
-import { devtools, isDevLike } from "../devtools/devbus";
+import { isDevLike } from "../devtools/devbus";
+import { buildStarted, buildFinished, componentEvent, disposeStarted, disposeFinished } from "../devtools/tree";
 
 /** DI token'ını okunur biçime çevirir (dev uyarıları için). */
 function describeServiceToken(t: any): string {
@@ -452,6 +453,7 @@ const ComponentHelper = {
         },
         callDisposing(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
+                /* @DEV-ONLY */ disposeStarted(component);
                 if (!hasLifecycleHook(component, 'onDisposing', '_onDisposingHandlers', 'ondisposing')) { return; }
                 const sender = component, ev = { cancel: false } as EventArgs;
                 if (component.onDisposing) {
@@ -506,7 +508,7 @@ const ComponentHelper = {
                         runHooks(component._baseCtx, '_onDisposedHandlers', sender, ev, 'onDisposed');
                         fireLifecycle(component, 'ondisposed', ev);
                 }
-                try { devtools()?.('component:disposed', { id: (component as any).id, type: component.constructor?.name }); } catch { }
+                /* @DEV-ONLY */ disposeFinished(component);
         },
         callBuilt(component: ComponentBase | any) {
                 if (!component || component.isDisposed) { return; }
@@ -516,7 +518,6 @@ const ComponentHelper = {
                         runHooks(component._baseCtx, '_onBuiltHandlers', sender, ev, 'onBuilt');
                         fireLifecycle(component, 'onbuilt', ev);
                 }
-                try { devtools()?.('component:mounted', { id: (component as any).id, type: component.constructor?.name }); } catch { }
         },
         scheduleMounted(component: ComponentBase | any) {
                 if (!component || component.isDisposed || component._baseCtx?._mountedScheduled) { return; }
@@ -599,6 +600,7 @@ const ComponentHelper = {
         },
         callVisibilityChanged(component: ComponentBase | any, visible: boolean) {
                 if (!component || component.isDisposed) { return; }
+                /* @DEV-ONLY */ componentEvent('component:visibility', component, { visible });
                 if (!hasLifecycleHook(component, 'onVisibilityChanged', '_onVisibilityChangedHandlers', 'onvisibilitychanged')) { return; }
                 const sender = component, ev: VisibilityChangedEventArgs = { cancel: false, visible };
                 if (component.onVisibilityChanged) { callReported(() => component.onVisibilityChanged(sender, ev), 'MJX122', 'onVisibilityChanged'); }
@@ -1555,7 +1557,8 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 } catch { return false; }
         }
         public set isWait(value: boolean) {
-                this._flags = value ? this._flags | F_WAIT : this._flags & ~F_WAIT;
+                /* @DEV-ONLY */ if (((this._flags & F_WAIT) !== 0) !== value) componentEvent('component:wait', this, { waiting: value });
+                this._flags =value ? this._flags | F_WAIT : this._flags & ~F_WAIT;
                 if (this.isBuilt) {
                         if (value) {
                                 this.motif.hide();
@@ -1686,6 +1689,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         return;
                 }
                 this._flags |= F_BUILDING;
+                /* @DEV-ONLY */ const devBuildAt = buildStarted();
                 try {
                         ComponentHelper.callBuilding(this);
                         if (this.isDisposed) { return; }
@@ -1805,6 +1809,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         this.isBuilt = true;
                         ComponentHelper.callBuilt(this);
                         ComponentHelper.scheduleMounted(this);
+                        /* @DEV-ONLY */ buildFinished(this, devBuildAt);
                 } finally {
                         this._flags &= ~F_BUILDING;
                 }
