@@ -31,14 +31,17 @@ export abstract class Disposable implements IDisposable {
     }
 
     public dispose(): void {
-        disposableCore.notifyDisposed(this);
         const owned = this._store;
+        if (owned === null) {
+            reportWarning('MJX501', [], { disposable: this });
+            return;
+        }
+        if (owned !== undefined && owned.isDisposed) return;
+        disposableCore.notifyDisposed(this);
         if (owned === undefined) {
             this._store = sharedClosedStore();
-        } else if (owned && typeof owned.dispose === 'function') {
-            owned.dispose();
         } else {
-            reportWarning('MJX501', [], { disposable: this });
+            owned.dispose();
         }
     }
 
