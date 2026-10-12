@@ -1,11 +1,13 @@
 export type DevEvent = { type: string; payload?: any };
-export type DevWarning = { code: string; message: string; details?: any };
+export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
+export type DevStore = { name: string; value: any; type: string };
 
 const state = {
     enabled: false as boolean,
     listeners: new Set<(ev: DevEvent) => void>(),
-    warnings: [] as DevWarning[],
+    warnings: new Map<string, DevWarning>(),
     routes: null as any,
+    stores: [] as DevStore[],
     exposed: null as object | null,
 };
 
@@ -19,7 +21,7 @@ export function setDevtoolsEnabled(enabled: boolean) {
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 1, on, getWarnings, getRoutes, isEnabled };
+            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
         } else {
             if (state.exposed !== null && g.__MOTIF_DEVTOOLS__ === state.exposed) delete g.__MOTIF_DEVTOOLS__;
@@ -48,13 +50,31 @@ function emit(type: string, payload?: any) {
 
 export function warn(code: string, message: string, details?: any) {
     if (!isDevLike()) return;
-    const w: DevWarning = { code, message, details };
-    state.warnings.push(w);
+    const key = code + '\u0000' + message;
+    const now = Date.now();
+    let w = state.warnings.get(key);
+    if (w === undefined) {
+        w = { code, message, details, count: 1, firstAt: now, lastAt: now };
+    } else {
+        state.warnings.delete(key);
+        w.count++;
+        w.lastAt = now;
+    }
+    state.warnings.set(key, w);
+    if (state.warnings.size > 200) state.warnings.delete(state.warnings.keys().next().value!);
     try { if (typeof console !== 'undefined') details === undefined ? console.warn(`[motifjs] ${code}: ${message}`) : console.warn(`[motifjs] ${code}: ${message}`, details); } catch { }
-    devtools()?.('warning', w);
+    devtools()?.('warning', { code, message, details });
 }
 
-export function getWarnings(): DevWarning[] { return state.warnings.slice(); }
+export function getWarnings(): DevWarning[] { return Array.from(state.warnings.values(), w => ({ ...w })); }
 
 export function setRoutes(routes: any) { state.routes = routes; }
 export function getRoutes(): any { return state.routes; }
+
+export function registerStore(name: string, value: any, type: string): void {
+    if (!state.enabled) return;
+    state.stores.push({ name, value, type });
+    if (state.stores.length > 200) state.stores.shift();
+}
+export function getStores(): DevStore[] { return state.stores.slice(); }
+export function storeCount(): number { return state.stores.length; }

@@ -6,6 +6,7 @@ import { Component, ComponentBase, resolveComponent, notifyDeactivated } from ".
 import { reportError } from "../common/diagnostics";
 import { pushTight } from "../common/pushTight";
 import { checkReservedMembers, domAnchor, setLeaveContainer } from "../component/componentBase";
+import { treeChanged } from "../devtools/tree";
 
 export class ControlCollection {
     constructor(private owner: ComponentBase) {
@@ -51,6 +52,7 @@ export class ControlCollection {
             pushTight(this.items, control);
         }
         control.parent = this.owner;
+        /* @DEV-ONLY */ treeChanged(this.owner);
 
         const pendingLeave = (control as any).__pendingLeave as PendingLeave | undefined;
         if (pendingLeave) {
@@ -77,6 +79,7 @@ export class ControlCollection {
         var index = this.items.indexOf(control);
         if (index > -1) {
             takeAt(this.items, index);
+            /* @DEV-ONLY */ treeChanged(this.owner);
             try { control.dispose(); } catch { /* ignore */ }
         }
     }
@@ -84,6 +87,7 @@ export class ControlCollection {
         const index = this.items.indexOf(control);
         if (index === -1) return Promise.resolve();
         takeAt(this.items, index);
+        /* @DEV-ONLY */ treeChanged(this.owner);
         if (control.isDisposed) return Promise.resolve();
         setLeaveContainer(control, this.owner);
         control.parent = null;
@@ -95,6 +99,7 @@ export class ControlCollection {
         const index = this.items.indexOf(control);
         if (index === -1) return;
         takeAt(this.items, index);
+        /* @DEV-ONLY */ treeChanged(this.owner);
         if (control.isDisposed) return;
         control.parent = null;
         try {
@@ -109,18 +114,21 @@ export class ControlCollection {
         const index = this.items.indexOf(control);
         if (index === -1) return;
         takeAt(this.items, index);
+        /* @DEV-ONLY */ treeChanged(this.owner);
         setLeaveContainer(control, this.owner);
         control.parent = null;
     }
 
     async clearAsync(): Promise<void> {
-        const items = this.items.splice(0, this.items.length);   
+        const items = this.items.splice(0, this.items.length);
+        /* @DEV-ONLY */ treeChanged(this.owner);
         await Promise.all(items.map(c => c.dispose()));          
     }
 
 
     clear() {
         var items = this.items.splice(0, this.items.length);
+        /* @DEV-ONLY */ treeChanged(this.owner);
         items.forEach(c => {
             try { c.dispose(); } catch { /* ignore */ }
         });
@@ -161,6 +169,7 @@ export class ControlCollection {
             const insertAt = newBeforeIndex >= 0 ? newBeforeIndex : this.items.length;
             this.items.splice(insertAt, 0, control);
         }
+        /* @DEV-ONLY */ treeChanged(this.owner);
 
         const container = findAppendableElement(this.owner);
         if (!container || !domAnchor(control, container)) return;
@@ -183,6 +192,7 @@ export class ControlCollection {
         }
         const items = this.items;
         for (let i = 0; i < order.length; i++) items[i] = order[i];
+        /* @DEV-ONLY */ treeChanged(this.owner);
     }
 
     moveToIndex(control: ComponentBase, index: number): void {

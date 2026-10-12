@@ -1,5 +1,6 @@
 import { ComponentBase } from "./componentBase";
 import { motifError } from "../common/diagnostics";
+import { treeChanged } from "../devtools/tree";
 
 export interface TransportOptions {
     index?: number;
@@ -20,6 +21,7 @@ export class Transporter {
         if (typeof options.index === "number") {
             if (!newParent.controls.items.includes(child)) {
                 newParent.controls.items.splice(options.index, 0, child);
+                /* @DEV-ONLY */ treeChanged(newParent);
             }
         } else {
             if (!newParent.controls.items.includes(child)) {
