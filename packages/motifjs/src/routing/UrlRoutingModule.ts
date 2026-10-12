@@ -8,7 +8,7 @@ import { RouteCollection, compareRouteRecords } from "./";
 import { RouteItem, RouteRecord, RouterValidateEventArgs } from "./";
 import { RoutingEngine } from "./";
 import { errorHandler } from "../common/ErrorHandler";
-import { devtoolsBus } from "../devtools/devbus";
+import { devtools } from "../devtools/devbus";
 import { motifError, reportError, reportWarning } from "../common/diagnostics";
 
 const pathOf = (uri: string): string => uri.split('#')[0].split('?')[0];
@@ -225,7 +225,7 @@ export class UrlRoutingModule {
 
         return await safeCallSilentAsync(async () => {
 
-            try { devtoolsBus()?.publish?.('route:navigation-start', { uri }); } catch { }
+            try { devtools()?.('route:navigation-start', { uri }); } catch { }
             const suppressBeforeEachThisCall = this._suppressBeforeEachOnce;
             if (suppressBeforeEachThisCall) {
                 this._suppressBeforeEachOnce = false;
@@ -411,7 +411,7 @@ export class UrlRoutingModule {
                 direction,
                 state: entryState
             });
-            try { devtoolsBus()?.publish?.('route:navigation-end', { uri: appliedPath, params: target.params }); } catch { }
+            try { devtools()?.('route:navigation-end', { uri: appliedPath, params: target.params }); } catch { }
 
             return target;
 

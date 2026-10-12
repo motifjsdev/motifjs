@@ -93,7 +93,6 @@ export const motifMessages = {
     MJX608: () => `Method not implemented.`,
     MJX609: () => `OperationRunner: the operation threw.`,
     MJX610: () => `Matching the request path failed.`,
-    MJX611: () => `The devtools panel failed to load.`,
 } satisfies Record<string, (...args: any[]) => string>;
 
 export type MotifErrorCode = keyof typeof motifMessages;

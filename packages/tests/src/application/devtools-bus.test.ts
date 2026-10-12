@@ -5,28 +5,32 @@ import { Application, Component, errorHandler } from '@motifx/core';
 
 const tick = (ms = 0) => new Promise(r => setTimeout(r, ms));
 
-describe('devtools bus', () => {
+describe('devtools events', () => {
     let events: { type: string; payload: any }[];
     let host: HTMLElement;
     let app: Application | undefined;
+    let off: (() => void) | undefined;
+
+    const listen = () => {
+        off = (globalThis as any).__MOTIF_DEVTOOLS__.on((ev: { type: string; payload: any }) => { events.push(ev); });
+    };
 
     beforeEach(() => {
         events = [];
-        (globalThis as any).__MOTIF_DEVTOOLS_BUS__ = { publish: (type: string, payload: any) => { events.push({ type, payload }); } };
         window.history.replaceState({}, '', '/');
         host = document.createElement('div');
         document.body.appendChild(host);
     });
 
     afterEach(() => {
+        off?.();
+        off = undefined;
         try { app?.dispose(); } catch { }
         app = undefined;
         host.remove();
-        delete (globalThis as any).__MOTIF_DEVTOOLS_BUS__;
-        delete (globalThis as any).__MOTIF_DEVTOOLS__;
-        const off = Application.CreateBuilder().build();
-        off.useDevelopment(false);
-        off.dispose();
+        const closer = Application.CreateBuilder().build();
+        closer.useDevelopment(false);
+        closer.dispose();
         delete (globalThis as any).__MOTIF_DEV__;
     });
 
@@ -41,9 +45,10 @@ describe('devtools bus', () => {
         return id;
     }
 
-    test('with useDevelopment(true) a component publishes mounted and disposed with its id and type', async () => {
+    test('a component publishes mounted and disposed with its type', async () => {
         app = Application.CreateBuilder().build();
         app.useDevelopment(true);
+        listen();
         app.run(host, new Component('div'));
         await tick();
         events.length = 0;
@@ -52,21 +57,10 @@ describe('devtools bus', () => {
         expect(events).toContainEqual({ type: 'component:disposed', payload: { id, type: 'Component' } });
     });
 
-    test('with the __MOTIF_DEVTOOLS__ global a component publishes mounted and disposed', async () => {
-        (globalThis as any).__MOTIF_DEVTOOLS__ = true;
-        app = Application.CreateBuilder().build();
-        app.useRouter({ routes: [{ path: '/', control: () => new Component('div') }] });
-        app.run(host);
-        await tick();
-        events.length = 0;
-        const id = await mountAndDispose();
-        expect(events).toContainEqual({ type: 'component:mounted', payload: { id, type: 'Component' } });
-        expect(events).toContainEqual({ type: 'component:disposed', payload: { id, type: 'Component' } });
-    });
-
-    test('with useDevelopment(true) a navigation publishes start and end', async () => {
+    test('a navigation publishes start and end', async () => {
         app = Application.CreateBuilder().build();
         app.useDevelopment(true);
+        listen();
         app.useRouter({ routes: [{ path: '/', control: () => new Component('div') }, { path: '/next', control: () => new Component('p') }] });
         app.run(host);
         await tick();
@@ -77,9 +71,10 @@ describe('devtools bus', () => {
         expect(types()).toContain('route:navigation-end');
     });
 
-    test('with useDevelopment(true) a reported error is published', () => {
+    test('a reported error is published', () => {
         app = Application.CreateBuilder().build();
         app.useDevelopment(true);
+        listen();
         const quiet = console.error;
         const rethrow = errorHandler.getUnexpectedErrorHandler();
         console.error = () => { };
@@ -94,8 +89,24 @@ describe('devtools bus', () => {
         expect(types().filter(t => t === 'error:caught').length).toBe(2);
     });
 
-    test('with devtools off nothing is published, even when the bus global exists', async () => {
+    test('a dev warning is published', () => {
         app = Application.CreateBuilder().build();
+        app.useDevelopment(true);
+        listen();
+        const quiet = console.warn;
+        console.warn = () => { };
+        try {
+            app.useRouter({ routes: [{ path: '/a' } as any, { path: '/a', control: () => new Component('div') }] });
+        } finally {
+            console.warn = quiet;
+        }
+        expect(types()).toContain('warning');
+    });
+
+    test('after useDevelopment(false) nothing is published to an earlier listener', async () => {
+        app = Application.CreateBuilder().build();
+        app.useDevelopment(true);
+        listen();
         app.useDevelopment(false);
         app.useRouter({ routes: [{ path: '/', control: () => new Component('div') }, { path: '/next', control: () => new Component('p') }] });
         app.run(host);

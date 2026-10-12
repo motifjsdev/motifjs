@@ -2,9 +2,8 @@ import { ServiceCollection } from "./dependencyInjection/ServiceCollection";
 import { ServiceProvider } from "./dependencyInjection/ServiceProvider";
 import { Component } from "./component/Component";
 import { RouteItem } from "./routing/RouteItem";
-import { ensureDevtoolsFlagInitialized, setRoutes, setDevtoolsEnabled, isEnabled as isDevtoolsEnabled } from "./devtools/devbus";
+import { setRoutes, setDevtoolsEnabled } from "./devtools/devbus";
 import { lintRoutes } from "./devtools/routeLinter";
-import { initOverlayIfEnabled, initDevtoolsButton } from "./devtools/overlay";
 import { RouterView } from "./routing/RouterView";
 import { UrlRoutingModule } from "./routing/UrlRoutingModule";
 import { RouterState, createRouter } from "./routing/routerState";
@@ -118,7 +117,6 @@ export class Application {
         safeCallSilent(() => {
             engine.startGc();
         }, 'Application.run.engine.startGc');
-        safeCallSilent(() => { ensureDevtoolsFlagInitialized(); }, 'Application.run.devtools');
         let target: HTMLElement | null;
         if (typeof host === 'string') {
             target = document.querySelector(host) as HTMLElement | null;
@@ -307,10 +305,8 @@ export class Application {
 
 
         safeCallSilent(() => {
-            ensureDevtoolsFlagInitialized();
-            initOverlayIfEnabled();
             setRoutes(routes as any);
-            if (this._isDevelopment || (globalThis as any).__MOTIF_DEV__ === true || isDevtoolsEnabled()) {
+            if (this._isDevelopment || (globalThis as any).__MOTIF_DEV__ === true) {
                 lintRoutes(routes as any);
             }
         }, 'Application.useRouter.devtools');

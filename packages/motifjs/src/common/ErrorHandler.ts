@@ -1,4 +1,4 @@
-import { devtoolsBus } from "../devtools/devbus";
+import { devtools } from "../devtools/devbus";
 
 function rethrowLater(error: any): void {
 	setTimeout(() => { throw error; }, 0);
@@ -32,12 +32,7 @@ export class ErrorHandler {
 			else console.error(error.message);
 		}
 
-		try {
-			const bus = devtoolsBus();
-			if (bus && typeof bus.publish === 'function') {
-				bus.publish('error:caught', { context: (error as any).code ?? error.name, error: this.serializeError(error) });
-			}
-		} catch { /* ignore */ }
+		try { devtools()?.('error:caught', { context: (error as any).code ?? error.name, error: this.serializeError(error) }); } catch { /* ignore */ }
 
 		this.emit(error);
 	}
@@ -47,12 +42,7 @@ export class ErrorHandler {
 			console.error(`[motifjs Error - ${context}]`, error);
 		}
 
-		try {
-			const bus = devtoolsBus();
-			if (bus && typeof bus.publish === 'function') {
-				bus.publish('error:caught', { context, error: this.serializeError(error) });
-			}
-		} catch { /* ignore */ }
+		try { devtools()?.('error:caught', { context, error: this.serializeError(error) }); } catch { /* ignore */ }
 	}
 
 
