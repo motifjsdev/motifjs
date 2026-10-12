@@ -104,6 +104,7 @@ export class Application {
     private _beforeEachGuards: NavigationGuard[] = [];
     public readonly _routerState = new RouterState();
     public readonly router: Router = createRouter(this._routerState, () => this.urlRoutingModule);
+    public _addressOf(uri: string): string { return this.urlRoutingModule?.addressOf(uri) ?? uri; }
     private events: Map<any, Set<any>> = new Map();
 
     public static CreateBuilder(): ApplicationBuilder {

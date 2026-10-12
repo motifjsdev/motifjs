@@ -97,6 +97,12 @@ export class UrlRoutingModule {
         return this._routerOptions.mode || (w?.location?.protocol === 'file:' ? 'hash' : 'history');
     }
 
+    public addressOf(uri: string): string {
+        const mode = this._addressMode();
+        if (mode === 'hash' || mode === 'file') return uri.startsWith('#') ? uri : '#' + uri;
+        return uri;
+    }
+
     private _readHistoryStamp(): HistoryStamp | null {
         try {
             const state = (window as any)?.history?.state;

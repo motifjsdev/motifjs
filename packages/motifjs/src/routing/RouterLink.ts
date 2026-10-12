@@ -20,7 +20,7 @@ export class RouterLink extends Component<any, RouterLinkOptions> {
     constructor(props: RouterLinkOptions) {
 
         super(props.el ?? 'a', props);
-        if (props.showHref !== false) this.attr.add({ href: props.to });
+        if (props.showHref !== false) this.attr.add({ href: Application.main?._addressOf(props.to) ?? props.to });
         if (props.target) this.attr.add({ target: props.target });
 
         this.motif.on('click', (s, e: MouseEvent) => {
