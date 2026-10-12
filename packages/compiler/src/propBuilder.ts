@@ -47,11 +47,52 @@ function extractStringValue(node: t.StringLiteral | t.TemplateLiteral): string {
 }
 
 
+function classKeyOf(p: t.ObjectProperty): t.Expression | null {
+    if (p.computed) return p.key as t.Expression;
+    if (t.isIdentifier(p.key)) return t.stringLiteral(p.key.name);
+    if (t.isStringLiteral(p.key)) return t.stringLiteral(p.key.value);
+    if (t.isNumericLiteral(p.key)) return t.stringLiteral(String(p.key.value));
+    return null;
+}
+
+function literalTruthOf(val: t.Node): boolean | undefined {
+    if (t.isBooleanLiteral(val)) return val.value;
+    if (t.isStringLiteral(val)) return val.value !== '';
+    if (t.isNumericLiteral(val)) return val.value !== 0 && !Number.isNaN(val.value);
+    if (t.isNullLiteral(val)) return false;
+    if (t.isIdentifier(val) && val.name === 'undefined') return false;
+    if (t.isTemplateLiteral(val) && val.expressions.length === 0) return val.quasis.some(q => (q.value.cooked ?? q.value.raw) !== '');
+    return undefined;
+}
+
+function splitClassObject(obj: t.ObjectExpression, staticNames: t.Expression[], live: t.Expression[]) {
+    const props: (t.ObjectProperty | t.ObjectMethod | t.SpreadElement)[] = [];
+    obj.properties.forEach(p => {
+        if (!t.isObjectProperty(p)) {
+            props.push(p);
+            return;
+        }
+        const key = classKeyOf(p);
+        if (key === null || !t.isExpression(p.value)) return;
+        const truth = literalTruthOf(p.value);
+        if (truth === false) return;
+        if (truth === true) {
+            if (t.isStringLiteral(key)) staticNames.push(key);
+            else props.push(t.objectProperty(key, t.booleanLiteral(true), true));
+            return;
+        }
+        const getter = t.isFunctionExpression(p.value) || t.isArrowFunctionExpression(p.value)
+            ? p.value
+            : t.arrowFunctionExpression([], p.value);
+        props.push(t.objectProperty(key, getter, p.computed));
+    });
+    if (props.length > 0) live.push(t.objectExpression(props));
+}
+
 export const mergeHtmlAttributes = (htmlAttrlist: t.ObjectProperty[]): t.ExpressionStatement[] => {
     const htmlProps: t.ExpressionStatement[] = [];
     if (htmlAttrlist.length > 0) {
         var totalAttr: t.ObjectProperty[] = [];
-        var totalClass: t.ObjectProperty[] = [];
         var totalBindClass: t.Expression[] = [];
         var totalStringClass: t.Expression[] = [];
         htmlAttrlist.forEach(attr => {
@@ -62,37 +103,7 @@ export const mergeHtmlAttributes = (htmlAttrlist: t.ObjectProperty[]): t.Express
 
                 if (keyValue === "class" || keyValue === "classname") {
                     if (t.isObjectExpression(attr.value)) {
-                        const objectProperties: t.ObjectProperty[] = [];
-
-                        attr.value.properties.forEach(p => {
-                            if (t.isObjectProperty(p)) {
-                                const val = p.value;
-
-                                if (t.isStringLiteral(val)) {
-                                    totalStringClass.push(p.key as t.StringLiteral);
-                                } else if (t.isBooleanLiteral(val)) {
-                                    totalStringClass.push(p.key as t.StringLiteral);
-                                } else if (t.isFunctionExpression(val) || t.isArrowFunctionExpression(val)) {
-                                    objectProperties.push(p);
-                                } else if (t.isTemplateLiteral(val)) {
-                                    if (val.expressions.length === 0) {
-                                        totalStringClass.push(
-                                            t.stringLiteral(val.quasis.map(q => q.value.raw).join(""))
-                                        );
-                                    } else {
-                                        totalBindClass.push(t.arrowFunctionExpression([], val));
-                                    }
-                                } else {
-                                    totalClass.push(p);
-                                }
-                            } else if (t.isFunctionExpression(p) || t.isArrowFunctionExpression(p)) {
-                                totalBindClass.push(p);
-                            }
-                        });
-
-                        if (objectProperties.length > 0) {
-                            totalBindClass.push(t.objectExpression(objectProperties));
-                        }
+                        splitClassObject(attr.value, totalStringClass, totalBindClass);
                     } else if (t.isMemberExpression(attr.value) || t.isCallExpression(attr.value)) {
                         totalBindClass.push(attr.value);
                     } else if (t.isFunctionExpression(attr.value) || t.isArrowFunctionExpression(attr.value)) {
@@ -114,30 +125,7 @@ export const mergeHtmlAttributes = (htmlAttrlist: t.ObjectProperty[]): t.Express
                             if (!element) return;
 
                             if (t.isObjectExpression(element)) {
-                                element.properties.forEach(p => {
-                                    if (t.isObjectProperty(p)) {
-                                        const val = p.value;
-                                        if (t.isStringLiteral(val)) {
-                                            totalStringClass.push(p.key as t.StringLiteral);
-                                        } else if (t.isBooleanLiteral(val)) {
-                                            totalStringClass.push(p.key as t.StringLiteral);
-                                        } else if (t.isFunctionExpression(val) || t.isArrowFunctionExpression(val)) {
-                                            totalBindClass.push(val);
-                                        } else if (t.isTemplateLiteral(val)) {
-                                            if (val.expressions.length === 0) {
-                                                totalStringClass.push(
-                                                    t.stringLiteral(val.quasis.map(q => q.value.raw).join(""))
-                                                );
-                                            } else {
-                                                totalBindClass.push(t.arrowFunctionExpression([], val));
-                                            }
-                                        } else {
-                                            totalClass.push(p);
-                                        }
-                                    } else if (t.isFunctionExpression(p) || t.isArrowFunctionExpression(p)) {
-                                        totalBindClass.push(p);
-                                    }
-                                });
+                                splitClassObject(element, totalStringClass, totalBindClass);
                             } else if (t.isStringLiteral(element)) {
                                 totalStringClass.push(element);
                             } else if (t.isTemplateLiteral(element)) {
@@ -245,9 +233,6 @@ export const mergeHtmlAttributes = (htmlAttrlist: t.ObjectProperty[]): t.Express
         }
         if (totalBindClass.length > 0) {
             htmlProps.push(t.expressionStatement(t.callExpression(t.identifier('sender.class.add'), [t.arrayExpression(totalBindClass)])));
-        }
-        if (totalClass.length > 0) {
-            htmlProps.push(t.expressionStatement(t.callExpression(t.identifier('sender.class.add'), [t.objectExpression(totalClass)])));
         }
         if (totalStringClass.length > 0) {
             htmlProps.push(t.expressionStatement(t.callExpression(t.identifier('sender.class.add'), [...totalStringClass])));

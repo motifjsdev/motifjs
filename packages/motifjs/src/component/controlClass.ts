@@ -146,7 +146,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
         return input.split(/\s+/).filter(s => s.length > 0);
     }
 
-    private _normalizeToSet(values: any, key?: any): Set<string> {
+    private _normalizeToSet(values: any): Set<string> {
         const result = new Set<string>();
         if (values == null) return result;
         if (typeof values === 'string') {
@@ -166,11 +166,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
                             for (const cls of this._splitClasses(String(k))) result.add(cls);
                         }
                     }
-                } else if (typeof item === 'boolean') {
-                    if (key && item) {
-                        for (const cls of this._splitClasses(String(key))) result.add(cls);
-                    }
-                } else {
+                } else if (typeof item !== 'boolean') {
                     for (const cls of this._splitClasses(String(item))) result.add(cls);
                 }
             }
@@ -182,11 +178,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
                     for (const cls of this._splitClasses(String(k))) result.add(cls);
                 }
             }
-        } else if (typeof values === 'boolean') {
-            if (key && values) {
-                for (const cls of this._splitClasses(String(key))) result.add(cls);
-            }
-        } else {
+        } else if (typeof values !== 'boolean') {
             for (const cls of this._splitClasses(String(values))) result.add(cls);
         }
         return result;
@@ -290,7 +282,9 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
         for (const k of Object.keys(obj)) {
             const v = obj[k];
             const keys = this._splitClasses(String(k));
-            if (!!v) {
+            if (typeof v === 'function') {
+                for (const cls of keys) this._addReactive(v, cls);
+            } else if (!!v) {
                 for (const cls of keys) this._staticSet.add(cls);
             } else {
                 for (const cls of keys) this._staticSet.delete(cls);
@@ -307,8 +301,9 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
         const run = () => effect(() => {
             let next: Set<string>;
             try {
-                const v = fn();
-                next = this._normalizeToSet(v, key);
+                let v = fn();
+                if (key !== undefined && typeof v === 'function') v = v();
+                next = key !== undefined ? (v ? new Set<string>([key]) : new Set<string>()) : this._normalizeToSet(v);
             } catch {
                 next = new Set();
             }

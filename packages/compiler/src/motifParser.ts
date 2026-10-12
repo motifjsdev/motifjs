@@ -601,10 +601,18 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                         if (atr !== null) {
                             htmlAttrlist.push(atr);
                             const lname = name.toLowerCase();
-                            const c = classifyAttrValue(prop, value, atr);
-                            const call = lname === 'class' || lname === 'classname' ? 'sender.class.add' : lname === 'style' ? 'sender.style' : 'sender.attr.add';
-                            const shown = call === 'sender.attr.add' ? `${call}({ "${name}": ${codeOf(atr.value)} })` : `${call}(${codeOf(atr.value)})`;
-                            explainProp(prop, 'attr', c.shape, shown, c.reactive, c.deps, c.note);
+                            if ((lname === 'class' || lname === 'classname') && (t.isObjectExpression(atr.value) || t.isArrayExpression(atr.value))) {
+                                const lowered = mergeHtmlAttributes([atr]);
+                                const live = lowered.some(s => t.isCallExpression(s.expression) && t.isArrayExpression(s.expression.arguments[0]));
+                                explainProp(prop, 'attr', 'class.object', lowered.map(s => codeOf(s.expression)).join('; '),
+                                    live ? 'live' : 'static', live ? DEPS.getter : DEPS.none,
+                                    live ? 'each key toggles its class; values other than literals are wrapped in getters' : undefined);
+                            } else {
+                                const c = classifyAttrValue(prop, value, atr);
+                                const call = lname === 'class' || lname === 'classname' ? 'sender.class.add' : lname === 'style' ? 'sender.style' : 'sender.attr.add';
+                                const shown = call === 'sender.attr.add' ? `${call}({ "${name}": ${codeOf(atr.value)} })` : `${call}(${codeOf(atr.value)})`;
+                                explainProp(prop, 'attr', c.shape, shown, c.reactive, c.deps, c.note);
+                            }
                         }
                     } else {
                         var atr = makeHtmlAttr(prop, name, t.booleanLiteral(true), path);

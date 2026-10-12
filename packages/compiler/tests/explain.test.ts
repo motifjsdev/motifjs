@@ -191,6 +191,20 @@ describe('DOM öznitelikleri', () => {
         expect(e.lowered).toBe('sender.class.add("a")');
     });
 
+    test('class={{ … }} → anahtar sınıf adı, sabit olmayan değer getter, canlı', () => {
+        const e = find(ex(`<div class={{ card: true, hidden: false, active: this.state.on }} />`), 'class={{');
+        expect(e.shape).toBe('class.object');
+        expect(e.reactive).toBe('live');
+        expect(e.lowered).toBe('sender.class.add([{ "active": () => this.state.on }]); sender.class.add("card")');
+    });
+
+    test('yalnız sabitli class={{ … }} statik', () => {
+        const e = find(ex(`<div class={{ card: true, hidden: false }} />`), 'class={{');
+        expect(e.shape).toBe('class.object');
+        expect(e.reactive).toBe('static');
+        expect(e.lowered).toBe('sender.class.add("card")');
+    });
+
     test('title={state.x} → korumalı getter, canlı', () => {
         const e = find(ex(`<div title={this.state.x} />`), 'title={this.state.x}');
         expect(e.shape).toBe('attr.expr');
