@@ -1,5 +1,10 @@
 import { devtools } from './devbus';
-import { pathOf, tagOf } from './inspect';
+import { pathOf, tagOf, recordService } from './inspect';
+
+export function serviceRequested(owner: object, token: any): void {
+    if (devtools() === undefined) return;
+    recordService(owner, token);
+}
 
 const dirty = new Set<any>();
 let scheduled = false;

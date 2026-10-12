@@ -1,6 +1,7 @@
 import { ServiceCollection, ServiceDescriptor } from "./ServiceCollection";
 import { motifError } from "../common/diagnostics";
 import { Signal } from "../store/Signal";
+import { setScopeResolver } from "../devtools/inspect";
 
 type ScopeKind = 'root' | 'navigation' | 'user';
 type OwnerSlot = { owner: object | null; ownerless?: boolean };
@@ -524,3 +525,5 @@ export class ServiceProvider {
         return `${name}[${src}]`;
     }
 }
+
+/* @DEV-ONLY */ setScopeResolver(pinnedScopeOf);

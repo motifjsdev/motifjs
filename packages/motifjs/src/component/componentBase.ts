@@ -18,7 +18,7 @@ import { lazyBindMethods } from "../common/lazyBind";
 import { trackedCleanup } from "../disposable/Cleanup";
 import type { MotifDomEventProps } from "../jsx-runtime";
 import { isDevLike } from "../devtools/devbus";
-import { buildStarted, buildFinished, componentEvent, disposeStarted, disposeFinished } from "../devtools/tree";
+import { buildStarted, buildFinished, componentEvent, disposeStarted, disposeFinished, serviceRequested } from "../devtools/tree";
 
 /** DI token'ını okunur biçime çevirir (dev uyarıları için). */
 function describeServiceToken(t: any): string {
@@ -2281,6 +2281,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         public getService<T>(token: (abstract new (...args: any) => T) | { prototype: T }): T | null;
         public getService<T = any>(token: string | symbol | object): T | null;
         public getService(token: any): any {
+                /* @DEV-ONLY */ serviceRequested(this, token);
                 try {
 
                         const sp = this.serviceProvider;
