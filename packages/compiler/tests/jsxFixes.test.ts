@@ -66,35 +66,35 @@ describe('düz DOM etiketinde initializeComponent ve ref', () => {
 describe('aynı kancanın iki yazımı birleşir', () => {
     test('düz etikette onbuilt + x-built + x:built tek anahtarda kaynak sırasıyla', () => {
         const out = compile(`function A(){ return <div x-built={b} onbuilt={a} x:built={c} />; }`);
-        expect(count(out, /onbuilt:/g)).toBe(1);
-        expect(out).toContain('onbuilt: [b, a, c]');
+        expect(count(out, /onBuilt:/g)).toBe(1);
+        expect(out).toContain('onBuilt: [b, a, c]');
     });
 
     test('büyük/küçük harf farkı birleşir (onBuilt + x-built)', () => {
         const out = compile(`function A(){ return <div onBuilt={a} x-built={b} />; }`);
-        expect(out).toContain('onbuilt: [a, b]');
-        expect(out).not.toMatch(/onBuilt:/);
+        expect(out).toContain('onBuilt: [a, b]');
+        expect(out).not.toMatch(/onbuilt:/);
     });
 
     test('bileşen etiketinde birleşik liste runover içinde', () => {
         const out = compile(`function A(){ return <Box x-mounted={b} onmounted={a} />; }`);
-        expect(out).toMatch(/runover:\s*\{\s*onmounted:\s*\[b, a\]\s*\}/);
-        expect(count(out, /onmounted:/g)).toBe(1);
+        expect(out).toMatch(/runover:\s*\{\s*onMounted:\s*\[b, a\]\s*\}/);
+        expect(count(out, /onMounted:/g)).toBe(1);
     });
 
     test('kapsamdaki her kanca birleşir', () => {
-        const hooks = ['built', 'building', 'mounted', 'config', 'configured', 'initializing', 'initialized', 'disposing', 'disposed', 'visibilitychanged', 'activated', 'deactivated'];
-        for (const h of hooks) {
+        const hooks: Record<string, string> = { built: 'onBuilt', building: 'onBuilding', mounted: 'onMounted', config: 'onConfig', configured: 'onConfigured', initializing: 'onInitializing', initialized: 'onInitialized', disposing: 'onDisposing', disposed: 'onDisposed', visibilitychanged: 'onVisibilityChanged', activated: 'onActivated', deactivated: 'onDeactivated' };
+        for (const [h, key] of Object.entries(hooks)) {
             const out = compile(`function A(){ return <div on${h}={a} x-${h}={b} />; }`);
-            expect(count(out, new RegExp(`on${h}:`, 'g'))).toBe(1);
-            expect(out).toContain(`on${h}: [a, b]`);
+            expect(count(out, new RegExp(`${key}:`, 'g'))).toBe(1);
+            expect(out).toContain(`${key}: [a, b]`);
         }
     });
 
     test('tek yazım eskisi gibi derlenir', () => {
         const out = compile(`function A(){ return <div onbuilt={a} x-mounted={b} />; }`);
-        expect(out).toMatch(/onbuilt:\s*a/);
-        expect(out).toMatch(/onmounted:\s*b/);
+        expect(out).toMatch(/onBuilt:\s*a/);
+        expect(out).toMatch(/onMounted:\s*b/);
         expect(out).not.toMatch(/\[a\]|\[b\]/);
     });
 
@@ -102,7 +102,7 @@ describe('aynı kancanın iki yazımı birleşir', () => {
         const list = explain(`function A(){ return <div onbuilt={a} x-built={b} />; }`, 'F.tsx');
         const recs = list.filter(e => e.site === 'component-event');
         expect(recs.length).toBe(2);
-        expect(recs.every(e => e.lowered === 'onbuilt: [a, b]')).toBe(true);
+        expect(recs.every(e => e.lowered === 'onBuilt: [a, b]')).toBe(true);
     });
 });
 
@@ -241,11 +241,11 @@ describe('tireli ve alt çizgili özel olay adları', () => {
 
 describe('bileşen etiketinde tek yaşam döngüsü yazımı runover\'a gider', () => {
     test.each([
-        ['x-mounted', 'onmounted'],
-        ['x:configured', 'onconfigured'],
-        ['onactivated', 'onactivated'],
+        ['x-mounted', 'onMounted'],
+        ['x:configured', 'onConfigured'],
+        ['onactivated', 'onActivated'],
         ['onDeactivated', 'onDeactivated'],
-        ['x-built', 'onbuilt'],
+        ['x-built', 'onBuilt'],
     ])('%s', (attr, key) => {
         const out = compile(`function A(){ return <Box ${attr}={h} title="t" />; }`);
         expect(out).toMatch(new RegExp('runover:\\s*\\{[\\s\\S]*' + key + ':\\s*h'));
@@ -255,7 +255,7 @@ describe('bileşen etiketinde tek yaşam döngüsü yazımı runover\'a gider', 
 
     test('düz etikette tek yazım yerinde kalır', () => {
         const out = compile(`function A(){ return <div x-mounted={h} />; }`);
-        expect(out).toMatch(/_mc\("div",\s*\{\s*onmounted:\s*h\s*\}\)/);
+        expect(out).toMatch(/_mc\("div",\s*\{\s*onMounted:\s*h\s*\}\)/);
         expect(out).not.toMatch(/runover/);
     });
 });

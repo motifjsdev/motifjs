@@ -98,14 +98,14 @@ describe('ref derleyici çıktısı', () => {
 
 describe('fonksiyon bileşeni etiketinde on<kanca> yazımları derlenir', () => {
     test.each([
-        ['oninitializing', 'oninitializing'],
+        ['oninitializing', 'onInitializing'],
         ['onInitializing', 'onInitializing'],
-        ['x-initializing', 'oninitializing'],
-        ['x:initializing', 'oninitializing'],
-        ['oninitialized', 'oninitialized'],
+        ['x-initializing', 'onInitializing'],
+        ['x:initializing', 'onInitializing'],
+        ['oninitialized', 'onInitialized'],
         ['onInitialized', 'onInitialized'],
-        ['x-initialized', 'oninitialized'],
-        ['x:initialized', 'oninitialized'],
+        ['x-initialized', 'onInitialized'],
+        ['x:initialized', 'onInitialized'],
     ])('%s', (attr, key) => {
         const src = `function Inner(props){ return <b />; } function A(){ return <Inner ${attr}={(s, e) => log(s, e)} title="t" />; }`;
         expect(() => compile(src)).not.toThrow();
@@ -117,16 +117,16 @@ describe('fonksiyon bileşeni etiketinde on<kanca> yazımları derlenir', () => 
     test('aynı kancanın yazımları runover içinde birleşir', () => {
         const out = compile(`function A(){ return <Inner oninitializing={a} x-initializing={b} onInitialized={c} x:initialized={d} />; }`);
         const runover = runoverOf(out, 'Inner');
-        expect(runover).toMatch(/oninitializing:\s*\[a,\s*b\]/);
-        expect(runover).toMatch(/oninitialized:\s*\[c,\s*d\]/);
+        expect(runover).toMatch(/onInitializing:\s*\[a,\s*b\]/);
+        expect(runover).toMatch(/onInitialized:\s*\[c,\s*d\]/);
     });
 
     test('blok gövdeli işleyiciler ve üye ifadeleri derlenir', () => {
         const src = `class A { view(){ return <Inner oninitializing={(s) => { this.log.push(s); }} oninitialized={this.onInit} />; } }`;
         expect(() => compile(src)).not.toThrow();
         const runover = runoverOf(compile(src), 'Inner');
-        expect(runover).toMatch(/oninitializing:\s*s => \{/);
-        expect(runover).toMatch(/oninitialized:\s*this\.onInit/);
+        expect(runover).toMatch(/onInitializing:\s*s => \{/);
+        expect(runover).toMatch(/onInitialized:\s*this\.onInit/);
     });
 });
 
