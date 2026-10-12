@@ -1,4 +1,5 @@
 import { devtools } from './devbus';
+import { pathOf, tagOf } from './inspect';
 
 const dirty = new Set<any>();
 let scheduled = false;
@@ -26,26 +27,12 @@ function flushTree(): void {
     if (parents.length > 0) emit('tree:changed', { parents });
 }
 
-export function pathOf(c: any): number[] | null {
-    const path: number[] = [];
-    let cur = c;
-    while (cur.parent) {
-        const i = cur.parent._controls?.items.indexOf(cur) ?? -1;
-        if (i < 0) return null;
-        path.push(i);
-        cur = cur.parent;
-    }
-    return path.reverse();
-}
-
 export type ComponentInfo = { path: number[] | null; type: string; tag: string };
 
 const disposeStarts = new WeakMap<object, { info: ComponentInfo; at: number }>();
 
 export function describe(c: any): ComponentInfo {
-    const n = c.element as Node | null;
-    const tag = !n ? '' : n.nodeType === 8 ? '#fragment' : n.nodeType === 3 ? '#text' : String(n.nodeName).toLowerCase();
-    return { path: pathOf(c), type: c.constructor?.name ?? '', tag };
+    return { path: pathOf(c), type: c.constructor?.name ?? '', tag: tagOf(c) };
 }
 
 export function componentEvent(type: string, c: any, extra?: object): void {

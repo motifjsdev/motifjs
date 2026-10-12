@@ -3,6 +3,7 @@ import { ServiceProvider } from "./dependencyInjection/ServiceProvider";
 import { Component } from "./component/Component";
 import { RouteItem } from "./routing/RouteItem";
 import { setRoutes, setDevtoolsEnabled } from "./devtools/devbus";
+import { setTreeRoot, clearTreeRoot } from "./devtools/inspect";
 import { lintRoutes } from "./devtools/routeLinter";
 import { RouterView } from "./routing/RouterView";
 import { UrlRoutingModule } from "./routing/UrlRoutingModule";
@@ -130,6 +131,7 @@ export class Application {
         this._state = 'running';
         const AppShell = new Component(target);
         this.appShell = AppShell;
+        /* @DEV-ONLY */ setTreeRoot(AppShell);
         safeCallSilent(() => {
             (AppShell as any)._keepElementOnDispose = true;
             (AppShell as any).application = this;
@@ -199,6 +201,7 @@ export class Application {
             if (shell && !shell.isDisposed) {
                 try { await shell.dispose(); } catch (error) { reportError('MJX307', error); }
             }
+            /* @DEV-ONLY */ clearTreeRoot(shell);
             try { await this.provider.dispose(); } catch { }
             if (_globalApplication === this) _globalApplication = null;
             this._state = 'disposed';
