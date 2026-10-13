@@ -1,10 +1,17 @@
 import { devtools } from './devbus';
-import { pathOf, tagOf, recordService } from './inspect';
-import { countCreated, countDisposed } from './counters';
+import { pathOf, tagOf, typeOf, isComponent, nameComponent, recordService } from './inspect';
+import { countCreated, countDisposed, countRenamed } from './counters';
 
 export function componentCreated(c: any): void {
     if (devtools() === undefined) return;
     countCreated(c);
+}
+
+export function componentNamed(fn: unknown, c: any): void {
+    if (devtools() === undefined || typeof fn !== 'function' || !fn.name || typeof c !== 'object' || c === null || !isComponent(c)) return;
+    const before = typeOf(c);
+    nameComponent(c, fn.name);
+    countRenamed(c, before, fn.name);
 }
 
 export function serviceRequested(owner: object, token: any): void {
@@ -43,7 +50,7 @@ export type ComponentInfo = { path: number[] | null; type: string; tag: string }
 const disposeStarts = new WeakMap<object, { info: ComponentInfo; at: number }>();
 
 export function describe(c: any): ComponentInfo {
-    return { path: pathOf(c), type: c.constructor?.name ?? '', tag: tagOf(c) };
+    return { path: pathOf(c), type: typeOf(c), tag: tagOf(c) };
 }
 
 export function componentEvent(type: string, c: any, extra?: object): void {

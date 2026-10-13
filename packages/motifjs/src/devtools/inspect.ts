@@ -9,6 +9,12 @@ export type TreeNode = {
     childCount: number; children?: TreeNode[];
 };
 
+const names = new WeakMap<object, string>();
+
+export function nameComponent(c: object, name: string): void { names.set(c, name); }
+
+export function typeOf(c: any): string { return names.get(c) ?? c.constructor?.name ?? ''; }
+
 export function tagOf(c: any): string {
     const n = c.element as Node | null;
     return !n ? '' : n.nodeType === 8 ? '#fragment' : n.nodeType === 3 ? '#text' : String(n.nodeName).toLowerCase();
@@ -38,7 +44,7 @@ export function componentAt(path: number[]): any | null {
 function nodeOf(c: any, path: number[], depth: number): TreeNode {
     const items: any[] = c._controls?.items ?? [];
     const out: TreeNode = {
-        path, type: c.constructor?.name ?? '', tag: tagOf(c),
+        path, type: typeOf(c), tag: tagOf(c),
         built: !!c.isBuilt, visible: !!c.isVisible, waiting: !!c.isWait, disposed: !!c.isDisposed,
         connected: !!(c.element as any)?.isConnected,
         childCount: items.length,
@@ -63,14 +69,14 @@ export function recordService(owner: object, token: any): void {
 export function setScopeResolver(fn: (owner: object) => any): void { scopeResolver = fn; }
 
 const tokenName = (t: any): string => typeof t === 'function' ? (t.name || '[AnonymousClass]') : String(t);
-const isComponent = (v: any): boolean => typeof v.build === 'function' && 'isDisposed' in v && 'motif' in v;
+export const isComponent = (v: any): boolean => typeof v.build === 'function' && 'isDisposed' in v && 'motif' in v;
 
 export function preview(v: any): any {
     if (v === null || v === undefined || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return v;
     if (typeof v === 'bigint' || typeof v === 'symbol') return v.toString();
     if (typeof v === 'function') return { kind: 'function', name: v.name || '' };
     if (typeof v.nodeType === 'number') return { kind: 'node', tag: String(v.nodeName).toLowerCase() };
-    if (isComponent(v)) return { kind: 'component', path: pathOf(v), type: v.constructor?.name ?? '' };
+    if (isComponent(v)) return { kind: 'component', path: pathOf(v), type: typeOf(v) };
     if (Array.isArray(v)) return { kind: 'array', length: v.length };
     return { kind: 'object', type: v.constructor?.name ?? 'Object', keys: Object.keys(v).length };
 }

@@ -1,5 +1,5 @@
 import { devtools } from './devbus';
-import { preview, pathOf, tagOf, effectInfoOf, ownEffect, disownEffect } from './inspect';
+import { preview, pathOf, tagOf, typeOf, effectInfoOf, ownEffect, disownEffect } from './inspect';
 import { countEffectCreated, countEffectOwned, countEffectStopped, countRun, countFlush } from './counters';
 
 type Trigger = { target: any; key: string; count: number };
@@ -74,7 +74,7 @@ export function flushFinished(): void {
     const effects = [...f.effects].map(([e, runs]) => {
         const info = effectInfoOf(e);
         const o: any = info.owner;
-        return { path: o ? pathOf(o) : null, type: o ? (o.constructor?.name ?? '') : null, tag: o ? tagOf(o) : null, kind: info.kind, runs };
+        return { path: o ? pathOf(o) : null, type: o ? typeOf(o) : null, tag: o ? tagOf(o) : null, kind: info.kind, runs };
     });
     const duration = performance.now() - f.at;
     countFlush(duration, f.runs);

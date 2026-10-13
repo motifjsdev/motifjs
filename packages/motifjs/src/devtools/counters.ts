@@ -1,4 +1,4 @@
-import { componentAt } from './inspect';
+import { componentAt, typeOf } from './inspect';
 
 const live = new Map<string, number>();
 let counted = new WeakSet<object>();
@@ -14,12 +14,17 @@ export function resetCounters(): void {
     runs = 0; flushes = 0; flushRuns = 0; lastFlush = 0; maxFlush = 0;
 }
 
-const typeOf = (c: any): string => c.constructor?.name ?? '';
-
 export function countCreated(c: any): void {
     counted.add(c);
     const t = typeOf(c);
     live.set(t, (live.get(t) ?? 0) + 1);
+}
+
+export function countRenamed(c: any, from: string, to: string): void {
+    if (!counted.has(c) || from === to) return;
+    const n = (live.get(from) ?? 1) - 1;
+    if (n > 0) live.set(from, n); else live.delete(from);
+    live.set(to, (live.get(to) ?? 0) + 1);
 }
 
 export function countDisposed(c: any): void {

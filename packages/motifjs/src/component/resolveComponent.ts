@@ -1,5 +1,6 @@
 import { ComponentBase } from "./componentBase";
 import { reportError } from "../common/diagnostics";
+import { componentNamed } from "../devtools/tree";
 
 const MAX_FACTORY_DEPTH = 100;
 
@@ -16,5 +17,6 @@ export function resolveComponent(input: unknown, props?: any): any {
         }
         current = current(props);
     }
+    /* @DEV-ONLY */ if (depth > 0) componentNamed(input, current);
     return current;
 }
