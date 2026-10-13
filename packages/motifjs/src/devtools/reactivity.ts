@@ -1,8 +1,8 @@
-import { devtools } from './devbus';
+import { devtools, storeOf } from './devbus';
 import { preview, pathOf, tagOf, typeOf, effectInfoOf, ownEffect, disownEffect } from './inspect';
 import { countEffectCreated, countEffectOwned, countEffectStopped, countRun, countFlush } from './counters';
 
-type Trigger = { target: any; key: string; count: number };
+type Trigger = { target: any; key: string; count: number; store?: { id: number; path: string[] } };
 type Flush = { at: number; runs: number; effects: Map<object, number>; triggers: Map<string, Trigger> };
 
 let lastCreated: object | null = null;
@@ -53,9 +53,11 @@ export function runFinished(e: object, at: number): void {
 
 export function triggered(target: object, key: unknown, effects: Set<object>): void {
     if (devtools() === undefined) return;
-    const t = { target: preview(target), key: String(key) };
+    const store = storeOf(target);
+    const t: { target: any; key: string; store?: { id: number; path: string[] } } = { target: preview(target), key: store !== null && store.type !== 'reactive' ? 'value' : String(key) };
+    if (store !== null) t.store = { id: store.id, path: store.path };
     for (const e of effects) effectInfoOf(e).lastTrigger = t;
-    const id = t.key + '\u0000' + JSON.stringify(t.target);
+    const id = t.key + '\u0000' + JSON.stringify(t.target) + '\u0000' + (store === null ? '' : store.id + '\u0000' + store.path.join('\u0000'));
     const p = pending.get(id);
     if (p) p.count++; else pending.set(id, { ...t, count: 1 });
 }

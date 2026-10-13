@@ -2,6 +2,7 @@
 import { Component, findAppendableComponent } from '../';
 import { ComponentBase, notifyDeactivated } from '../';
 import { effect, engine, untracked } from '../store';
+import { internalState } from '../devtools/devbus';
 import { effectOwner } from '../devtools/reactivity';
 import { reportError, reportWarning } from '../common/diagnostics';
 
@@ -81,6 +82,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
             error: undefined,
             data: []
         });
+        /* @DEV-ONLY */ internalState(this._state);
 
         this._loadMore = this._loadMore.bind(this);
         this._renderLoadingState = this._renderLoadingState.bind(this);

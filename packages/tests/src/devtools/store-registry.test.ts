@@ -82,15 +82,31 @@ describe('devtools store registry', () => {
         expect(g.__MOTIF_STORE_REGISTRY__).toBeUndefined();
     });
 
-    test('with devtools off nothing is recorded, even when __MOTIF_DEV__ is set by hand', () => {
+    test('with devtools off and no __MOTIF_DEV__ flag nothing is recorded', () => {
         app.useDevelopment(true);
         const before = hook().getStores().length;
         app.useDevelopment(false);
-        g.__MOTIF_DEV__ = true;
-        reactive({ a: 1 });
-        createSignal(1);
+        const kept = [reactive({ a: 1 }), createSignal(1)];
         app.useDevelopment(true);
         expect(hook().getStores().length).toBe(before);
+        expect(kept).toHaveLength(2);
+    });
+
+    test('with __MOTIF_DEV__ set before the core loads, stores are recorded before devtools is enabled', () => {
+        g.__MOTIF_DEV__ = true;
+        jest.isolateModules(() => {
+            const core = require('@motifx/core');
+            const early = core.reactive({ early: true });
+            const flag = core.createSignal('on');
+            const isolated = core.Application.CreateBuilder().build();
+            isolated.useDevelopment(true);
+            const values = g.__MOTIF_DEVTOOLS__.getStores().map((s: any) => s.value);
+            expect(values).toContain(early);
+            expect(values).toContain('on');
+            expect(flag.peek()).toBe('on');
+            isolated.useDevelopment(false);
+            isolated.dispose();
+        });
     });
 
     test('the first stores stay listed after many others are created', () => {

@@ -16,7 +16,7 @@ export type DevtoolsEvent =
     | { type: 'component:wait'; payload: DevtoolsComponentRef & { waiting: boolean } }
     | { type: 'component:disposing'; payload: DevtoolsComponentRef }
     | { type: 'component:disposed'; payload: DevtoolsComponentRef & { duration?: number } }
-    | { type: 'reactivity:flush'; payload: { duration: number; runs: number; triggers: { target: unknown; key: string; count: number }[]; effects: { path: DevtoolsPath | null; type: string | null; tag: string | null; kind: string; runs: number }[] } }
+    | { type: 'reactivity:flush'; payload: { duration: number; runs: number; triggers: { target: unknown; key: string; count: number; store?: { id: number; path: string[] } }[]; effects: { path: DevtoolsPath | null; type: string | null; tag: string | null; kind: string; runs: number }[] } }
     | { type: 'route:navigation-start'; payload: { uri: string } }
     | { type: 'route:navigation-end'; payload: { uri: string; requested: string; outcome: 'done' | 'skipped' | 'cancelled' | 'notFound' | 'error'; reason?: string; params?: unknown; duration: number } }
     | { type: `ext:${string}`; payload?: unknown };

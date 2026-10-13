@@ -30,7 +30,10 @@ export function isDevLike(): boolean {
     return state.enabled || (globalThis as any).__MOTIF_DEV__ === true;
 }
 
+let earlyStores = (() => { try { return (globalThis as any).__MOTIF_DEV__ === true; } catch { return false; } })();
+
 export function setDevtoolsEnabled(enabled: boolean) {
+    earlyStores = enabled;
     if (enabled && !state.enabled) resetCounters();
     state.enabled = enabled;
     try {
@@ -149,10 +152,35 @@ export function errorCaught(context: string, error: any, serialize: () => any): 
 export function getErrors(): DevError[] { return Array.from(state.errors.values(), e => ({ ...e })); }
 
 export function registerStore(value: object, type: StoreEntry['type'], fallback: string, model?: unknown): void {
-    if (!state.enabled) return;
+    if (!state.enabled && !earlyStores) return;
+    addStore(value, type, classNameOf(model) ?? fallback);
+}
+
+function addStore(value: object, type: StoreEntry['type'], name: string): number {
     const id = ++state.storeSeq;
-    state.stores.set(id, { id, name: classNameOf(model) ?? fallback, type, ref: new WeakRef(value) });
+    state.stores.set(id, { id, name, type, ref: new WeakRef(value) });
     if (state.stores.size >= state.storePrune) pruneStores();
+    return id;
+}
+
+const IS_REACTIVE = Symbol.for('motif.isReactive');
+const internal = new WeakSet<object>();
+
+export function internalState(value: object): void { internal.add(value); }
+
+function storeTypeOf(v: any): StoreEntry['type'] | null {
+    if (internal.has(v)) return null;
+    try { if (v[IS_REACTIVE] === true) return 'reactive'; } catch { }
+    if (typeof v.peek === 'function' && '_target' in v && '_value' in v) return '_getter' in v ? 'computed' : 'signal';
+    return null;
+}
+
+function adopt(v: any, ids: Map<object, number>): number | undefined {
+    const type = storeTypeOf(v);
+    if (type === null) return undefined;
+    const id = addStore(v, type, type === 'reactive' ? (classNameOf(rawOf(v)) ?? 'reactive') : type);
+    ids.set(v, id);
+    return id;
 }
 
 function classNameOf(model: unknown): string | null {
@@ -168,17 +196,109 @@ function pruneStores(): void {
 
 export function getStores(): DevStore[] {
     pruneStores();
+    const ids = new Map<object, number>();
+    for (const e of state.stores.values()) {
+        const target = e.ref.deref();
+        if (target !== undefined) ids.set(target, e.id);
+    }
+    const holders = holdersOf(v => ids.get(v) ?? adopt(v, ids));
     const live: [StoreEntry, any][] = [];
     for (const e of state.stores.values()) {
         const target: any = e.ref.deref();
         if (target !== undefined) live.push([e, target]);
     }
-    const holders = holdersOf(new Map(live.map(([e, target]) => [target, e.id])));
     return live.map(([e, target]) => {
         const base = { id: e.id, name: e.name, type: e.type, holders: holders.get(e.id) ?? [] };
         if (e.type === 'reactive') return { ...base, value: target };
         return target._dirty === true ? { ...base, value: target._value, stale: true } : { ...base, value: target._value };
     });
+}
+
+const RAW = Symbol.for('motif.raw');
+type StoreLocation = { id: number; type: StoreEntry['type']; path: string[] };
+const located = new WeakMap<object, StoreLocation>();
+
+function rootOf(e: StoreEntry): object | undefined {
+    const t: any = e.ref.deref();
+    if (t === undefined) return undefined;
+    return e.type === 'reactive' ? rawOf(t) : t._target;
+}
+
+function rawOf(v: any): any {
+    let c = v;
+    try { while (c && c[RAW]) c = c[RAW]; } catch { }
+    return c;
+}
+
+function childrenOf(v: any): [string, any][] {
+    if (v instanceof Map) return [...v].map(([k, x]) => [String(k), rawOf(x)]);
+    if (v instanceof Set) return [...v].map((x, i) => [String(i), rawOf(x)]);
+    const out: [string, any][] = [];
+    for (const k of Object.keys(v)) {
+        const d = Object.getOwnPropertyDescriptor(v, k);
+        if (d && 'value' in d) out.push([k, rawOf(d.value)]);
+    }
+    return out;
+}
+
+function childAt(v: any, key: string): any {
+    if (v instanceof Map) {
+        for (const [k, x] of v) if (String(k) === key) return rawOf(x);
+        return undefined;
+    }
+    if (v instanceof Set) {
+        let i = 0;
+        for (const x of v) if (String(i++) === key) return rawOf(x);
+        return undefined;
+    }
+    const d = Object.getOwnPropertyDescriptor(v, key);
+    return d && 'value' in d ? rawOf(d.value) : undefined;
+}
+
+function reach(loc: StoreLocation): object | undefined {
+    const e = state.stores.get(loc.id);
+    let v: any = e && rootOf(e);
+    for (const k of loc.path) {
+        if (v === null || typeof v !== 'object') return undefined;
+        v = childAt(v, k);
+    }
+    return v;
+}
+
+export function storeOf(raw: object): StoreLocation | null {
+    const hit = located.get(raw);
+    if (hit !== undefined && reach(hit) === raw) return hit;
+    const found = searchStores(raw);
+    if (found === null) located.delete(raw);
+    return found;
+}
+
+function searchStores(raw: object): StoreLocation | null {
+    const queue: [any, StoreEntry, string[]][] = [];
+    for (const e of state.stores.values()) {
+        const root = rootOf(e);
+        if (root === undefined) continue;
+        const loc: StoreLocation = { id: e.id, type: e.type, path: [] };
+        located.set(root, loc);
+        if (root === raw) return loc;
+        if (e.type === 'reactive') queue.push([root, e, []]);
+    }
+    const seen = new Set<object>();
+    for (let i = 0; i < queue.length && i < 20000; i++) {
+        const [v, e, path] = queue[i];
+        if (path.length >= 8 || seen.has(v)) continue;
+        seen.add(v);
+        let found: StoreLocation | null = null;
+        for (const [k, x] of childrenOf(v)) {
+            if (x === null || typeof x !== 'object' || seen.has(x)) continue;
+            const loc: StoreLocation = { id: e.id, type: e.type, path: [...path, k] };
+            located.set(x, loc);
+            if (x === raw && found === null) found = loc;
+            queue.push([x, e, loc.path]);
+        }
+        if (found !== null) return found;
+    }
+    return null;
 }
 
 export function readStore(id: number, keys: string[]): WriteResult {

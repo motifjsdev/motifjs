@@ -249,22 +249,22 @@ export type StoreHolder =
     | { kind: 'component'; path: number[]; type: string; field: string }
     | { kind: 'service'; token: string; lifetime: string; field: string | null };
 
-export function holdersOf(stores: Map<object, number>): Map<number, StoreHolder[]> {
+export function holdersOf(idOf: (v: object) => number | undefined): Map<number, StoreHolder[]> {
     const out = new Map<number, StoreHolder[]>();
-    if (stores.size === 0) return out;
     const add = (id: number, h: StoreHolder) => { const list = out.get(id); if (list) list.push(h); else out.set(id, [h]); };
-    const scan = (owner: object, holder: (field: string) => StoreHolder) => {
+    const scan = (owner: object, holder: (field: string) => StoreHolder, skip?: Set<string>) => {
         for (const field of Object.keys(owner)) {
+            if (skip?.has(field)) continue;
             let v: any;
             try { v = Object.getOwnPropertyDescriptor(owner, field)?.value; } catch { continue; }
             if (v === null || typeof v !== 'object') continue;
-            const id = stores.get(v);
+            const id = idOf(v);
             if (id !== undefined) add(id, holder(field));
         }
     };
     const providers = new Set<any>();
     const walk = (c: any, path: number[]) => {
-        scan(c, field => ({ kind: 'component', path, type: typeOf(c), field }));
+        scan(c, field => ({ kind: 'component', path, type: typeOf(c), field }), FRAMEWORK_FIELDS);
         if (c.provider) providers.add(c.provider);
         const items: any[] = c._controls?.items ?? [];
         for (let i = 0; i < items.length; i++) walk(items[i], [...path, i]);
@@ -279,7 +279,7 @@ export function holdersOf(stores: Map<object, number>): Map<number, StoreHolder[
             if (inst === null || typeof inst !== 'object' || seen.has(inst)) continue;
             seen.add(inst);
             const name = tokenName(token), lifetime = descriptors?.get(token)?.lifetime ?? '';
-            const self = stores.get(inst);
+            const self = idOf(inst);
             if (self !== undefined) add(self, { kind: 'service', token: name, lifetime, field: null });
             scan(inst, field => ({ kind: 'service', token: name, lifetime, field }));
         }

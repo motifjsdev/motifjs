@@ -60,7 +60,8 @@ describe('devtools reactivity trace', () => {
         await settle();
         const [e] = hook().inspect([0, 0]).effects;
         expect(e.runs).toBe(2);
-        expect(e.lastTrigger).toEqual({ target: { kind: 'object', type: 'Cart', keys: 2 }, key: 'total' });
+        const store = { id: hook().getStores().find((x: any) => x.value === s).id, path: [] };
+        expect(e.lastTrigger).toEqual({ target: { kind: 'object', type: 'Cart', keys: 2 }, key: 'total', store });
     });
 
     test('changes in one turn publish one flush with triggers and owned effects', async () => {
@@ -79,8 +80,9 @@ describe('devtools reactivity trace', () => {
         const f = flushes[0];
         expect(f.runs).toBe(2);
         expect(typeof f.duration).toBe('number');
-        expect(f.triggers).toContainEqual({ target: { kind: 'object', type: 'Cart', keys: 2 }, key: 'total', count: 2 });
-        expect(f.triggers).toContainEqual({ target: { kind: 'object', type: 'Cart', keys: 2 }, key: 'name', count: 1 });
+        const store = { id: hook().getStores().find((x: any) => x.value === s).id, path: [] };
+        expect(f.triggers).toContainEqual({ target: { kind: 'object', type: 'Cart', keys: 2 }, key: 'total', count: 2, store });
+        expect(f.triggers).toContainEqual({ target: { kind: 'object', type: 'Cart', keys: 2 }, key: 'name', count: 1, store });
         expect(f.effects).toContainEqual({ path: [0, 0], type: 'Component', tag: 'span', kind: 'binding:textContent', runs: 1 });
         expect(f.effects).toContainEqual({ path: [0, 1], type: 'Component', tag: 'b', kind: 'binding:textContent', runs: 1 });
     });
