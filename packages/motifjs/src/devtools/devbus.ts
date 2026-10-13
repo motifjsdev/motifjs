@@ -2,8 +2,8 @@ import { getTree, getElement, pathOfElement, inspect, getServices, componentAt }
 import { getCounters, resetCounters } from './counters';
 import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
 import { setClass, setAttribute, setVisible, writeModel, setProp, navigate, BLOCKED_KEYS, type WriteResult } from './writes';
+import type { MotifDevtools, DevtoolsEvent } from './types';
 
-export type DevEvent = { type: string; payload?: any };
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
 export type DevStore = { name: string; value: any; type: string };
 export type DevNavigation = { requested: string; uri: string | null; outcome: string; reason?: string; params?: any; duration: number; at: number };
@@ -11,14 +11,14 @@ export type DevError = { context: string; name: string; message: string; error: 
 
 const state = {
     enabled: false as boolean,
-    listeners: new Set<(ev: DevEvent) => void>(),
+    listeners: new Set<(ev: DevtoolsEvent) => void>(),
     warnings: new Map<string, DevWarning>(),
     routes: null as any,
     stores: [] as DevStore[],
     navigations: [] as DevNavigation[],
     route: null as { uri: string; params: any; chain: string[] } | null,
     errors: new Map<string, DevError>(),
-    exposed: null as object | null,
+    exposed: null as MotifDevtools | null,
 };
 
 /** Dev modu: devtools açık ya da `globalThis.__MOTIF_DEV__ === true`. */
@@ -55,13 +55,13 @@ function inspectWithExtensions(path: number[]) {
     return r;
 }
 
-export function on(listener: (ev: DevEvent) => void): () => void {
+export function on(listener: (ev: DevtoolsEvent) => void): () => void {
     state.listeners.add(listener);
     return () => { state.listeners.delete(listener); };
 }
 
 function emit(type: string, payload?: any) {
-    const ev: DevEvent = { type, payload };
+    const ev = { type, payload } as DevtoolsEvent;
     for (const l of state.listeners) {
         try { l(ev); } catch { }
     }
