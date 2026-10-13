@@ -1,6 +1,7 @@
 import { getTree, getElement, pathOfElement, inspect, getServices, componentAt } from './inspect';
 import { getCounters, resetCounters } from './counters';
 import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
+import { setClass, setAttribute, setVisible, writeModel, setProp, navigate, BLOCKED_KEYS, type WriteResult } from './writes';
 
 export type DevEvent = { type: string; payload?: any };
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
@@ -31,7 +32,7 @@ export function setDevtoolsEnabled(enabled: boolean) {
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, isEnabled };
+            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
         } else {
             if (state.exposed !== null && g.__MOTIF_DEVTOOLS__ === state.exposed) delete g.__MOTIF_DEVTOOLS__;
@@ -149,4 +150,19 @@ export function registerStore(name: string, value: any, type: string): void {
     if (state.stores.length > 200) state.stores.shift();
 }
 export function getStores(): DevStore[] { return state.stores.slice(); }
+
+export function setStoreValue(index: number, keys: string[], value: unknown): WriteResult {
+    const entry = state.stores[index];
+    if (!entry || entry.type !== 'reactive') return { ok: false, error: 'not a writable store' };
+    if (!Array.isArray(keys) || keys.length === 0 || keys.some(k => BLOCKED_KEYS.has(String(k)))) return { ok: false, error: 'invalid key' };
+    try {
+        let target = entry.value;
+        for (const k of keys.slice(0, -1)) {
+            target = target[k];
+            if (target === null || typeof target !== 'object') return { ok: false, error: 'path not found' };
+        }
+        target[keys[keys.length - 1]] = value;
+        return { ok: true };
+    } catch (error) { return { ok: false, error: String((error as any)?.message ?? error) }; }
+}
 export function storeCount(): number { return state.stores.length; }
