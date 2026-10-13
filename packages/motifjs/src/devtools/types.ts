@@ -28,7 +28,7 @@ export interface MotifDevtools {
     getTree(path?: DevtoolsPath, depth?: number): DevtoolsTreeNode | null;
     getElement(path: DevtoolsPath): Node | null;
     pathOfElement(node: Node | null): DevtoolsPath | null;
-    inspect(path: DevtoolsPath): (Omit<DevtoolsTreeNode, 'children'> & { props: Record<string, unknown>; bindings: unknown[]; events: unknown[]; hooks: unknown[]; classes: { static: string[]; reactive: { id: string; classes: string[] }[] }; attributes: unknown[]; services: unknown; effects: unknown[]; extensions: Record<string, unknown> }) | null;
+    inspect(path: DevtoolsPath): (Omit<DevtoolsTreeNode, 'children'> & { props: Record<string, unknown>; functionProps?: Record<string, unknown>; bindings: unknown[]; events: unknown[]; hooks: unknown[]; classes: { static: string[]; reactive: { id: string; classes: string[] }[] }; attributes: unknown[]; services: unknown; effects: unknown[]; extensions: Record<string, unknown> }) | null;
     getServices(): { token: string; lifetime: string; created: boolean }[];
     getCounters(): { components: { live: number; inTree: number; notInTree: number; byType: Record<string, number> }; bindings: number; listeners: { dom: number; component: number }; effects: { live: number; owned: number }; reactivity: { runs: number; flushes: number; flushRuns: number; lastFlushDuration: number; maxFlushDuration: number } };
     getWarnings(): { code: string; message: string; details?: unknown; count: number; firstAt: number; lastAt: number }[];

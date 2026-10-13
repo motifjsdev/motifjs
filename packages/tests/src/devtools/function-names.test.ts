@@ -107,5 +107,21 @@ describe('devtools function component names', () => {
         root.controls.add(card);
         app.run(host, root);
         expect(hook().getTree([0, 0])).toMatchObject({ type: 'Component', tag: 'article' });
+        expect(hook().inspect([0, 0]).functionProps).toBeUndefined();
+    });
+
+    test('inspect shows the props given to a function component', () => {
+        const root = new Component('main');
+        root.controls.add(h(StatCard, { title: 'a', count: 2, onPick: function pick() {} }), new Dashboard());
+        app.run(host, root);
+        expect(hook().inspect([0, 0]).functionProps).toEqual({ title: 'a', count: 2, onPick: { kind: 'function', name: 'pick' } });
+        expect(hook().inspect([0, 1]).functionProps).toBeUndefined();
+    });
+
+    test('the outer function props are shown when a function returns another function component', () => {
+        const root = new Component('main');
+        root.controls.add(h(Outer, { level: 1 }));
+        app.run(host, root);
+        expect(hook().inspect([0, 0]).functionProps).toEqual({ level: 1 });
     });
 });

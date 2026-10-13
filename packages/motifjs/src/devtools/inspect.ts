@@ -10,8 +10,12 @@ export type TreeNode = {
 };
 
 const names = new WeakMap<object, string>();
+const functionProps = new WeakMap<object, object>();
 
-export function nameComponent(c: object, name: string): void { names.set(c, name); }
+export function nameComponent(c: object, name: string, props?: unknown): void {
+    names.set(c, name);
+    if (typeof props === 'object' && props !== null) functionProps.set(c, props); else functionProps.delete(c);
+}
 
 export function typeOf(c: any): string { return names.get(c) ?? c.constructor?.name ?? ''; }
 
@@ -193,11 +197,17 @@ export function inspect(path: number[]): any | null {
     if (c === null) return null;
     const props: Record<string, any> = {};
     if (c.props) for (const k of Object.keys(c.props)) props[k] = preview(c.props[k]);
-    return {
+    const result: any = {
         ...nodeOf(c, path.slice(), 0),
         props, bindings: bindingsOf(c), events: eventsOf(c), hooks: hooksOf(c),
         classes: classesOf(c), attributes: attributesOf(c), services: servicesOf(c), effects: effectsOf(c),
     };
+    const given: any = functionProps.get(c);
+    if (given !== undefined) {
+        result.functionProps = {};
+        for (const k of Object.keys(given)) result.functionProps[k] = preview(given[k]);
+    }
+    return result;
 }
 
 export function getServices(): any[] {

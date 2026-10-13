@@ -17,6 +17,6 @@ export function resolveComponent(input: unknown, props?: any): any {
         }
         current = current(props);
     }
-    /* @DEV-ONLY */ if (depth > 0) componentNamed(input, current);
+    /* @DEV-ONLY */ if (depth > 0) componentNamed(input, current, props);
     return current;
 }

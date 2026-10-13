@@ -7,10 +7,10 @@ export function componentCreated(c: any): void {
     countCreated(c);
 }
 
-export function componentNamed(fn: unknown, c: any): void {
+export function componentNamed(fn: unknown, c: any, props?: unknown): void {
     if (devtools() === undefined || typeof fn !== 'function' || !fn.name || typeof c !== 'object' || c === null || !isComponent(c)) return;
     const before = typeOf(c);
-    nameComponent(c, fn.name);
+    nameComponent(c, fn.name, props);
     countRenamed(c, before, fn.name);
 }
 
