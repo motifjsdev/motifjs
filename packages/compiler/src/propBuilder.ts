@@ -291,6 +291,15 @@ export function supportedDirectivesText(): string {
     return [...SUPPORTED_DIRECTIVES, 'style', 'ref', 'key'].map(d => 'x-' + d).join(', ') + ' and the lifecycle hooks (x-mounted, x-built, x-disposed, …)';
 }
 
+const EQUALITY = new Set(['===', '!==', '==', '!=']);
+
+function operandGuard(x: t.Expression, equality: boolean): t.Expression | null {
+    if (!equality) return findIfStatements(x);
+    if (t.isIdentifier(x) || t.isNullLiteral(x) || t.isStringLiteral(x) || t.isNumericLiteral(x) || t.isBooleanLiteral(x) || t.isBigIntLiteral(x)) return null;
+    if (t.isMemberExpression(x)) return findIfStatements(x.object as t.Expression);
+    return findIfStatements(x);
+}
+
 const ParentIfStatement = (path: t.Expression | t.BlockStatement, state: any[]): any[] => {
     if (t.isExpression(path)) {
         state.push(path)
@@ -363,9 +372,10 @@ export const returnIfStatement = (value: any, enableDefaultreturn: boolean = tru
         }
         return value;
     } else if (t.isBinaryExpression(value)) {
-        var ifStatementA = findIfStatements(value.left as any);
-        var ifStatementB = findIfStatements(value.right);
-        var le = t.logicalExpression('&&', ifStatementA, ifStatementB);
+        const equality = EQUALITY.has(value.operator);
+        const guards = [operandGuard(value.left as t.Expression, equality), operandGuard(value.right, equality)].filter((g): g is t.Expression => g !== null);
+        if (guards.length === 0) return t.arrowFunctionExpression([], value);
+        var le = guards.length === 1 ? guards[0] : t.logicalExpression('&&', guards[0], guards[1]);
         rtrn = t.returnStatement(value);
         if (enableDefaultreturn) {
             return cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([t.ifStatement(le, t.blockStatement([rtrn])), t.returnStatement(defaultLiteral)])), [value.left, value.right]);

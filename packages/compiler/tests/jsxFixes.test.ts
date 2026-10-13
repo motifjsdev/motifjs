@@ -323,3 +323,65 @@ describe('üretilen getter içindeki çağrı bir kez değerlendirilir', () => {
         expect(out).toMatch(/__r1 = wrap\(\(\) => f\(\)\)/);
     });
 });
+
+describe('düz etiketteki eşitlik karşılaştırması değerin kendisini korumaz', () => {
+    const getterOf = (out: string, attr: string): string => {
+        const asAttr = out.indexOf(`"${attr}": () =>`);
+        const start = asAttr > -1 ? asAttr : out.indexOf(`bindings.add("${attr}", () =>`);
+        expect(start).toBeGreaterThan(-1);
+        let depth = 0;
+        let i = out.indexOf('=>', start) + 2;
+        const from = out.indexOf('{', i);
+        const arrowBody = out.slice(i).trimStart();
+        if (!arrowBody.startsWith('{')) {
+            const end = out.indexOf('})', i);
+            return out.slice(i, end).trim();
+        }
+        for (i = from; i < out.length; i++) {
+            if (out[i] === '{') depth++;
+            if (out[i] === '}' && --depth === 0) break;
+        }
+        return out.slice(from, i + 1);
+    };
+    const run = (out: string, attr: string, s: unknown) => {
+        const body = getterOf(out, attr);
+        const fn = body.startsWith('{') ? new Function('s', body) : new Function('s', `return ${body};`);
+        return fn(s);
+    };
+
+    test('s.path === null yalnız s nesnesini korur ve null değerde true döner', () => {
+        const out = compile(`function A(s){ return <button disabled={s.path === null} />; }`);
+        expect(out).toMatch(/"disabled": \(\) => \{\s*if \(s !== null && s !== undefined\) \{\s*return s\.path === null;/);
+        expect(out).not.toMatch(/null !== null/);
+        expect(run(out, 'disabled', { path: null })).toBe(true);
+        expect(run(out, 'disabled', { path: [1] })).toBe(false);
+        expect(run(out, 'disabled', undefined)).toBeUndefined();
+    });
+
+    test('== null ve === undefined aynı biçimde çalışır', () => {
+        const a = compile(`function A(s){ return <button disabled={s.path == null} />; }`);
+        expect(run(a, 'disabled', { path: undefined })).toBe(true);
+        const b = compile(`function A(s){ return <button disabled={s.mode === undefined} />; }`);
+        expect(run(b, 'disabled', {})).toBe(true);
+    });
+
+    test('düz değişkenle karşılaştırma korunmaz', () => {
+        const out = compile(`function A(s){ return <input checked={s === null} />; }`);
+        expect(out).toMatch(/bindings\.add\("checked", \(\) => s === null\)/);
+        expect(out).not.toMatch(/null !== null/);
+    });
+
+    test('derin üyede yalnız nesne zinciri korunur', () => {
+        const out = compile(`function A(s){ return <input checked={s.a.b !== null} />; }`);
+        expect(out).toMatch(/if \(s && s\.a !== null && s\.a !== undefined\) \{\s*return s\.a\.b !== null;/);
+        expect(run(out, 'checked', { a: { b: null } })).toBe(false);
+        expect(run(out, 'checked', { a: { b: 1 } })).toBe(true);
+    });
+
+    test('aritmetik ve büyüklük karşılaştırması bugünkü korumayla kalır', () => {
+        const plus = compile(`function A(s){ return <input value={s.a.b + 1} />; }`);
+        expect(plus).toMatch(/if \(s && s\.a && s\.a\.b !== null && s\.a\.b !== undefined && 1 !== null && 1 !== undefined\) \{\s*return s\.a\.b \+ 1;/);
+        const more = compile(`function A(s){ return <input checked={s.items.length > 0} />; }`);
+        expect(more).toMatch(/if \(s && s\.items && s\.items\.length !== null && s\.items\.length !== undefined && 0 !== null && 0 !== undefined\) \{\s*return s\.items\.length > 0;/);
+    });
+});
