@@ -247,8 +247,8 @@ export class ServiceProvider {
         if (!slot.ownerless) {
             const pinned = pinnedScopeOf(slot.owner);
             if (pinned) return pinned;
-            if (constructionScope && constructionScope.root === this) return constructionScope;
         }
+        if (constructionScope && constructionScope.root === this) return constructionScope;
         return navigation ? navigation.current : this;
     }
 
