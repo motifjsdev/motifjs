@@ -8,7 +8,7 @@ import { RouteCollection, compareRouteRecords } from "./";
 import { RouteItem, RouteRecord, RouterValidateEventArgs } from "./";
 import { RoutingEngine } from "./";
 import { errorHandler } from "../common/ErrorHandler";
-import { devtools } from "../devtools/devbus";
+import { navigationStarted, navigationFinished } from "../devtools/devbus";
 import { motifError, reportError, reportWarning } from "../common/diagnostics";
 
 const pathOf = (uri: string): string => uri.split('#')[0].split('?')[0];
@@ -222,10 +222,9 @@ export class UrlRoutingModule {
     public async navigate(uri: string, options?: NavigationOptions): Promise<any> {
         const traversal = this._pendingTraversal;
         this._pendingTraversal = null;
+        /* @DEV-ONLY */ const devNav = navigationStarted(uri);
+        const result = await safeCallSilentAsync(async () => {
 
-        return await safeCallSilentAsync(async () => {
-
-            try { devtools()?.('route:navigation-start', { uri }); } catch { }
             const suppressBeforeEachThisCall = this._suppressBeforeEachOnce;
             if (suppressBeforeEachThisCall) {
                 this._suppressBeforeEachOnce = false;
@@ -411,12 +410,12 @@ export class UrlRoutingModule {
                 direction,
                 state: entryState
             });
-            try { devtools()?.('route:navigation-end', { uri: appliedPath, params: target.params }); } catch { }
 
             return target;
 
         }, 'UrlRoutingModule.navigate');
-
+        /* @DEV-ONLY */ navigationFinished(devNav, result, (r: ResolveResult) => this.chainOf(r));
+        return result;
     }
  
     public describeStack(): StackEntryInfo[] | undefined {

@@ -4,6 +4,8 @@ import { getCounters, resetCounters } from './counters';
 export type DevEvent = { type: string; payload?: any };
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
 export type DevStore = { name: string; value: any; type: string };
+export type DevNavigation = { requested: string; uri: string | null; outcome: string; reason?: string; params?: any; duration: number; at: number };
+export type DevError = { context: string; name: string; message: string; error: any; count: number; firstAt: number; lastAt: number };
 
 const state = {
     enabled: false as boolean,
@@ -11,6 +13,9 @@ const state = {
     warnings: new Map<string, DevWarning>(),
     routes: null as any,
     stores: [] as DevStore[],
+    navigations: [] as DevNavigation[],
+    route: null as { uri: string; params: any; chain: string[] } | null,
+    errors: new Map<string, DevError>(),
     exposed: null as object | null,
 };
 
@@ -25,7 +30,7 @@ export function setDevtoolsEnabled(enabled: boolean) {
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect, getServices, getCounters, isEnabled };
+            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect, getServices, getCounters, getRoute, getNavigations, getErrors, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
         } else {
             if (state.exposed !== null && g.__MOTIF_DEVTOOLS__ === state.exposed) delete g.__MOTIF_DEVTOOLS__;
@@ -74,6 +79,60 @@ export function getWarnings(): DevWarning[] { return Array.from(state.warnings.v
 
 export function setRoutes(routes: any) { state.routes = routes; }
 export function getRoutes(): any { return state.routes; }
+
+export function navigationStarted(uri: string): { requested: string; at: number } | null {
+    if (!state.enabled) return null;
+    emit('route:navigation-start', { uri });
+    return { requested: uri, at: performance.now() };
+}
+
+function outcomeOf(result: any): { outcome: string; reason?: string } {
+    if (result === undefined || result === null) return { outcome: 'error' };
+    if (result.skipped) return { outcome: 'skipped' };
+    if (result.cancelled) return { outcome: 'cancelled', reason: result.reason };
+    if (result.ok === false) return { outcome: result.route?.name === 'error' ? 'error' : 'notFound' };
+    return { outcome: 'done' };
+}
+
+export function navigationFinished(started: { requested: string; at: number } | null, result: any, chainOf: (r: any) => string[]): void {
+    if (started === null || !state.enabled) return;
+    const { requested } = started;
+    const { outcome, reason } = outcomeOf(result);
+    const uri: string | null = result?.uri ?? null;
+    const nav: DevNavigation = { requested, uri, outcome, reason, params: result?.params, duration: performance.now() - started.at, at: Date.now() };
+    state.navigations.push(nav);
+    if (state.navigations.length > 50) state.navigations.shift();
+    if ((outcome === 'done' || outcome === 'notFound' || outcome === 'error') && uri !== null && Array.isArray(result?.chain)) {
+        let chain: string[] = [];
+        try { chain = chainOf(result); } catch { }
+        state.route = { uri, params: result.params, chain };
+    }
+    emit('route:navigation-end', { uri: uri ?? requested, requested, outcome, reason, params: result?.params, duration: nav.duration });
+}
+
+export function getRoute() { return state.route === null ? null : { ...state.route }; }
+export function getNavigations(): DevNavigation[] { return state.navigations.map(n => ({ ...n })); }
+
+export function errorCaught(context: string, error: any, serialize: () => any): void {
+    if (!state.enabled) return;
+    const name = String(error?.name ?? ''), message = String(error?.message ?? error);
+    const key = context + '\u0000' + name + '\u0000' + message;
+    const now = Date.now();
+    const serialized = serialize();
+    let e = state.errors.get(key);
+    if (e === undefined) {
+        e = { context, name, message, error: serialized, count: 1, firstAt: now, lastAt: now };
+    } else {
+        state.errors.delete(key);
+        e.count++;
+        e.lastAt = now;
+    }
+    state.errors.set(key, e);
+    if (state.errors.size > 100) state.errors.delete(state.errors.keys().next().value!);
+    emit('error:caught', { context, error: serialized });
+}
+
+export function getErrors(): DevError[] { return Array.from(state.errors.values(), e => ({ ...e })); }
 
 export function registerStore(name: string, value: any, type: string): void {
     if (!state.enabled) return;
