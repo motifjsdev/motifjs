@@ -1,6 +1,7 @@
 import { getTree, getElement, pathOfElement, inspect, getServices } from './inspect';
+import { getCounters, resetCounters } from './counters';
 
-export type DevEvent ={ type: string; payload?: any };
+export type DevEvent = { type: string; payload?: any };
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
 export type DevStore = { name: string; value: any; type: string };
 
@@ -19,11 +20,12 @@ export function isDevLike(): boolean {
 }
 
 export function setDevtoolsEnabled(enabled: boolean) {
+    if (enabled && !state.enabled) resetCounters();
     state.enabled = enabled;
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect, getServices, isEnabled };
+            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect, getServices, getCounters, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
         } else {
             if (state.exposed !== null && g.__MOTIF_DEVTOOLS__ === state.exposed) delete g.__MOTIF_DEVTOOLS__;

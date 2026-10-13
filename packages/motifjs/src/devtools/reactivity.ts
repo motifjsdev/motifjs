@@ -1,5 +1,6 @@
 import { devtools } from './devbus';
 import { preview, pathOf, tagOf, effectInfoOf, ownEffect, disownEffect } from './inspect';
+import { countEffectCreated, countEffectOwned, countEffectStopped, countRun, countFlush } from './counters';
 
 type Trigger = { target: any; key: string; count: number };
 type Flush = { at: number; runs: number; effects: Map<object, number>; triggers: Map<string, Trigger> };
@@ -11,6 +12,7 @@ let current: Flush | null = null;
 export function effectCreated(e: object): void {
     if (devtools() === undefined) return;
     effectInfoOf(e);
+    countEffectCreated(e);
     lastCreated = e;
 }
 
@@ -18,11 +20,18 @@ export function effectOwner(owner: object | null, kind: string): void {
     if (devtools() === undefined || lastCreated === null) return;
     const info = effectInfoOf(lastCreated);
     info.kind = kind;
-    if (owner !== null) ownEffect(owner, lastCreated, info);
+    if (owner !== null) {
+        ownEffect(owner, lastCreated, info);
+        countEffectOwned(lastCreated);
+    }
     lastCreated = null;
 }
 
-export function effectStopped(e: object): void { disownEffect(e); }
+export function effectStopped(e: object): void {
+    if (devtools() === undefined) return;
+    countEffectStopped(e);
+    disownEffect(e);
+}
 
 export function runStarting(): number {
     return devtools() === undefined ? -1 : performance.now();
@@ -35,6 +44,7 @@ export function runFinished(e: object, at: number): void {
     info.runs++;
     info.lastDuration = now - at;
     info.lastRunAt = now;
+    countRun();
     if (current !== null) {
         current.runs++;
         current.effects.set(e, (current.effects.get(e) ?? 0) + 1);
@@ -66,5 +76,7 @@ export function flushFinished(): void {
         const o: any = info.owner;
         return { path: o ? pathOf(o) : null, type: o ? (o.constructor?.name ?? '') : null, tag: o ? tagOf(o) : null, kind: info.kind, runs };
     });
-    emit('reactivity:flush', { duration: performance.now() - f.at, runs: f.runs, triggers: [...f.triggers.values()], effects });
+    const duration = performance.now() - f.at;
+    countFlush(duration, f.runs);
+    emit('reactivity:flush', { duration, runs: f.runs, triggers: [...f.triggers.values()], effects });
 }

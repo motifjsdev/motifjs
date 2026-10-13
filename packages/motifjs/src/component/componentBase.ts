@@ -18,7 +18,7 @@ import { lazyBindMethods } from "../common/lazyBind";
 import { trackedCleanup } from "../disposable/Cleanup";
 import type { MotifDomEventProps } from "../jsx-runtime";
 import { isDevLike } from "../devtools/devbus";
-import { buildStarted, buildFinished, componentEvent, disposeStarted, disposeFinished, serviceRequested } from "../devtools/tree";
+import { buildStarted, buildFinished, componentEvent, disposeStarted, disposeFinished, serviceRequested, componentCreated } from "../devtools/tree";
 import { effectOwner } from "../devtools/reactivity";
 
 /** DI token'ını okunur biçime çevirir (dev uyarıları için). */
@@ -1583,6 +1583,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 const asComponentRoot = constructingComponentRoot;
                 constructingComponentRoot = false;
                 recordServiceOwner(this);
+                /* @DEV-ONLY */ componentCreated(this);
                 if (this.onElementCreating) {
                         this.element = this.onElementCreating.call(this);
                 } else if ((props as any)?.onElementCreating) {

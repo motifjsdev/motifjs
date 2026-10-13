@@ -175,7 +175,7 @@ export function disownEffect(e: object): void {
 function effectsOf(c: any) {
     const s = ownedEffects.get(c);
     if (s === undefined) return [];
-    return [...s].map(e => {
+    return [...s].filter(e => (e as any).active !== false).map(e => {
         const i = effectInfoOf(e);
         const deps: any[] = (e as any).deps ?? [];
         return { kind: i.kind, runs: i.runs, lastDuration: i.lastDuration, lastTrigger: i.lastTrigger, deps: deps.map(([t, k]) => ({ target: preview(t), key: String(k) })) };

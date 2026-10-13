@@ -1,5 +1,11 @@
 import { devtools } from './devbus';
 import { pathOf, tagOf, recordService } from './inspect';
+import { countCreated, countDisposed } from './counters';
+
+export function componentCreated(c: any): void {
+    if (devtools() === undefined) return;
+    countCreated(c);
+}
 
 export function serviceRequested(owner: object, token: any): void {
     if (devtools() === undefined) return;
@@ -66,6 +72,7 @@ export function disposeStarted(c: any): void {
 export function disposeFinished(c: any): void {
     const emit = devtools();
     if (emit === undefined) return;
+    countDisposed(c);
     const start = disposeStarts.get(c);
     disposeStarts.delete(c);
     emit('component:disposed', start === undefined
