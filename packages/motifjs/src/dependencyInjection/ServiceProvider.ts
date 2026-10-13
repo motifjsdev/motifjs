@@ -2,7 +2,7 @@ import { ServiceCollection, ServiceDescriptor } from "./ServiceCollection";
 import { motifError } from "../common/diagnostics";
 import { Signal } from "../store/Signal";
 import { setScopeResolver } from "../devtools/inspect";
-import { scopeCreated, scopeDisposed, scopesChanged } from "../devtools/scopes";
+import { scopeCreated, scopeDisposed, scopesChanged, serviceCreated } from "../devtools/scopes";
 
 type ScopeKind = 'root' | 'navigation' | 'user';
 type OwnerSlot = { owner: object | null; ownerless?: boolean };
@@ -301,6 +301,7 @@ export class ServiceProvider {
         if (this.scopedCache.has(desc.token)) return this.scopedCache.get(desc.token);
         const inst = runWith(null, this, () => this.instantiateSync(desc, path));
         this.scopedCache.set(desc.token, inst);
+        /* @DEV-ONLY */ serviceCreated(this, desc, inst);
         return inst;
     }
 
@@ -310,6 +311,7 @@ export class ServiceProvider {
         const promise = (async () => {
             const inst = await this.instantiateAsyncIn(null, this, desc, path);
             this.scopedCache.set(desc.token, inst);
+            /* @DEV-ONLY */ serviceCreated(this, desc, inst);
             this.pendingScoped.delete(desc.token);
             return inst;
         })();
@@ -324,6 +326,7 @@ export class ServiceProvider {
                 if (this.singletonCache.has(desc.token)) return this.singletonCache.get(desc.token);
                 const inst = runWith(null, null, () => this.instantiateSync(desc, path));
                 this.singletonCache.set(desc.token, inst);
+                /* @DEV-ONLY */ serviceCreated(this.root, desc, inst);
                 return inst;
             }
             case 'scoped': {
@@ -336,6 +339,7 @@ export class ServiceProvider {
                 if (this._autoDisposeTransients && this.parent) {
                     this.transientSet.add(inst);
                 }
+                /* @DEV-ONLY */ serviceCreated(this, desc, inst);
                 return inst;
             }
         }
@@ -350,6 +354,7 @@ export class ServiceProvider {
                 const promise = (async () => {
                     const inst = await this.instantiateAsyncIn(null, null, desc, path);
                     this.singletonCache.set(desc.token, inst);
+                    /* @DEV-ONLY */ serviceCreated(this.root, desc, inst);
                     this.pendingSingleton.delete(desc.token);
                     return inst;
                 })();
@@ -366,6 +371,7 @@ export class ServiceProvider {
                 if (this._autoDisposeTransients && this.parent) {
                     this.transientSet.add(inst);
                 }
+                /* @DEV-ONLY */ serviceCreated(this, desc, inst);
                 return inst;
             }
         }

@@ -21,6 +21,8 @@ export type DevtoolsEvent =
     | { type: 'route:navigation-end'; payload: { uri: string; requested: string; outcome: 'done' | 'skipped' | 'cancelled' | 'notFound' | 'error'; reason?: string; params?: unknown; duration: number } }
     | { type: 'stores:changed'; payload: Record<string, never> }
     | { type: 'scopes:changed'; payload: Record<string, never> }
+    | { type: 'service:created'; payload: { scope: number; token: string; lifetime: string; source: 'class' | 'factory' | 'value'; instance: unknown } }
+    | { type: 'service:disposed'; payload: { scope: number; token: string; lifetime: string; instance: unknown } }
     | { type: `ext:${string}`; payload?: unknown };
 
 export type DevtoolsStoreHolder =

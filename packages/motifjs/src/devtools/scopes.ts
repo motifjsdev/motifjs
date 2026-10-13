@@ -40,7 +40,29 @@ export function scopeCreated(scope: object): void {
 export function scopeDisposed(scope: object): void {
     const id = ids.get(scope);
     if (id !== undefined) created.delete(id);
+    const emit = emitter();
+    if (emit !== undefined) servicesDisposed(scope, emit);
     scopesChanged();
+}
+
+const transientTokens = new WeakMap<object, any>();
+
+const sourceOf = (desc: any) => desc.useValue !== undefined ? 'value' : desc.useFactory ? 'factory' : 'class';
+
+export function serviceCreated(scope: object, desc: any, inst: any): void {
+    const emit = emitter();
+    if (emit === undefined) return;
+    if (desc.lifetime === 'transient' && inst !== null && typeof inst === 'object') transientTokens.set(inst, desc.token);
+    emit('service:created', { scope: idOf(scope), token: tokenName(desc.token), lifetime: desc.lifetime, source: sourceOf(desc), instance: preview(inst) });
+}
+
+function servicesDisposed(scope: any, emit: Emit): void {
+    const lifetimes: Map<any, any> | undefined = scope.root.services?.descriptors;
+    const send = (token: any, inst: any, lifetime: string) =>
+        emit('service:disposed', { scope: idOf(scope), token: tokenName(token), lifetime, instance: preview(inst) });
+    if (scope.root === scope) for (const [token, inst] of scope.singletonCache) send(token, inst, 'singleton');
+    for (const [token, inst] of scope.scopedCache) send(token, inst, lifetimes?.get(token)?.lifetime ?? 'scoped');
+    for (const inst of scope.transientSet) send(transientTokens.get(inst) ?? null, inst, 'transient');
 }
 
 export function getScopes(): DevScope[] {
