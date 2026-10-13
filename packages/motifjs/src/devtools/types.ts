@@ -31,6 +31,7 @@ export type DevtoolsStoreHolder =
 
 export interface MotifDevtools {
     readonly version: 1;
+    readonly coreVersion: string;
     on(listener: (event: DevtoolsEvent) => void): () => void;
     isEnabled(): boolean;
     getTree(path?: DevtoolsPath, depth?: number): DevtoolsTreeNode | null;

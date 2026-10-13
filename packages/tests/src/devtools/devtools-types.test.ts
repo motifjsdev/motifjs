@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Application } from '@motifx/core';
 import type { MotifDevtools, DevtoolsEvent } from '@motifx/core/devtools';
 
 const KEYS: (keyof MotifDevtools)[] = [
-    'version', 'on', 'isEnabled',
+    'version', 'coreVersion', 'on', 'isEnabled',
     'getTree', 'getElement', 'pathOfElement', 'inspect', 'getServices', 'getScopes', 'getCounters',
     'getWarnings', 'getErrors', 'getRoutes', 'getRoute', 'getNavigations', 'getStores',
     'getExtensions', 'readExtension', 'readValue', 'readStore', 'readService',
@@ -27,6 +29,14 @@ describe('devtools contract type', () => {
         const off = hook.on(ev => { seen.push(ev.type); });
         off();
         expect(seen).toEqual([]);
+        app.dispose();
+    });
+
+    test('coreVersion is the version of the core package', () => {
+        const app = Application.CreateBuilder().build();
+        app.useDevelopment(true);
+        const pkg = JSON.parse(readFileSync(join(__dirname, '../../../motifjs/package.json'), 'utf8'));
+        expect((globalThis as any).__MOTIF_DEVTOOLS__.coreVersion).toBe(pkg.version);
         app.dispose();
     });
 });

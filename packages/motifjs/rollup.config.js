@@ -112,6 +112,16 @@ var onwarn = function (warning) {
     }
 };
 
+var motifVersion = function () {
+    var version = JSON.stringify(JSON.parse(fs.readFileSync('./package.json', 'utf8')).version);
+    return {
+        name: 'motif-version',
+        transform: function (code) {
+            return code.includes('__MOTIF_VERSION__') ? { code: code.split('__MOTIF_VERSION__').join(version), map: null } : null;
+        }
+    };
+};
+
 var plugins = function (statsFile) {
     return [
         commonJS(),
@@ -126,6 +136,7 @@ var plugins = function (statsFile) {
             importHelpers: true,
             cacheRoot: './node_modules/.cache/rpt2-' + statsFile.replace(/\.html$/, '')
         }),
+        motifVersion(),
         (process.env.ANALYZE && visualizer({ filename: statsFile, gzipSize: true, brotliSize: true }))
     ];
 };
