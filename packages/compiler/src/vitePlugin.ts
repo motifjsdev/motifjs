@@ -5,6 +5,7 @@ import Compiler from "./compiler";
 import { MotifDiagnostic, printDiagnostics } from "./diagnostics";
 import { printExplanations } from "./explain";
 import { analyzeModule, createComponentResolver, mayHaveSuperOverrides, parseModule, superCallMessage } from "./superCalls";
+import { STORE_FACTORY_PATTERN } from "./storeNames";
 const fileRegex = /\.(jsx|tsx|aio|mjsx|mtsx)$/;
 const decoratorFileRegex = /\.(ts|mts|cts|js|mjs|cjs)$/;
 const declarationFileRegex = /\.d\.[mc]?ts$/;
@@ -29,6 +30,17 @@ export function shouldLowerDecorators(id: string, src: string): boolean {
   if (file === null || !decoratorFileRegex.test(file) || declarationFileRegex.test(file)) return false;
   if (file.includes('/node_modules/')) return false;
   return decoratorSyntaxRegex.test(src);
+}
+
+function mayCreateStores(src: string): boolean {
+  return src.includes('@motifx/core') && STORE_FACTORY_PATTERN.test(src);
+}
+
+export function shouldNameStores(id: string, src: string): boolean {
+  const file = sourceFile(id);
+  if (file === null || !decoratorFileRegex.test(file) || declarationFileRegex.test(file)) return false;
+  if (file.replace(/\\/g, '/').includes('/node_modules/')) return false;
+  return mayCreateStores(src);
 }
 
 export function shouldCheckSuperCalls(id: string, src: string): boolean {
@@ -81,6 +93,7 @@ function legacyDecoratorsChecker() {
 export interface MotifVitePluginOptions {
   diagnostics?: boolean;
   explain?: boolean | string | RegExp;
+  storeNames?: boolean;
 }
 
 function explainMatches(opt: boolean | string | RegExp | undefined, id: string): boolean {
@@ -106,9 +119,20 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
     });
   let isComponentBase = makeResolver();
   const pending = new Set<Promise<void>>();
+  let naming = options.storeNames === true;
+  let root = process.cwd();
+  const storeLabel = (id: string, src: string): string | null => {
+    const file = sourceFile(id);
+    if (!naming || file === null || file.replace(/\\/g, '/').includes('/node_modules/') || !mayCreateStores(src)) return null;
+    return path.relative(root, file).split(path.sep).join('/');
+  };
   return {
     name: 'transform-file-motif-jsx',
     enforce: 'pre' as const,
+    configResolved(config: { isProduction: boolean; root: string }) {
+      root = config.root;
+      if (options.storeNames === undefined) naming = !config.isProduction;
+    },
     watchChange() {
       isComponentBase = makeResolver();
     },
@@ -126,9 +150,22 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
           .finally(() => { pending.delete(check); });
         pending.add(check);
       }
-      if (shouldLowerDecorators(id, src)) {
-        if (usesLegacyDecorators(sourceFile(id)!)) return;
-        const result = new Compiler().lowerDecorators(src, id);
+      if (shouldLowerDecorators(id, src) && !usesLegacyDecorators(sourceFile(id)!)) {
+        const compiler = new Compiler();
+        compiler.storeNames = storeLabel(id, src);
+        const result = compiler.lowerDecorators(src, id);
+        if (result && result.code) {
+          return {
+            code: result.code,
+            map: result.map
+          }
+        }
+        return;
+      }
+      if (shouldNameStores(id, src)) {
+        const compiler = new Compiler();
+        compiler.storeNames = storeLabel(id, src);
+        const result = compiler.nameStores(src, id);
         if (result && result.code) {
           return {
             code: result.code,
@@ -141,6 +178,7 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
         if (!src.includes("//useReact") && !src.includes("//useVue")) {
           try {
             const compiler = new Compiler();
+            compiler.storeNames = storeLabel(id, src);
             const doExplain = explainMatches(options.explain, id);
             var result = doExplain ? compiler.explain(src, id) : compiler.start(src, id);
             if (doExplain) printExplanations(compiler.explanations);

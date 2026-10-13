@@ -41,12 +41,15 @@ export default {
 
 Files ending in `.tsx`, `.jsx`, `.mtsx`, `.mjsx` or `.aio`. In `.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs` files that contain decorators, only the standard (TC39) decorators are compiled, so `@Injectable` behaves the same in every file in `vite dev` and `vite build`. Files whose nearest `tsconfig.json` enables `experimentalDecorators`, `.d.ts` files and files under `node_modules` are left to Vite. Imports with a `?raw`, `?url`, `?worker`, `?sharedworker` or `?inline` query and virtual modules are left untouched.
 
+While developing (`storeNames`), module-level stores are named for DevTools: in `.ts`, `.tsx`, `.js` and `.jsx` files outside `node_modules`, every top-level `const` or `let` whose value comes from `reactive`, `useModel`, `createSignal`, `createComputed` or `createLazyComputed` of `@motifx/core` is followed by a call that gives the store its variable name and its file. A production build adds nothing.
+
 ## Options
 
 ```ts
 compiler({
     diagnostics: true,
     explain: false,
+    storeNames: undefined,
 });
 ```
 
@@ -54,6 +57,7 @@ compiler({
 | --- | --- | --- |
 | `diagnostics` | `true` | Print compiler warnings (`MJX001`–`MJX004`, `MJX007`, `MJX015`) for patterns that compile but do not behave as they read. `MJX015` (a class component override that does not reach `super` on every path) is also checked in `.ts` / `.js` files. |
 | `explain` | `false` | Print what every JSX expression was lowered to. `true` for all files, or a string / `RegExp` matched against the file path. |
+| `storeNames` | on while developing | Name module-level stores for DevTools with their variable and file (relative to the Vite root). Unset, it follows Vite: on in `vite dev`, off in a production build; `true` or `false` sets it. |
 
 ## Command-line tools
 

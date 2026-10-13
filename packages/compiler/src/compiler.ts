@@ -14,6 +14,7 @@ import { ASYNC_TRACKING_LOCAL, isVirtualizationDataRequest, wrapAwaitsForTrackin
 import { resolveElementType } from "./elementTags";
 import { beginCollect, endCollect, type MotifDiagnostic } from "./diagnostics";
 import { beginExplain, endExplain, isExplaining, captureOrigin, noteOriginRaw, type MotifExplanation } from "./explain";
+import { storeNamesPlugin } from "./storeNames";
 
 
 function absorbGeneratedCoreImports(statements: NodePath[], into: Map<string, t.ImportSpecifier>): void {
@@ -133,6 +134,31 @@ export default class Compiler {
     }
     public diagnostics: MotifDiagnostic[] = [];
     public explanations: MotifExplanation[] = [];
+    public storeNames: string | null = null;
+
+    private namingPlugins(outcome?: { named: boolean }): babel.PluginItem[] {
+        return this.storeNames === null ? [] : [storeNamesPlugin(this.storeNames, outcome)];
+    }
+
+    public nameStores(code: string, filename: string): babel.BabelFileResult | null {
+        if (this.storeNames === null) return null;
+        const file = filename.split('?')[0];
+        const outcome = { named: false };
+        const result = babel.transformSync(code, {
+            sourceType: 'module',
+            babelrc: false,
+            configFile: false,
+            code: true,
+            sourceMaps: true,
+            comments: true,
+            highlightCode: false,
+            filename: file,
+            sourceFileName: file,
+            parserOpts: { plugins: /\.[mc]?ts$/.test(file) ? ['typescript'] : [] },
+            plugins: this.namingPlugins(outcome),
+        });
+        return outcome.named ? result : null;
+    }
 
     public start(code: string, filename: string): babel.BabelFileResult | null {
 
@@ -157,7 +183,7 @@ export default class Compiler {
             filename: file,
             sourceFileName: file,
             parserOpts: { plugins: /\.[mc]?ts$/.test(file) ? ['typescript'] : [] },
-            plugins: [[proposal_decorators, { "version": "2023-11" }]],
+            plugins: [...this.namingPlugins(), [proposal_decorators, { "version": "2023-11" }]],
         });
     }
 
@@ -196,6 +222,7 @@ export default class Compiler {
                 }]
             ],
             plugins: [
+                ...this.namingPlugins(),
                 elementTagPlugin,
                 [proposal_decorators, { "version": "2023-11" }],
                 [transform_class_properties, { "loose": true }],

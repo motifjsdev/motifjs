@@ -45,7 +45,7 @@ export interface MotifDevtools {
     getRoutes(): unknown;
     getRoute(): { uri: string; params: unknown; chain: string[] } | null;
     getNavigations(): { requested: string; uri: string | null; outcome: string; reason?: string; params?: unknown; duration: number; at: number }[];
-    getStores(): { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; value: unknown; stale?: boolean; released?: boolean; holders: DevtoolsStoreHolder[] }[];
+    getStores(): { id: number; name: string; file?: string; type: 'reactive' | 'signal' | 'computed'; value: unknown; stale?: boolean; released?: boolean; holders: DevtoolsStoreHolder[] }[];
     getExtensions(): string[];
     readExtension(name: string): unknown;
     readValue(path: DevtoolsPath, source: 'props' | 'functionProps' | 'fields', keys: string[]): DevtoolsResult;

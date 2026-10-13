@@ -7,8 +7,8 @@ import { getScopes, recordScopes, bindScopesEmitter, serviceInstance } from './s
 import type { MotifDevtools, DevtoolsEvent } from './types';
 
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
-type StoreEntry = { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; ref: WeakRef<object>; held: boolean };
-export type DevStore = { id: number; name: string; type: StoreEntry['type']; value: any; stale?: boolean; released?: boolean; holders: StoreHolder[] };
+type StoreEntry = { id: number; name: string; file?: string; type: 'reactive' | 'signal' | 'computed'; ref: WeakRef<object>; held: boolean };
+export type DevStore = { id: number; name: string; file?: string; type: StoreEntry['type']; value: any; stale?: boolean; released?: boolean; holders: StoreHolder[] };
 export type DevNavigation = { requested: string; uri: string | null; outcome: string; reason?: string; params?: any; duration: number; at: number };
 export type DevError = { context: string; name: string; message: string; error: any; count: number; firstAt: number; lastAt: number };
 
@@ -162,9 +162,24 @@ export function registerStore(value: object, type: StoreEntry['type'], fallback:
 
 const entryOf = new WeakMap<object, StoreEntry>();
 
+const moduleNames = new WeakMap<object, { name: string; file: string }>();
+let moduleStores: WeakRef<object>[] = [];
+
+export function nameModuleStore(value: unknown, name: string, file: string): void {
+    if (value === null || typeof value !== 'object' || storeTypeOf(value) === null) return;
+    moduleNames.set(value, { name, file });
+    moduleStores.push(new WeakRef(value));
+    const entry = entryOf.get(value);
+    if (entry !== undefined) {
+        entry.name = name;
+        entry.file = file;
+    }
+}
+
 function addStore(value: object, type: StoreEntry['type'], name: string, notify = true): number {
     const id = ++state.storeSeq;
-    const entry: StoreEntry = { id, name, type, ref: new WeakRef(value), held: false };
+    const known = moduleNames.get(value);
+    const entry: StoreEntry = known === undefined ? { id, name, type, ref: new WeakRef(value), held: false } : { id, name: known.name, file: known.file, type, ref: new WeakRef(value), held: false };
     state.stores.set(id, entry);
     entryOf.set(value, entry);
     if (state.stores.size >= state.storePrune) pruneStores();
@@ -233,6 +248,12 @@ export function getStores(): DevStore[] {
         const target = e.ref.deref();
         if (target !== undefined) ids.set(target, e.id);
     }
+    moduleStores = moduleStores.filter(ref => {
+        const target = ref.deref();
+        if (target === undefined) return false;
+        if (!ids.has(target)) adopt(target, ids);
+        return true;
+    });
     const holders = holdersOf(v => ids.get(v) ?? adopt(v, ids));
     const live: [StoreEntry, any][] = [];
     for (const e of state.stores.values()) {
@@ -242,7 +263,9 @@ export function getStores(): DevStore[] {
     return live.map(([e, target]) => {
         const held = holders.get(e.id) ?? [];
         if (held.length > 0) e.held = true;
-        const base: { id: number; name: string; type: StoreEntry['type']; holders: StoreHolder[]; released?: boolean } = { id: e.id, name: e.name, type: e.type, holders: held };
+        const base: { id: number; name: string; file?: string; type: StoreEntry['type']; holders: StoreHolder[]; released?: boolean } = e.file === undefined
+            ? { id: e.id, name: e.name, type: e.type, holders: held }
+            : { id: e.id, name: e.name, file: e.file, type: e.type, holders: held };
         if (held.length === 0 && e.held) base.released = true;
         if (e.type === 'reactive') return { ...base, value: target };
         return target._dirty === true ? { ...base, value: target._value, stale: true } : { ...base, value: target._value };
