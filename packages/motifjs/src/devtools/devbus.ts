@@ -2,6 +2,7 @@ import { getTree, getElement, pathOfElement, inspect, getServices, componentAt }
 import { getCounters, resetCounters } from './counters';
 import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
 import { setClass, setAttribute, setVisible, writeModel, setProp, navigate, BLOCKED_KEYS, type WriteResult } from './writes';
+import { readValue } from './read';
 import type { MotifDevtools, DevtoolsEvent } from './types';
 
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
@@ -32,7 +33,7 @@ export function setDevtoolsEnabled(enabled: boolean) {
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
+            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readValue, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
         } else {
             if (state.exposed !== null && g.__MOTIF_DEVTOOLS__ === state.exposed) delete g.__MOTIF_DEVTOOLS__;

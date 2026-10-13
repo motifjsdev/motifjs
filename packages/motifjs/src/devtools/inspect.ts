@@ -17,6 +17,8 @@ export function nameComponent(c: object, name: string, props?: unknown): void {
     if (typeof props === 'object' && props !== null) functionProps.set(c, props); else functionProps.delete(c);
 }
 
+export function functionPropsOf(c: object): object | undefined { return functionProps.get(c); }
+
 export function typeOf(c: any): string { return names.get(c) ?? c.constructor?.name ?? ''; }
 
 export function tagOf(c: any): string {

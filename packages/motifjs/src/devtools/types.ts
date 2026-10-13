@@ -39,6 +39,7 @@ export interface MotifDevtools {
     getStores(): { name: string; value: unknown; type: string }[];
     getExtensions(): string[];
     readExtension(name: string): unknown;
+    readValue(path: DevtoolsPath, source: 'props' | 'functionProps', keys: string[]): DevtoolsResult;
     setClass(path: DevtoolsPath, name: string, on: boolean): DevtoolsResult;
     setAttribute(path: DevtoolsPath, name: string, value: string | null): DevtoolsResult;
     setVisible(path: DevtoolsPath, visible: boolean): Promise<DevtoolsResult>;
