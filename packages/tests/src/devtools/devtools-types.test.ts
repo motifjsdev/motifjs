@@ -5,7 +5,7 @@ const KEYS: (keyof MotifDevtools)[] = [
     'version', 'on', 'isEnabled',
     'getTree', 'getElement', 'pathOfElement', 'inspect', 'getServices', 'getScopes', 'getCounters',
     'getWarnings', 'getErrors', 'getRoutes', 'getRoute', 'getNavigations', 'getStores',
-    'getExtensions', 'readExtension', 'readValue', 'readStore',
+    'getExtensions', 'readExtension', 'readValue', 'readStore', 'readService',
     'setClass', 'setAttribute', 'setVisible', 'writeModel', 'setProp', 'navigate', 'setStoreValue',
 ];
 

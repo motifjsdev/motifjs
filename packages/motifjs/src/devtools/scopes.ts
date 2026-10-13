@@ -65,9 +65,7 @@ function servicesDisposed(scope: any, emit: Emit): void {
     for (const inst of scope.transientSet) send(transientTokens.get(inst) ?? null, inst, 'transient');
 }
 
-export function getScopes(): DevScope[] {
-    const root = rootProvider();
-    if (root === null) return [];
+function listScopes(root: any): Set<any> {
     const list = new Set<any>([root, ...(root._navigation?.scopes ?? [])]);
     for (const [id, ref] of [...created].sort((a, b) => a[0] - b[0])) {
         const s = ref.deref();
@@ -77,6 +75,22 @@ export function getScopes(): DevScope[] {
         for (let p = s; p && !list.has(p); p = p.parent) chain.unshift(p);
         for (const p of chain) list.add(p);
     }
+    return list;
+}
+
+export function serviceInstance(scopeId: number, token: string): { found: boolean; value?: any; error?: string } {
+    const root = rootProvider();
+    const scope = root === null ? undefined : [...listScopes(root)].find(s => ids.get(s) === scopeId);
+    if (scope === undefined) return { found: false, error: 'no scope' };
+    const caches: Map<any, any>[] = scope === root ? [scope.singletonCache, scope.scopedCache] : [scope.scopedCache];
+    for (const cache of caches) for (const [t, inst] of cache) if (tokenName(t) === token) return { found: true, value: inst };
+    return { found: false, error: 'no service' };
+}
+
+export function getScopes(): DevScope[] {
+    const root = rootProvider();
+    if (root === null) return [];
+    const list = listScopes(root);
     const descriptors: Map<any, any> | undefined = root.services?.descriptors;
     const lifetimeOf = (token: any) => descriptors?.get(token)?.lifetime ?? '';
     return [...list].map(s => {

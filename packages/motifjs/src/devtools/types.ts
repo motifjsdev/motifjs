@@ -50,6 +50,7 @@ export interface MotifDevtools {
     readExtension(name: string): unknown;
     readValue(path: DevtoolsPath, source: 'props' | 'functionProps' | 'fields', keys: string[]): DevtoolsResult;
     readStore(id: number, keys: string[]): DevtoolsResult;
+    readService(scope: number, token: string, keys: string[]): DevtoolsResult;
     setClass(path: DevtoolsPath, name: string, on: boolean): DevtoolsResult;
     setAttribute(path: DevtoolsPath, name: string, value: string | null): DevtoolsResult;
     setVisible(path: DevtoolsPath, visible: boolean): Promise<DevtoolsResult>;

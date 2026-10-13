@@ -3,7 +3,7 @@ import { getCounters, resetCounters } from './counters';
 import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
 import { setClass, setAttribute, setVisible, writeModel, setProp, navigate, BLOCKED_KEYS, type WriteResult } from './writes';
 import { readValue, readFrom } from './read';
-import { getScopes, recordScopes, bindScopesEmitter } from './scopes';
+import { getScopes, recordScopes, bindScopesEmitter, serviceInstance } from './scopes';
 import type { MotifDevtools, DevtoolsEvent } from './types';
 
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
@@ -42,7 +42,7 @@ export function setDevtoolsEnabled(enabled: boolean) {
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getScopes, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readValue, readStore, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
+            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getScopes, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readValue, readStore, readService, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
         } else {
             if (state.exposed !== null && g.__MOTIF_DEVTOOLS__ === state.exposed) delete g.__MOTIF_DEVTOOLS__;
@@ -340,6 +340,11 @@ export function readStore(id: number, keys: string[]): WriteResult {
     const target: any = entry?.ref.deref();
     if (!entry || target === undefined) return { ok: false, error: 'no store' };
     return readFrom(entry.type === 'reactive' ? target : target._value, keys);
+}
+
+export function readService(scope: number, token: string, keys: string[]): WriteResult {
+    const found = serviceInstance(scope, token);
+    return found.found ? readFrom(found.value, keys) : { ok: false, error: found.error! };
 }
 
 export function setStoreValue(id: number, keys: string[], value: unknown): WriteResult {
