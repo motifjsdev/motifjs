@@ -19,6 +19,8 @@ export function nameComponent(c: object, name: string, props?: unknown): void {
 
 export function functionPropsOf(c: object): object | undefined { return functionProps.get(c); }
 
+export function hasName(c: object): boolean { return names.has(c); }
+
 export function typeOf(c: any): string { return names.get(c) ?? c.constructor?.name ?? ''; }
 
 export function tagOf(c: any): string {

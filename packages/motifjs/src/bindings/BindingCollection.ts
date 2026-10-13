@@ -5,6 +5,7 @@ import { quietCleanup } from "../disposable/Cleanup";
 import { dom } from "../";
 import { effect, untracked } from "../";
 import { effectOwner } from "../devtools/reactivity";
+import { listCreated } from "../devtools/tree";
 import { Binding, BindingFormatInfo, IBaseBinding, IBindingCollection, ListBinding, ListBindingOptions, readModelValue } from "./";
 import { reportError } from "../common/diagnostics";
 import { lazyBindMethods } from "../common/lazyBind";
@@ -129,6 +130,7 @@ export class BindingCollection implements IBindingCollection {
     list(itemsFn: () => any[] | Iterable<any>, renderFn: (item: any, index: number) => ComponentBase, options: ListBindingOptions): IBaseBinding;
     list(itemsFn: () => any[] | Iterable<any>, renderFn: (item: any, index: number) => ComponentBase, options?: ListBindingOptions): IBaseBinding {
         const binding = new ListBinding(this._component, itemsFn, renderFn, options);
+        /* @DEV-ONLY */ listCreated(this._component, (binding as any).container);
         pushTight(this._items, binding);
         if (this._component.isBuilt) {
             binding.activate();
@@ -140,6 +142,7 @@ export class BindingCollection implements IBindingCollection {
     loop(itemsFn: () => any[] | Iterable<any>, renderFn: (item: any, index: number) => ComponentBase, options: ListBindingOptions): IBaseBinding;
     loop(itemsFn: () => any[] | Iterable<any>, renderFn: (item: any, index: number) => ComponentBase, options?: ListBindingOptions): IBaseBinding {
         const binding = new ListBinding(this._component, itemsFn, renderFn, options);
+        /* @DEV-ONLY */ listCreated(this._component, (binding as any).container);
         pushTight(this._items, binding);
         if (this._component.isBuilt) {
             binding.activate();

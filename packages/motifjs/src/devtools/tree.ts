@@ -1,5 +1,5 @@
 import { devtools, storesLeaving } from './devbus';
-import { pathOf, tagOf, typeOf, isComponent, nameComponent, recordService } from './inspect';
+import { pathOf, tagOf, typeOf, isComponent, nameComponent, recordService, hasName } from './inspect';
 import { countCreated, countDisposed, countRenamed } from './counters';
 
 export function componentCreated(c: any): void {
@@ -12,6 +12,19 @@ export function componentNamed(fn: unknown, c: any, props?: unknown): void {
     const before = typeOf(c);
     nameComponent(c, fn.name, props);
     countRenamed(c, before, fn.name);
+}
+
+function rename(c: any, name: string): void {
+    const before = typeOf(c);
+    nameComponent(c, name);
+    countRenamed(c, before, name);
+}
+
+export function listCreated(host: any, container: any): void {
+    if (devtools() === undefined) return;
+    rename(container, 'ListItems');
+    const plain = Object.getPrototypeOf(Object.getPrototypeOf(container));
+    if (Object.getPrototypeOf(host) === plain && tagOf(host) === '#fragment' && !hasName(host)) rename(host, 'List');
 }
 
 export function serviceRequested(owner: object, token: any): void {
