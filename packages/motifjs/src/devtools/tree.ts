@@ -27,6 +27,16 @@ export function listCreated(host: any, container: any): void {
     if (Object.getPrototypeOf(host) === plain && tagOf(host) === '#fragment' && !hasName(host)) rename(host, 'List');
 }
 
+export function frameCreated(frame: any, kind: 'Ternary' | 'When' | 'Switch' | 'Expression'): void {
+    if (devtools() === undefined) return;
+    rename(frame, kind);
+}
+
+export function emptyCreated(fragment: any): void {
+    if (devtools() === undefined) return;
+    rename(fragment, 'Empty');
+}
+
 export function serviceRequested(owner: object, token: any): void {
     if (devtools() === undefined) return;
     recordService(owner, token);

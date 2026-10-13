@@ -5,7 +5,7 @@ import { quietCleanup } from "../disposable/Cleanup";
 import { dom } from "../";
 import { effect, untracked } from "../";
 import { effectOwner } from "../devtools/reactivity";
-import { listCreated } from "../devtools/tree";
+import { listCreated, frameCreated, emptyCreated } from "../devtools/tree";
 import { Binding, BindingFormatInfo, IBaseBinding, IBindingCollection, ListBinding, ListBindingOptions, readModelValue } from "./";
 import { reportError } from "../common/diagnostics";
 import { lazyBindMethods } from "../common/lazyBind";
@@ -41,6 +41,7 @@ export class BindingCollection implements IBindingCollection {
     when(computeFn: () => any, renderFn: (isTrue: boolean) => any) {
 
         var frame = new Frame();
+        /* @DEV-ONLY */ frameCreated(frame, 'When');
         this._component.controls.add(frame);
         let shown = false;
         let last: any;
@@ -52,7 +53,9 @@ export class BindingCollection implements IBindingCollection {
                 if (value) {
                     frame.navigate(renderFn(value as any))
                 } else {
-                    frame.navigate(motifFragment())
+                    const empty = motifFragment();
+                    /* @DEV-ONLY */ emptyCreated(empty);
+                    frame.navigate(empty);
                 }
             });
         });
@@ -176,10 +179,17 @@ export class BindingCollection implements IBindingCollection {
             }
             if (!frame) {
                 frame = new Frame();
+                /* @DEV-ONLY */ frameCreated(frame, 'Expression');
                 place(frame, text);
                 text = null;
             }
-            frame.navigate(result == null ? motifFragment() : result as any);
+            if (result == null) {
+                const empty = motifFragment();
+                /* @DEV-ONLY */ emptyCreated(empty);
+                frame.navigate(empty);
+            } else {
+                frame.navigate(result as any);
+            }
         });
         /* @DEV-ONLY */ effectOwner(host, 'method');
         host.motif.register(quietCleanup(stop));
@@ -187,6 +197,7 @@ export class BindingCollection implements IBindingCollection {
 
     ternary(conditionFn: () => any, trueFn: (frame: Frame) => any, falseFn: (frame: Frame) => any) {
         const frame = new Frame();
+        /* @DEV-ONLY */ frameCreated(frame, 'Ternary');
         this._component.controls.add(frame);
         this._ternaryCallTop(
             conditionFn,
@@ -405,6 +416,7 @@ export class BindingCollection implements IBindingCollection {
         defaultFn?: (frame: Frame) => any
     ) {
         const frame = new Frame();
+        /* @DEV-ONLY */ frameCreated(frame, 'Switch');
         this._component.controls.add(frame);
         var currentValue: any;
         var defaultRunned = false;
@@ -422,7 +434,9 @@ export class BindingCollection implements IBindingCollection {
             } else {
                 if (defaultRunned) return;
                 defaultRunned = true;
-                frame.navigate(motifFragment());
+                const empty = motifFragment();
+                /* @DEV-ONLY */ emptyCreated(empty);
+                frame.navigate(empty);
             }
         });
         /* @DEV-ONLY */ effectOwner(this._component, 'switch');
