@@ -19,6 +19,7 @@ import { trackedCleanup } from "../disposable/Cleanup";
 import type { MotifDomEventProps } from "../jsx-runtime";
 import { isDevLike } from "../devtools/devbus";
 import { buildStarted, buildFinished, componentEvent, disposeStarted, disposeFinished, serviceRequested } from "../devtools/tree";
+import { effectOwner } from "../devtools/reactivity";
 
 /** DI token'ını okunur biçime çevirir (dev uyarıları için). */
 function describeServiceToken(t: any): string {
@@ -1868,14 +1869,16 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 }
                         });
                         let current = run();
+                        /* @DEV-ONLY */ effectOwner(this, 'style');
                         const stop = () => { try { current(); } catch { } };
                         const binding: IBaseBinding = {
                                 propertyName: '__style',
                                 dataSource: null,
                                 activate() { /* no-op */ },
-                                reActivate() {
+                                reActivate: () => {
                                         stop();
                                         current = run();
+                                        /* @DEV-ONLY */ effectOwner(this, 'style');
                                 },
                                 deactivate() { stop(); }
                         } as any;

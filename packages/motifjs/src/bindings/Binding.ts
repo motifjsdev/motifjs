@@ -1,6 +1,7 @@
 
 import { ComponentBase } from "../";
 import { effect } from "../store/reactivity-core";
+import { effectOwner } from "../devtools/reactivity";
 import { BindingFormatInfo, IBaseBinding } from "./";
 
 
@@ -132,6 +133,7 @@ export class Binding implements IBaseBinding {
         this._effectCleanup = effect(() => {
             return updateTarget();
         });
+        /* @DEV-ONLY */ effectOwner(this._component, 'binding:' + this.propertyName);
 
     }
 

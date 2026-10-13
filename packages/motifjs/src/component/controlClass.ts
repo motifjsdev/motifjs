@@ -1,6 +1,7 @@
 import { IClass } from "../";
 import { ComponentBase } from "./";
 import { effect } from "../store/reactivity-core";
+import { effectOwner } from "../devtools/reactivity";
 import { IBaseBinding } from "../bindings";
 
 
@@ -312,6 +313,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
             rec.set = next;
         });
         let current = run();
+        /* @DEV-ONLY */ effectOwner(this._parent, 'class');
         const stop = () => { try { current(); } catch { } };
 
         const binding: IBaseBinding = {
@@ -328,6 +330,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
             reActivate: () => {
                 stop();
                 current = run();
+                /* @DEV-ONLY */ effectOwner(this._parent, 'class');
             }
         } as any;
         try { this._parent.bindings.add(binding); } catch { }

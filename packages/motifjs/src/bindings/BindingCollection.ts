@@ -4,6 +4,7 @@ import { Component, ComponentBase, Frame, motifFragment } from "../";
 import { quietCleanup } from "../disposable/Cleanup";
 import { dom } from "../";
 import { effect, untracked } from "../";
+import { effectOwner } from "../devtools/reactivity";
 import { Binding, BindingFormatInfo, IBaseBinding, IBindingCollection, ListBinding, ListBindingOptions, readModelValue } from "./";
 import { reportError } from "../common/diagnostics";
 import { lazyBindMethods } from "../common/lazyBind";
@@ -54,6 +55,7 @@ export class BindingCollection implements IBindingCollection {
                 }
             });
         });
+        /* @DEV-ONLY */ effectOwner(this._component, 'when');
         this._own(stop);
 
         return null as any;
@@ -176,6 +178,7 @@ export class BindingCollection implements IBindingCollection {
             }
             frame.navigate(result == null ? motifFragment() : result as any);
         });
+        /* @DEV-ONLY */ effectOwner(host, 'method');
         host.motif.register(quietCleanup(stop));
     }
 
@@ -222,6 +225,7 @@ export class BindingCollection implements IBindingCollection {
             }
             defer(() => { if (!stopped && !this._component.isDisposed) run(); });
         });
+        /* @DEV-ONLY */ effectOwner(this._component, 'ternary');
         this._own(() => {
             stopped = true;
             stopEffect();
@@ -239,6 +243,7 @@ export class BindingCollection implements IBindingCollection {
         const ef = effect(() => {
             cb();
         });
+        /* @DEV-ONLY */ effectOwner(this._component, 'watch');
         this._component.motif.register(quietCleanup(ef));
     }
     remove(binding: IBaseBinding): void {
@@ -417,6 +422,7 @@ export class BindingCollection implements IBindingCollection {
                 frame.navigate(motifFragment());
             }
         });
+        /* @DEV-ONLY */ effectOwner(this._component, 'switch');
         this._component.motif.register(quietCleanup(ef));
 
         return null as any;

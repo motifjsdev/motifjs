@@ -3,6 +3,7 @@ import { LeakMonitor } from "../common";
 import { reportError, reportWarning } from "../common/diagnostics";
 import { getRaw, followTracking } from "./common";
 import { pushTight } from "../common/pushTight";
+import { effectCreated, effectStopped, runStarting, runFinished, triggered, flushStarting, flushFinished } from "../devtools/reactivity";
 
 export type EffectFn = () => void;
 
@@ -18,11 +19,13 @@ class Effect {
         cleanup(this);
         effectStack.push(this);
         this.running = true;
+        /* @DEV-ONLY */ const devAt = runStarting();
         try {
             value = this.fn();
         } finally {
             effectStack.pop();
             this.running = false;
+            /* @DEV-ONLY */ runFinished(this, devAt);
             if (this.callback) {
                 this.callback(value);
             }
@@ -31,6 +34,7 @@ class Effect {
     stop() {
         this.active = false;
         cleanup(this);
+        /* @DEV-ONLY */ effectStopped(this);
     }
 }
 
@@ -80,6 +84,7 @@ export function trigger(target: object, key: string | symbol) {
     if (!deps) return;
     const effects = deps.get(key);
     if (!effects) return;
+    /* @DEV-ONLY */ triggered(rawTarget, key, effects);
     let queued = false;
     effects.forEach(effect => {
         if (!effect.active) return;
@@ -107,6 +112,7 @@ function flushEffects() {
     if (isFlushing) return;
     isFlushing = true;
     Promise.resolve().then(() => {
+        /* @DEV-ONLY */ flushStarting();
         const runCounts = new Map<Effect, number>();
         try {
             while (effectQueue.size > 0) {
@@ -127,6 +133,7 @@ function flushEffects() {
         } finally {
             effectQueue.clear();
             isFlushing = false;
+            /* @DEV-ONLY */ flushFinished();
         }
     });
 }
@@ -157,6 +164,7 @@ function cleanup(effect: Effect) {
 export function effect(fn: EffectFn, onValueChanged?: <T>(value: T) => void) {
     const e = new Effect(fn, onValueChanged);
     runReported(() => e.run());
+    /* @DEV-ONLY */ effectCreated(e);
     return () => e.stop();
 }
 
@@ -168,6 +176,7 @@ export interface ScheduledEffect {
 export function createScheduledEffect(fn: EffectFn, scheduler: () => void): ScheduledEffect {
     const e = new Effect(fn);
     e.scheduler = scheduler;
+    /* @DEV-ONLY */ effectCreated(e);
     return {
         run: () => { runReported(() => e.run()); },
         stop: () => e.stop(),

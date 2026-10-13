@@ -2,6 +2,7 @@
 import { Component, findAppendableComponent } from '../';
 import { ComponentBase, notifyDeactivated } from '../';
 import { effect, untracked } from '../store';
+import { effectOwner } from '../devtools/reactivity';
 import { reportError, reportWarning } from '../common/diagnostics';
 
 export interface VirtualizationDataRequest {
@@ -248,6 +249,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
             }
             this._scheduleReload();
         });
+        /* @DEV-ONLY */ effectOwner(this, 'virtual-data');
         return result;
     }
 

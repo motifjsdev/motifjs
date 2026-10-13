@@ -1,5 +1,6 @@
 import { track, trigger, effect, createScheduledEffect, untracked, ScheduledEffect } from "../";
 import { pauseTracking, resetTracking } from "./common";
+import { effectOwner } from "../devtools/reactivity";
 const SIGNAL_TARGET = Symbol('SignalTarget');
 const SIGNAL_KEY = Symbol('SignalKey');
 
@@ -115,6 +116,7 @@ export class Computed<T> {
                 this._computing = false;
             }
         });
+        /* @DEV-ONLY */ effectOwner(null, 'computed');
     }
 
     get value(): T {
@@ -185,6 +187,7 @@ export class LazyComputed<T> {
                 trigger(this._target, this._key);
             }
         );
+        /* @DEV-ONLY */ effectOwner(null, 'computed');
     }
 
     get value(): T {

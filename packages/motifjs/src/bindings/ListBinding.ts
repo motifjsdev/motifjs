@@ -1,5 +1,6 @@
 import { ComponentBase, motifFragment, resolveComponent } from "../";
 import { effect, untracked } from "../";
+import { effectOwner } from "../devtools/reactivity";
 import { getRaw } from "../store/common";
 import { motifError, reportWarning } from "../common/diagnostics";
 import { isListAdopted, noteListAdopted } from "../component/componentBase";
@@ -241,6 +242,7 @@ export class ListBinding implements IBaseBinding {
             return count;
         };
         this._effectCleanup = effect(() => update());
+        /* @DEV-ONLY */ effectOwner(this.component, 'list');
     }
 
     private _syncContainer(newComponents: ComponentBase[]) {

@@ -91,7 +91,7 @@ function bindingsOf(c: any) {
     return items.map(b => {
         const prop = String(b.propertyName ?? '');
         const kind = prop === '__list__' ? 'list' : prop === '__conditional__' ? 'conditional'
-            : prop.startsWith('__class:') ? 'class' : prop === '__style' ? 'style' : 'property';
+            : prop.startsWith('__class:') ? 'class' : prop.startsWith('__attr:') ? 'attr' : prop === '__style' ? 'style' : 'property';
         return { kind, property: kind === 'property' ? prop : undefined, member: b.dataMember, updateMode: b.updateMode, active: b._isActive ?? null };
     });
 }
@@ -149,6 +149,39 @@ function servicesOf(c: any) {
     };
 }
 
+export type EffectInfo = { owner: object | null; kind: string; runs: number; lastDuration: number; lastRunAt: number; lastTrigger: { target: any; key: string } | null };
+
+const effectInfos = new WeakMap<object, EffectInfo>();
+const ownedEffects = new WeakMap<object, Set<object>>();
+
+export function effectInfoOf(e: object): EffectInfo {
+    let i = effectInfos.get(e);
+    if (i === undefined) effectInfos.set(e, i = { owner: null, kind: 'effect', runs: 0, lastDuration: 0, lastRunAt: 0, lastTrigger: null });
+    return i;
+}
+
+export function ownEffect(owner: object, e: object, info: EffectInfo): void {
+    info.owner = owner;
+    let s = ownedEffects.get(owner);
+    if (s === undefined) ownedEffects.set(owner, s = new Set());
+    s.add(e);
+}
+
+export function disownEffect(e: object): void {
+    const owner = effectInfos.get(e)?.owner;
+    if (owner) ownedEffects.get(owner)?.delete(e);
+}
+
+function effectsOf(c: any) {
+    const s = ownedEffects.get(c);
+    if (s === undefined) return [];
+    return [...s].map(e => {
+        const i = effectInfoOf(e);
+        const deps: any[] = (e as any).deps ?? [];
+        return { kind: i.kind, runs: i.runs, lastDuration: i.lastDuration, lastTrigger: i.lastTrigger, deps: deps.map(([t, k]) => ({ target: preview(t), key: String(k) })) };
+    });
+}
+
 export function inspect(path: number[]): any | null {
     const c = componentAt(path);
     if (c === null) return null;
@@ -157,7 +190,7 @@ export function inspect(path: number[]): any | null {
     return {
         ...nodeOf(c, path.slice(), 0),
         props, bindings: bindingsOf(c), events: eventsOf(c), hooks: hooksOf(c),
-        classes: classesOf(c), attributes: attributesOf(c), services: servicesOf(c),
+        classes: classesOf(c), attributes: attributesOf(c), services: servicesOf(c), effects: effectsOf(c),
     };
 }
 

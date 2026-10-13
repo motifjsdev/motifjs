@@ -1,6 +1,7 @@
 import { IAttribute } from "../";
 import { ComponentBase } from "../";
 import { effect } from "../store/reactivity-core";
+import { effectOwner } from "../devtools/reactivity";
 import { Binding, IBaseBinding } from "../bindings";
 import { isComponentLike } from "./componentBase";
 
@@ -93,6 +94,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                 this._applyValue(key, v);
             });
             let current = run();
+            /* @DEV-ONLY */ effectOwner(this._parent, 'attr:' + String(key));
             const stop = () => { try { current(); } catch { } };
 
             const binding: IBaseBinding = {
@@ -100,9 +102,10 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                 dataSource: null,
                 activate() { /* no-op */ },
                 deactivate() { stop(); },
-                reActivate() {
+                reActivate: () => {
                     stop();
                     current = run();
+                    /* @DEV-ONLY */ effectOwner(this._parent, 'attr:' + String(key));
                 }
             } as any;
             try { this._parent.bindings.add(binding); } catch { }

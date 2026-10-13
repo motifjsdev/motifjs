@@ -2,6 +2,7 @@ import { Component } from "../";
 import { ComponentBase } from "../";
 import { dom } from "../core";
 import { effect } from "../";
+import { effectOwner } from "../devtools/reactivity";
 
 export class ConditionalWrapper extends ComponentBase<Comment, { render: () => any }> {
     private currentChild: ComponentBase | null = null;
@@ -75,6 +76,7 @@ export class ConditionalWrapper extends ComponentBase<Comment, { render: () => a
     public override build(building: boolean = true) {
         if (this.isBuilt) return;
         this.stopEffect = effect(() => this.updateChild());
+        /* @DEV-ONLY */ effectOwner(this, 'conditional');
         super.build(building);
     }
 
