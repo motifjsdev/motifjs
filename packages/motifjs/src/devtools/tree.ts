@@ -1,4 +1,4 @@
-import { devtools } from './devbus';
+import { devtools, storesLeaving } from './devbus';
 import { pathOf, tagOf, typeOf, isComponent, nameComponent, recordService } from './inspect';
 import { countCreated, countDisposed, countRenamed } from './counters';
 
@@ -72,6 +72,7 @@ export function disposeStarted(c: any): void {
     const emit = devtools();
     if (emit === undefined) return;
     const info = describe(c);
+    storesLeaving(c);
     disposeStarts.set(c, { info, at: performance.now() });
     emit('component:disposing', info);
 }

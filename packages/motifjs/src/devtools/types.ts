@@ -19,6 +19,7 @@ export type DevtoolsEvent =
     | { type: 'reactivity:flush'; payload: { duration: number; runs: number; triggers: { target: unknown; key: string; count: number; store?: { id: number; path: string[] } }[]; effects: { path: DevtoolsPath | null; type: string | null; tag: string | null; kind: string; runs: number }[] } }
     | { type: 'route:navigation-start'; payload: { uri: string } }
     | { type: 'route:navigation-end'; payload: { uri: string; requested: string; outcome: 'done' | 'skipped' | 'cancelled' | 'notFound' | 'error'; reason?: string; params?: unknown; duration: number } }
+    | { type: 'stores:changed'; payload: Record<string, never> }
     | { type: `ext:${string}`; payload?: unknown };
 
 export type DevtoolsStoreHolder =
@@ -40,7 +41,7 @@ export interface MotifDevtools {
     getRoutes(): unknown;
     getRoute(): { uri: string; params: unknown; chain: string[] } | null;
     getNavigations(): { requested: string; uri: string | null; outcome: string; reason?: string; params?: unknown; duration: number; at: number }[];
-    getStores(): { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; value: unknown; stale?: boolean; holders: DevtoolsStoreHolder[] }[];
+    getStores(): { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; value: unknown; stale?: boolean; released?: boolean; holders: DevtoolsStoreHolder[] }[];
     getExtensions(): string[];
     readExtension(name: string): unknown;
     readValue(path: DevtoolsPath, source: 'props' | 'functionProps' | 'fields', keys: string[]): DevtoolsResult;

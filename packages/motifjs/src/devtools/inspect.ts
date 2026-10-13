@@ -194,7 +194,7 @@ function effectsOf(c: any) {
     });
 }
 
-const FRAMEWORK_FIELDS = new Set(['_store', '_motif', '_flags', '_controls', '_class', '_bindings', '_baseCtx', '_init', '_eventHandlers', '_keepElementOnDispose', '_styleFx', '_disposing', '_scopedContext', '_siblingsApi', '_siblingsSet', 'element', 'parent', 'props', 'application', 'provider']);
+export const FRAMEWORK_FIELDS = new Set(['_store', '_motif', '_flags', '_controls', '_class', '_bindings', '_baseCtx', '_init', '_eventHandlers', '_keepElementOnDispose', '_styleFx', '_disposing', '_scopedContext', '_siblingsApi', '_siblingsSet', 'element', 'parent', 'props', 'application', 'provider']);
 
 export function fieldsOf(c: any): object {
     const out = Object.create(null);

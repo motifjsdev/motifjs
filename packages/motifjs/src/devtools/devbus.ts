@@ -1,4 +1,4 @@
-import { getTree, getElement, pathOfElement, inspect, getServices, componentAt, holdersOf, type StoreHolder } from './inspect';
+import { getTree, getElement, pathOfElement, inspect, getServices, componentAt, holdersOf, FRAMEWORK_FIELDS, type StoreHolder } from './inspect';
 import { getCounters, resetCounters } from './counters';
 import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
 import { setClass, setAttribute, setVisible, writeModel, setProp, navigate, BLOCKED_KEYS, type WriteResult } from './writes';
@@ -6,8 +6,8 @@ import { readValue, readFrom } from './read';
 import type { MotifDevtools, DevtoolsEvent } from './types';
 
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
-type StoreEntry = { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; ref: WeakRef<object> };
-export type DevStore = { id: number; name: string; type: StoreEntry['type']; value: any; stale?: boolean; holders: StoreHolder[] };
+type StoreEntry = { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; ref: WeakRef<object>; held: boolean };
+export type DevStore = { id: number; name: string; type: StoreEntry['type']; value: any; stale?: boolean; released?: boolean; holders: StoreHolder[] };
 export type DevNavigation = { requested: string; uri: string | null; outcome: string; reason?: string; params?: any; duration: number; at: number };
 export type DevError = { context: string; name: string; message: string; error: any; count: number; firstAt: number; lastAt: number };
 
@@ -156,11 +156,38 @@ export function registerStore(value: object, type: StoreEntry['type'], fallback:
     addStore(value, type, classNameOf(model) ?? fallback);
 }
 
-function addStore(value: object, type: StoreEntry['type'], name: string): number {
+const entryOf = new WeakMap<object, StoreEntry>();
+
+function addStore(value: object, type: StoreEntry['type'], name: string, notify = true): number {
     const id = ++state.storeSeq;
-    state.stores.set(id, { id, name, type, ref: new WeakRef(value) });
+    const entry: StoreEntry = { id, name, type, ref: new WeakRef(value), held: false };
+    state.stores.set(id, entry);
+    entryOf.set(value, entry);
     if (state.stores.size >= state.storePrune) pruneStores();
+    if (notify && state.enabled) storesChanged();
     return id;
+}
+
+let storesPending = false;
+
+function storesChanged(): void {
+    if (storesPending) return;
+    storesPending = true;
+    queueMicrotask(() => {
+        storesPending = false;
+        emit('stores:changed', {});
+    });
+}
+
+export function storesLeaving(owner: object): void {
+    for (const key of Object.keys(owner)) {
+        if (FRAMEWORK_FIELDS.has(key)) continue;
+        let v: any;
+        try { v = Object.getOwnPropertyDescriptor(owner, key)?.value; } catch { continue; }
+        if (v === null || typeof v !== 'object') continue;
+        const entry = entryOf.get(v);
+        if (entry !== undefined) entry.held = true;
+    }
 }
 
 const IS_REACTIVE = Symbol.for('motif.isReactive');
@@ -178,7 +205,7 @@ function storeTypeOf(v: any): StoreEntry['type'] | null {
 function adopt(v: any, ids: Map<object, number>): number | undefined {
     const type = storeTypeOf(v);
     if (type === null) return undefined;
-    const id = addStore(v, type, type === 'reactive' ? (classNameOf(rawOf(v)) ?? 'reactive') : type);
+    const id = addStore(v, type, type === 'reactive' ? (classNameOf(rawOf(v)) ?? 'reactive') : type, false);
     ids.set(v, id);
     return id;
 }
@@ -208,7 +235,10 @@ export function getStores(): DevStore[] {
         if (target !== undefined) live.push([e, target]);
     }
     return live.map(([e, target]) => {
-        const base = { id: e.id, name: e.name, type: e.type, holders: holders.get(e.id) ?? [] };
+        const held = holders.get(e.id) ?? [];
+        if (held.length > 0) e.held = true;
+        const base: { id: number; name: string; type: StoreEntry['type']; holders: StoreHolder[]; released?: boolean } = { id: e.id, name: e.name, type: e.type, holders: held };
+        if (held.length === 0 && e.held) base.released = true;
         if (e.type === 'reactive') return { ...base, value: target };
         return target._dirty === true ? { ...base, value: target._value, stale: true } : { ...base, value: target._value };
     });
