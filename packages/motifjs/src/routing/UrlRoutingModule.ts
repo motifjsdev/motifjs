@@ -91,6 +91,8 @@ export class UrlRoutingModule {
 
     private static readonly HISTORY_STAMP_KEY = '__motifHistory';
     private _historyStamp: HistoryStamp | null = null;
+    private _ownHashWrites = 0;
+    private _ownHash: string | null = null;
 
     private _addressMode(): NonNullable<RouterOptions['mode']> {
         const w = window as any;
@@ -187,6 +189,15 @@ export class UrlRoutingModule {
     private _pendingTraversal: TraversalInfo | null = null;
 
     private async _onHistoryTraversal(): Promise<void> {
+        if (this._ownHashWrites > 0) {
+            this._ownHashWrites--;
+            if ((window as any).location.hash === this._ownHash) {
+                if (this._ownHashWrites === 0) this._ownHash = null;
+                return;
+            }
+            this._ownHashWrites = 0;
+            this._ownHash = null;
+        }
         const shown = this._historyStamp;
         const arrived = this._readHistoryStamp();
         this._historyStamp = arrived;
@@ -754,7 +765,9 @@ export class UrlRoutingModule {
                         w.history.replaceState(this._routerState(options.state, stamp), '', target);
                         this._historyStamp = stamp;
                     } else {
+                        this._ownHashWrites++;
                         w.location.hash = target;
+                        this._ownHash = w.location.hash;
                         const stamp = this._nextHistoryStamp(true);
                         this._stampCurrentEntry(stamp, options.state);
                         this._historyStamp = stamp;
