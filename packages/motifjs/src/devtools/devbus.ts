@@ -1,4 +1,4 @@
-import { getTree, getElement, pathOfElement, inspect, getServices, componentAt } from './inspect';
+import { getTree, getElement, pathOfElement, inspect, getServices, componentAt, holdersOf, type StoreHolder } from './inspect';
 import { getCounters, resetCounters } from './counters';
 import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
 import { setClass, setAttribute, setVisible, writeModel, setProp, navigate, BLOCKED_KEYS, type WriteResult } from './writes';
@@ -7,7 +7,7 @@ import type { MotifDevtools, DevtoolsEvent } from './types';
 
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
 type StoreEntry = { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; ref: WeakRef<object> };
-export type DevStore = { id: number; name: string; type: StoreEntry['type']; value: any; stale?: boolean };
+export type DevStore = { id: number; name: string; type: StoreEntry['type']; value: any; stale?: boolean; holders: StoreHolder[] };
 export type DevNavigation = { requested: string; uri: string | null; outcome: string; reason?: string; params?: any; duration: number; at: number };
 export type DevError = { context: string; name: string; message: string; error: any; count: number; firstAt: number; lastAt: number };
 
@@ -168,15 +168,17 @@ function pruneStores(): void {
 
 export function getStores(): DevStore[] {
     pruneStores();
-    const out: DevStore[] = [];
+    const live: [StoreEntry, any][] = [];
     for (const e of state.stores.values()) {
         const target: any = e.ref.deref();
-        if (target === undefined) continue;
-        if (e.type === 'reactive') out.push({ id: e.id, name: e.name, type: e.type, value: target });
-        else if (target._dirty === true) out.push({ id: e.id, name: e.name, type: e.type, value: target._value, stale: true });
-        else out.push({ id: e.id, name: e.name, type: e.type, value: target._value });
+        if (target !== undefined) live.push([e, target]);
     }
-    return out;
+    const holders = holdersOf(new Map(live.map(([e, target]) => [target, e.id])));
+    return live.map(([e, target]) => {
+        const base = { id: e.id, name: e.name, type: e.type, holders: holders.get(e.id) ?? [] };
+        if (e.type === 'reactive') return { ...base, value: target };
+        return target._dirty === true ? { ...base, value: target._value, stale: true } : { ...base, value: target._value };
+    });
 }
 
 export function setStoreValue(id: number, keys: string[], value: unknown): WriteResult {

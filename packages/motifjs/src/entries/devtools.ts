@@ -1,4 +1,4 @@
 export { debugGetDeps, debugGetDepMap } from "../store/reactivity-core";
 export { registerDevtools } from "../devtools/extensions";
 export type { DevtoolsExtension, DevtoolsExtensionHandle } from "../devtools/extensions";
-export type { MotifDevtools, DevtoolsEvent, DevtoolsTreeNode, DevtoolsPath, DevtoolsResult, DevtoolsComponentRef } from "../devtools/types";
+export type { MotifDevtools, DevtoolsEvent, DevtoolsTreeNode, DevtoolsPath, DevtoolsResult, DevtoolsComponentRef, DevtoolsStoreHolder } from "../devtools/types";

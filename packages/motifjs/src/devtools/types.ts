@@ -21,6 +21,10 @@ export type DevtoolsEvent =
     | { type: 'route:navigation-end'; payload: { uri: string; requested: string; outcome: 'done' | 'skipped' | 'cancelled' | 'notFound' | 'error'; reason?: string; params?: unknown; duration: number } }
     | { type: `ext:${string}`; payload?: unknown };
 
+export type DevtoolsStoreHolder =
+    | { kind: 'component'; path: DevtoolsPath; type: string; field: string }
+    | { kind: 'service'; token: string; lifetime: string; field: string | null };
+
 export interface MotifDevtools {
     readonly version: 1;
     on(listener: (event: DevtoolsEvent) => void): () => void;
@@ -36,7 +40,7 @@ export interface MotifDevtools {
     getRoutes(): unknown;
     getRoute(): { uri: string; params: unknown; chain: string[] } | null;
     getNavigations(): { requested: string; uri: string | null; outcome: string; reason?: string; params?: unknown; duration: number; at: number }[];
-    getStores(): { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; value: unknown; stale?: boolean }[];
+    getStores(): { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; value: unknown; stale?: boolean; holders: DevtoolsStoreHolder[] }[];
     getExtensions(): string[];
     readExtension(name: string): unknown;
     readValue(path: DevtoolsPath, source: 'props' | 'functionProps', keys: string[]): DevtoolsResult;

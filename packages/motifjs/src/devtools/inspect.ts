@@ -224,6 +224,50 @@ export function getServices(): any[] {
     }));
 }
 
+export type StoreHolder =
+    | { kind: 'component'; path: number[]; type: string; field: string }
+    | { kind: 'service'; token: string; lifetime: string; field: string | null };
+
+export function holdersOf(stores: Map<object, number>): Map<number, StoreHolder[]> {
+    const out = new Map<number, StoreHolder[]>();
+    if (stores.size === 0) return out;
+    const add = (id: number, h: StoreHolder) => { const list = out.get(id); if (list) list.push(h); else out.set(id, [h]); };
+    const scan = (owner: object, holder: (field: string) => StoreHolder) => {
+        for (const field of Object.keys(owner)) {
+            let v: any;
+            try { v = Object.getOwnPropertyDescriptor(owner, field)?.value; } catch { continue; }
+            if (v === null || typeof v !== 'object') continue;
+            const id = stores.get(v);
+            if (id !== undefined) add(id, holder(field));
+        }
+    };
+    const providers = new Set<any>();
+    const walk = (c: any, path: number[]) => {
+        scan(c, field => ({ kind: 'component', path, type: typeOf(c), field }));
+        if (c.provider) providers.add(c.provider);
+        const items: any[] = c._controls?.items ?? [];
+        for (let i = 0; i < items.length; i++) walk(items[i], [...path, i]);
+    };
+    if (root !== null) walk(root, []);
+    const sp = root?.provider;
+    for (const s of sp?._navigation?.scopes ?? []) providers.add(s);
+    const descriptors: Map<any, any> | undefined = sp?.services?.descriptors;
+    const seen = new Set<object>();
+    const scanCache = (cache: Map<any, any> | undefined) => {
+        for (const [token, inst] of cache ?? []) {
+            if (inst === null || typeof inst !== 'object' || seen.has(inst)) continue;
+            seen.add(inst);
+            const name = tokenName(token), lifetime = descriptors?.get(token)?.lifetime ?? '';
+            const self = stores.get(inst);
+            if (self !== undefined) add(self, { kind: 'service', token: name, lifetime, field: null });
+            scan(inst, field => ({ kind: 'service', token: name, lifetime, field }));
+        }
+    };
+    scanCache(sp?.singletonCache);
+    for (const p of providers) scanCache(p.scopedCache);
+    return out;
+}
+
 export function getElement(path: number[]): Node | null {
     return componentAt(path)?.element ?? null;
 }
