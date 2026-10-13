@@ -79,12 +79,21 @@ export function rootProvider(): any { return root?.provider ?? null; }
 export const tokenName = (t: any): string => typeof t === 'function' ? (t.name || '[AnonymousClass]') : String(t);
 export const isComponent = (v: any): boolean => typeof v.build === 'function' && 'isDisposed' in v && 'motif' in v;
 
+export function signalTypeOf(v: any): 'signal' | 'computed' | null {
+    return v !== null && typeof v === 'object' && typeof v.peek === 'function' && '_target' in v && '_key' in v
+        ? ('_getter' in v ? 'computed' : 'signal') : null;
+}
+
 export function preview(v: any): any {
     if (v === null || v === undefined || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return v;
     if (typeof v === 'bigint' || typeof v === 'symbol') return v.toString();
     if (typeof v === 'function') return { kind: 'function', name: v.name || '' };
     if (typeof v.nodeType === 'number') return { kind: 'node', tag: String(v.nodeName).toLowerCase() };
     if (isComponent(v)) return { kind: 'component', path: pathOf(v), type: typeOf(v) };
+    const signal = signalTypeOf(v);
+    if (signal !== null) return v._dirty === true
+        ? { kind: 'signal', type: signal, value: preview(v._value), stale: true }
+        : { kind: 'signal', type: signal, value: preview(v._value) };
     if (Array.isArray(v)) return { kind: 'array', length: v.length };
     return { kind: 'object', type: v.constructor?.name ?? 'Object', keys: Object.keys(v).length };
 }

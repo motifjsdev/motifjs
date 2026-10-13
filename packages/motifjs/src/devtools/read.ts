@@ -1,7 +1,9 @@
-import { componentAt, preview, functionPropsOf, fieldsOf } from './inspect';
+import { componentAt, preview, functionPropsOf, fieldsOf, signalTypeOf } from './inspect';
 import { BLOCKED_KEYS, type WriteResult } from './writes';
 
 const LIMIT = 100;
+
+const unwrap = (v: any) => signalTypeOf(v) !== null ? v._value : v;
 
 function child(v: any, key: string): { found: boolean; getter?: boolean; value?: any } {
     if (v instanceof Map) {
@@ -39,13 +41,16 @@ export function readFrom(root: any, keys: string[]): WriteResult {
     if (!Array.isArray(keys) || keys.some(k => BLOCKED_KEYS.has(String(k)))) return { ok: false, error: 'invalid key' };
     let v = root;
     for (const k of keys) {
+        v = unwrap(v);
         if (v === null || typeof v !== 'object') return { ok: false, error: 'not an object' };
         const step = child(v, String(k));
         if (!step.found) return { ok: false, error: 'missing key' };
         if (step.getter) return { ok: false, error: 'getter' };
         v = step.value;
     }
-    if (v === null || typeof v !== 'object') return { ok: true, value: { value: preview(v), entries: [], total: 0 } };
+    const shown = preview(v);
+    v = unwrap(v);
+    if (v === null || typeof v !== 'object') return { ok: true, value: { value: shown, entries: [], total: 0 } };
     const all = entriesOf(v);
-    return { ok: true, value: { value: preview(v), entries: all.slice(0, LIMIT), total: all.length } };
+    return { ok: true, value: { value: shown, entries: all.slice(0, LIMIT), total: all.length } };
 }

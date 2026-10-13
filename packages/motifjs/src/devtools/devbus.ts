@@ -1,4 +1,4 @@
-import { getTree, getElement, pathOfElement, inspect, getServices, componentAt, holdersOf, FRAMEWORK_FIELDS, type StoreHolder } from './inspect';
+import { getTree, getElement, pathOfElement, inspect, getServices, componentAt, holdersOf, FRAMEWORK_FIELDS, signalTypeOf, type StoreHolder } from './inspect';
 import { getCounters, resetCounters } from './counters';
 import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
 import { setClass, setAttribute, setVisible, writeModel, setProp, navigate, BLOCKED_KEYS, type WriteResult } from './writes';
@@ -202,7 +202,8 @@ export function internalState(value: object): void { internal.add(value); }
 function storeTypeOf(v: any): StoreEntry['type'] | null {
     if (internal.has(v)) return null;
     try { if (v[IS_REACTIVE] === true) return 'reactive'; } catch { }
-    if (typeof v.peek === 'function' && '_target' in v && '_value' in v) return '_getter' in v ? 'computed' : 'signal';
+    const signal = signalTypeOf(v);
+    if (signal !== null) return signal;
     return null;
 }
 
