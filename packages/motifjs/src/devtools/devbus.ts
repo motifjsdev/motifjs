@@ -1,5 +1,6 @@
-import { getTree, getElement, pathOfElement, inspect, getServices } from './inspect';
+import { getTree, getElement, pathOfElement, inspect, getServices, componentAt } from './inspect';
 import { getCounters, resetCounters } from './counters';
+import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
 
 export type DevEvent = { type: string; payload?: any };
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
@@ -30,7 +31,7 @@ export function setDevtoolsEnabled(enabled: boolean) {
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect, getServices, getCounters, getRoute, getNavigations, getErrors, isEnabled };
+            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
         } else {
             if (state.exposed !== null && g.__MOTIF_DEVTOOLS__ === state.exposed) delete g.__MOTIF_DEVTOOLS__;
@@ -43,6 +44,14 @@ export function isEnabled(): boolean { return state.enabled; }
 
 export function devtools(): ((type: string, payload?: any) => void) | undefined {
     return state.enabled ? emit : undefined;
+}
+
+bindExtensionEmitter(devtools);
+
+function inspectWithExtensions(path: number[]) {
+    const r = inspect(path);
+    if (r !== null) r.extensions = inspectExtensions(componentAt(path));
+    return r;
 }
 
 export function on(listener: (ev: DevEvent) => void): () => void {
