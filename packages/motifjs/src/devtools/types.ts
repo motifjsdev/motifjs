@@ -20,6 +20,7 @@ export type DevtoolsEvent =
     | { type: 'route:navigation-start'; payload: { uri: string } }
     | { type: 'route:navigation-end'; payload: { uri: string; requested: string; outcome: 'done' | 'skipped' | 'cancelled' | 'notFound' | 'error'; reason?: string; params?: unknown; duration: number } }
     | { type: 'stores:changed'; payload: Record<string, never> }
+    | { type: 'scopes:changed'; payload: Record<string, never> }
     | { type: `ext:${string}`; payload?: unknown };
 
 export type DevtoolsStoreHolder =
@@ -35,6 +36,7 @@ export interface MotifDevtools {
     pathOfElement(node: Node | null): DevtoolsPath | null;
     inspect(path: DevtoolsPath): (Omit<DevtoolsTreeNode, 'children'> & { props: Record<string, unknown>; fields: Record<string, unknown>; functionProps?: Record<string, unknown>; bindings: unknown[]; events: unknown[]; hooks: unknown[]; classes: { static: string[]; reactive: { id: string; classes: string[] }[] }; attributes: unknown[]; services: unknown; effects: unknown[]; extensions: Record<string, unknown> }) | null;
     getServices(): { token: string; lifetime: string; created: boolean }[];
+    getScopes(): { id: number; kind: 'root' | 'navigation' | 'user'; name: string | null; parent: number | null; current: boolean; pending: boolean; pins: number; services: { token: string; lifetime: string; instance: unknown; creating?: true }[]; transients: unknown[] }[];
     getCounters(): { components: { live: number; inTree: number; notInTree: number; byType: Record<string, number> }; bindings: number; listeners: { dom: number; component: number }; effects: { live: number; owned: number }; reactivity: { runs: number; flushes: number; flushRuns: number; lastFlushDuration: number; maxFlushDuration: number } };
     getWarnings(): { code: string; message: string; details?: unknown; count: number; firstAt: number; lastAt: number }[];
     getErrors(): { context: string; name: string; message: string; error: unknown; count: number; firstAt: number; lastAt: number }[];

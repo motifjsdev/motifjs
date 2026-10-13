@@ -2,6 +2,7 @@ import { ServiceCollection, ServiceDescriptor } from "./ServiceCollection";
 import { motifError } from "../common/diagnostics";
 import { Signal } from "../store/Signal";
 import { setScopeResolver } from "../devtools/inspect";
+import { scopeCreated, scopeDisposed, scopesChanged } from "../devtools/scopes";
 
 type ScopeKind = 'root' | 'navigation' | 'user';
 type OwnerSlot = { owner: object | null; ownerless?: boolean };
@@ -150,6 +151,7 @@ export class ServiceProvider {
         const scoped = new ServiceProvider(this.services, this, this.root);
         scoped.scopeName = name ?? this.scopeName;
         (scoped as any)._autoDisposeTransients = this._autoDisposeTransients;
+        /* @DEV-ONLY */ scopeCreated(scoped);
         return scoped;
     }
 
@@ -195,6 +197,7 @@ export class ServiceProvider {
         scope._pending = true;
         scope._autoDisposeTransients = root._autoDisposeTransients;
         navigation.scopes.add(scope);
+        /* @DEV-ONLY */ scopesChanged();
         return scope;
     }
 
@@ -205,11 +208,13 @@ export class ServiceProvider {
         const previous = navigation.current;
         navigation.current = scope;
         this._touch();
+        /* @DEV-ONLY */ scopesChanged();
         if (previous !== this.root) previous._releaseIfUnused();
     }
 
     public _abandonNavigation(scope: ServiceProvider): void {
         scope._pending = false;
+        /* @DEV-ONLY */ scopesChanged();
         scope._releaseIfUnused();
     }
 
@@ -424,6 +429,7 @@ export class ServiceProvider {
     }
 
     public async dispose(): Promise<void> {
+        /* @DEV-ONLY */ scopeDisposed(this);
         const seen = new Set<any>();
         const callDispose = async (obj: any) => {
             if (!obj || seen.has(obj)) return;

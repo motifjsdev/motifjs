@@ -74,7 +74,9 @@ export function recordService(owner: object, token: any): void {
 }
 export function setScopeResolver(fn: (owner: object) => any): void { scopeResolver = fn; }
 
-const tokenName = (t: any): string => typeof t === 'function' ? (t.name || '[AnonymousClass]') : String(t);
+export function rootProvider(): any { return root?.provider ?? null; }
+
+export const tokenName = (t: any): string => typeof t === 'function' ? (t.name || '[AnonymousClass]') : String(t);
 export const isComponent = (v: any): boolean => typeof v.build === 'function' && 'isDisposed' in v && 'motif' in v;
 
 export function preview(v: any): any {

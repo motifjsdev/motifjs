@@ -3,6 +3,7 @@ import { getCounters, resetCounters } from './counters';
 import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
 import { setClass, setAttribute, setVisible, writeModel, setProp, navigate, BLOCKED_KEYS, type WriteResult } from './writes';
 import { readValue, readFrom } from './read';
+import { getScopes, recordScopes, bindScopesEmitter } from './scopes';
 import type { MotifDevtools, DevtoolsEvent } from './types';
 
 export type DevWarning = { code: string; message: string; details?: any; count: number; firstAt: number; lastAt: number };
@@ -31,15 +32,17 @@ export function isDevLike(): boolean {
 }
 
 let earlyStores = (() => { try { return (globalThis as any).__MOTIF_DEV__ === true; } catch { return false; } })();
+recordScopes(earlyStores);
 
 export function setDevtoolsEnabled(enabled: boolean) {
     earlyStores = enabled;
+    recordScopes(enabled);
     if (enabled && !state.enabled) resetCounters();
     state.enabled = enabled;
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readValue, readStore, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
+            state.exposed = { version: 1, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getScopes, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readValue, readStore, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
         } else {
             if (state.exposed !== null && g.__MOTIF_DEVTOOLS__ === state.exposed) delete g.__MOTIF_DEVTOOLS__;
@@ -55,6 +58,7 @@ export function devtools(): ((type: string, payload?: any) => void) | undefined 
 }
 
 bindExtensionEmitter(devtools);
+bindScopesEmitter(devtools);
 
 function inspectWithExtensions(path: number[]) {
     const r = inspect(path);
