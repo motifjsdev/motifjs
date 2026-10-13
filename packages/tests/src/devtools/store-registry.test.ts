@@ -1,4 +1,4 @@
-import { Application, reactive, useModel, createSignal, createComputed, createLazyComputed } from '@motifx/core';
+import { Application, Virtualization, reactive, useModel, createSignal, createComputed, createLazyComputed } from '@motifx/core';
 
 describe('devtools store registry', () => {
     const g = globalThis as any;
@@ -16,26 +16,64 @@ describe('devtools store registry', () => {
         delete g.__MOTIF_STORE_REGISTRY__;
     });
 
+    const created = (before: number[]) => hook().getStores().filter((s: any) => !before.includes(s.id));
+    const ids = () => hook().getStores().map((s: any) => s.id);
+
     test('with devtools on, created stores are listed by getStores', () => {
         app.useDevelopment(true);
-        const before = hook().getStores().length;
+        const before = ids();
         class Cart { items: number[] = []; }
         const r = reactive(new Cart());
+        reactive({ a: 1 });
         useModel({ a: 1 });
         const s = createSignal(5);
-        createComputed(() => s.value * 2);
+        const c = createComputed(() => s.value * 2);
+        c.value;
         createLazyComputed(() => 1);
-        const list = hook().getStores().slice(before);
-        expect(list.map((x: any) => x.type)).toEqual(['reactive', 'reactive', 'signal', 'computed', 'computed']);
-        expect(list[0].name).toBe('Cart');
+        const list = created(before);
+        expect(list.map((x: any) => x.type)).toEqual(['reactive', 'reactive', 'reactive', 'signal', 'computed', 'computed']);
+        expect(list.map((x: any) => x.name)).toEqual(['Cart', 'reactive', 'useModel', 'signal', 'computed', 'lazyComputed']);
         expect(list[0].value).toBe(r);
-        expect(list[1].name).toBe('Object');
-        expect(list[2].name).toMatch(/^signal_\d+$/);
-        expect(list[2].value).toBe(5);
-        expect(list[3].name).toMatch(/^computed_\d+$/);
-        expect(list[3].value).toBe(10);
-        expect(list[4].name).toMatch(/^lazyComputed_\d+$/);
-        expect(list[4].value).toBeUndefined();
+        expect(list[3].value).toBe(5);
+        expect(list[4].value).toBe(10);
+        expect(list[4].stale).toBeUndefined();
+        expect(list[5].value).toBeUndefined();
+        expect(list[5].stale).toBe(true);
+    });
+
+    test('every store has its own id that does not change', () => {
+        app.useDevelopment(true);
+        const before = ids();
+        reactive({ a: 1 });
+        createSignal(1);
+        const first = created(before).map((x: any) => x.id);
+        expect(new Set(first).size).toBe(2);
+        for (let i = 0; i < 10; i++) reactive({ i });
+        expect(created(before).slice(0, 2).map((x: any) => x.id)).toEqual(first);
+    });
+
+    test('a signal is listed with its current value', () => {
+        app.useDevelopment(true);
+        const before = ids();
+        const s = createSignal('light');
+        s.value = 'dark';
+        expect(created(before)[0].value).toBe('dark');
+    });
+
+    test('a computed is read without running its getter', () => {
+        app.useDevelopment(true);
+        const before = ids();
+        let runs = 0;
+        createComputed(() => ++runs);
+        let lazyRuns = 0;
+        createLazyComputed(() => ++lazyRuns);
+        const ranAtCreation = runs;
+        const [computed, lazy] = created(before);
+        expect(computed.value).toBe(ranAtCreation);
+        expect(lazy.stale).toBe(true);
+        hook().getStores();
+        expect(runs).toBe(ranAtCreation);
+        expect(lazyRuns).toBe(0);
     });
 
     test('no __MOTIF_STORE_REGISTRY__ global is created', () => {
@@ -55,11 +93,44 @@ describe('devtools store registry', () => {
         expect(hook().getStores().length).toBe(before);
     });
 
-    test('the list keeps the last 200 stores', () => {
+    test('the first stores stay listed after many others are created', () => {
         app.useDevelopment(true);
-        for (let i = 0; i < 250; i++) reactive({ i });
-        const list = hook().getStores();
-        expect(list.length).toBe(200);
-        expect(list[199].value.i).toBe(249);
+        const keep = reactive({ keep: true });
+        const kept = createSignal('kept');
+        const others = [];
+        for (let i = 0; i < 300; i++) others.push(reactive({ i }));
+        const values = hook().getStores().map((s: any) => s.value);
+        expect(values).toContain(keep);
+        expect(values).toContain('kept');
+        expect(values).toContain(others[299]);
+        expect(kept.peek()).toBe('kept');
+    });
+
+    test('a store that was garbage collected leaves the list', () => {
+        const Real = g.WeakRef;
+        const refs: { target: object | undefined }[] = [];
+        g.WeakRef = class {
+            target: object | undefined;
+            constructor(target: object) { this.target = target; refs.push(this); }
+            deref() { return this.target; }
+        };
+        try {
+            app.useDevelopment(true);
+            const before = ids();
+            reactive({ gone: true });
+            const stay = reactive({ stay: true });
+            refs[refs.length - 2].target = undefined;
+            expect(created(before).map((x: any) => x.value)).toEqual([stay]);
+        } finally {
+            g.WeakRef = Real;
+        }
+    });
+
+    test('the state of the Virtualization component is not listed', () => {
+        app.useDevelopment(true);
+        const before = hook().getStores().length;
+        const virt = new Virtualization<any>({ itemHeight: 20, pageSize: 2, autoRefresh: false, dataRequest: async () => ({ items: [], totalCount: 0, hasMore: false }) } as any);
+        expect(hook().getStores().length).toBe(before);
+        virt.dispose();
     });
 });

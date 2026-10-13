@@ -1,7 +1,7 @@
 
 import { Component, findAppendableComponent } from '../';
 import { ComponentBase, notifyDeactivated } from '../';
-import { effect, untracked } from '../store';
+import { effect, engine, untracked } from '../store';
 import { effectOwner } from '../devtools/reactivity';
 import { reportError, reportWarning } from '../common/diagnostics';
 
@@ -72,7 +72,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
         if (props.className) this.class.add(props.className);
         if (props.style) Object.assign(this.element.style, props.style);
 
-        this._state = this.useModel({
+        this._state = engine.reactive({
             isLoading: false,
             isInitialized: false,
             currentPage: 0,

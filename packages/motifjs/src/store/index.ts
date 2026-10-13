@@ -2,7 +2,7 @@
 import { ReactiveEngine } from "./ReactiveEngine";
 import { UnwrapValueRefs } from "./common";
 import { Signal, Computed, LazyComputed } from "./Signal";
-import { registerStore, storeCount } from "../devtools/devbus";
+import { registerStore } from "../devtools/devbus";
 export const engine = new ReactiveEngine();
 
 
@@ -24,13 +24,13 @@ export function reactiveConfig(config: {
 
 export function reactive<T>(model: T): UnwrapValueRefs<T> {
     const result = engine.reactive<T>(model);
-    /* @DEV-ONLY */ registerStore((model as any)?.constructor?.name || 'reactive', result, 'reactive');
+    /* @DEV-ONLY */ registerStore(result as object, 'reactive', 'reactive', model);
     return result;
 }
 
 export function useModel<T>(model: T): UnwrapValueRefs<T> {
     const result = engine.reactive<T>(model);
-    /* @DEV-ONLY */ registerStore((model as any)?.constructor?.name || 'useModel', result, 'reactive');
+    /* @DEV-ONLY */ registerStore(result as object, 'reactive', 'useModel', model);
     return result;
 }
 
@@ -48,19 +48,19 @@ export function deepClone(item: any) {
 
 export function createSignal<T>(initialValue: T): Signal<T> {
     const sig = new Signal(initialValue);
-    /* @DEV-ONLY */ registerStore(`signal_${storeCount()}`, sig.value, 'signal');
+    /* @DEV-ONLY */ registerStore(sig, 'signal', 'signal');
     return sig;
 }
 
 export function createComputed<T>(getter: () => T): Computed<T> {
     const comp = new Computed(getter);
-    /* @DEV-ONLY */ registerStore(`computed_${storeCount()}`, comp.value, 'computed');
+    /* @DEV-ONLY */ registerStore(comp, 'computed', 'computed');
     return comp;
 }
 
 export function createLazyComputed<T>(getter: () => T): LazyComputed<T> {
     const comp = new LazyComputed(getter);
-    /* @DEV-ONLY */ registerStore(`lazyComputed_${storeCount()}`, undefined, 'computed');
+    /* @DEV-ONLY */ registerStore(comp, 'computed', 'lazyComputed');
     return comp;
 }
 

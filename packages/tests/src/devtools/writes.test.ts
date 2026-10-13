@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { Application, Component, reactive, createSignal } from '@motifx/core';
+import { Application, Component, reactive, createSignal, createComputed } from '@motifx/core';
 
 const settle = () => new Promise(r => setTimeout(r, 0));
 
@@ -107,21 +107,53 @@ describe('devtools writes', () => {
         expect(hook().getRoute().uri).toBe('/next');
     });
 
-    test('setStoreValue writes a nested key of a reactive store and refuses others', async () => {
+    test('setStoreValue writes a nested key of a reactive store by its id and refuses bad keys', async () => {
         const store = reactive({ user: { name: 'a' } });
-        createSignal(1);
         const c = new Component('span');
         c.bindings.text(() => store.user.name);
         run(c);
-        const list = hook().getStores();
-        const index = list.findIndex((s: any) => s.value === store);
-        const signalIndex = list.findIndex((s: any) => s.type === 'signal');
-        expect(hook().setStoreValue(index, ['user', 'name'], 'b')).toEqual({ ok: true });
+        const id = hook().getStores().find((s: any) => s.value === store).id;
+        expect(hook().setStoreValue(id, ['user', 'name'], 'b')).toEqual({ ok: true });
         await settle();
         expect(el(c).textContent).toBe('b');
-        expect(hook().setStoreValue(index, ['__proto__', 'polluted'], 1).ok).toBe(false);
+        expect(hook().setStoreValue(id, ['__proto__', 'polluted'], 1).ok).toBe(false);
         expect(({} as any).polluted).toBeUndefined();
-        expect(hook().setStoreValue(signalIndex, ['value'], 2).ok).toBe(false);
+        expect(hook().setStoreValue(id, [], 1).ok).toBe(false);
+    });
+
+    test('setStoreValue still finds the store after other stores are created', () => {
+        const store = reactive({ n: 1 });
+        const id = hook().getStores().find((s: any) => s.value === store).id;
+        const others = [];
+        for (let i = 0; i < 250; i++) others.push(reactive({ n: 0 }));
+        expect(hook().setStoreValue(id, ['n'], 2)).toEqual({ ok: true });
+        expect(store.n).toBe(2);
+        expect(others.every(o => o.n === 0)).toBe(true);
+    });
+
+    test('setStoreValue writes a signal and a key inside its value', async () => {
+        const theme = createSignal('light');
+        const user = createSignal({ name: 'a' });
+        const c = new Component('span');
+        c.bindings.text(() => `${theme.value} ${user.value.name}`);
+        run(c);
+        const list = hook().getStores();
+        const themeId = list.find((s: any) => s.type === 'signal' && s.value === 'light').id;
+        const userId = list.find((s: any) => s.type === 'signal' && s.value?.name === 'a').id;
+        expect(hook().setStoreValue(themeId, [], 'dark')).toEqual({ ok: true });
+        expect(hook().setStoreValue(userId, ['name'], 'b')).toEqual({ ok: true });
+        await settle();
+        expect(theme.peek()).toBe('dark');
+        expect(el(c).textContent).toBe('dark b');
+    });
+
+    test('setStoreValue refuses a computed and an unknown id', () => {
+        const s = createSignal(1);
+        const doubled = createComputed(() => s.value * 2);
+        doubled.value;
+        const id = hook().getStores().find((x: any) => x.type === 'computed').id;
+        expect(hook().setStoreValue(id, [], 5).ok).toBe(false);
+        expect(hook().setStoreValue(-1, ['n'], 5).ok).toBe(false);
     });
 
     test('an unknown path or a disposed component gives ok false', async () => {

@@ -36,7 +36,7 @@ export interface MotifDevtools {
     getRoutes(): unknown;
     getRoute(): { uri: string; params: unknown; chain: string[] } | null;
     getNavigations(): { requested: string; uri: string | null; outcome: string; reason?: string; params?: unknown; duration: number; at: number }[];
-    getStores(): { name: string; value: unknown; type: string }[];
+    getStores(): { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; value: unknown; stale?: boolean }[];
     getExtensions(): string[];
     readExtension(name: string): unknown;
     readValue(path: DevtoolsPath, source: 'props' | 'functionProps', keys: string[]): DevtoolsResult;
@@ -46,5 +46,5 @@ export interface MotifDevtools {
     writeModel(path: DevtoolsPath, value: unknown): DevtoolsResult;
     setProp(path: DevtoolsPath, keys: string[], value: unknown): DevtoolsResult;
     navigate(uri: string): Promise<DevtoolsResult>;
-    setStoreValue(index: number, keys: string[], value: unknown): DevtoolsResult;
+    setStoreValue(id: number, keys: string[], value: unknown): DevtoolsResult;
 }
