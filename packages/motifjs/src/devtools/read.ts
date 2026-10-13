@@ -1,4 +1,4 @@
-import { componentAt, preview, functionPropsOf } from './inspect';
+import { componentAt, preview, functionPropsOf, fieldsOf } from './inspect';
 import { BLOCKED_KEYS, type WriteResult } from './writes';
 
 const LIMIT = 100;
@@ -27,12 +27,17 @@ function entriesOf(v: any): { key: string; value: unknown; getter?: true }[] {
     });
 }
 
-export function readValue(path: number[], source: 'props' | 'functionProps', keys: string[]): WriteResult {
+export function readValue(path: number[], source: 'props' | 'functionProps' | 'fields', keys: string[]): WriteResult {
     const c = componentAt(path);
     if (c === null) return { ok: false, error: 'no component at path' };
-    if (!Array.isArray(keys) || keys.some(k => BLOCKED_KEYS.has(String(k)))) return { ok: false, error: 'invalid key' };
-    let v: any = source === 'functionProps' ? functionPropsOf(c) : c.props;
+    const v: any = source === 'functionProps' ? functionPropsOf(c) : source === 'fields' ? fieldsOf(c) : c.props;
     if (v === undefined || v === null) return { ok: false, error: `no ${source}` };
+    return readFrom(v, keys);
+}
+
+export function readFrom(root: any, keys: string[]): WriteResult {
+    if (!Array.isArray(keys) || keys.some(k => BLOCKED_KEYS.has(String(k)))) return { ok: false, error: 'invalid key' };
+    let v = root;
     for (const k of keys) {
         if (v === null || typeof v !== 'object') return { ok: false, error: 'not an object' };
         const step = child(v, String(k));

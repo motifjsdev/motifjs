@@ -194,6 +194,27 @@ function effectsOf(c: any) {
     });
 }
 
+const FRAMEWORK_FIELDS = new Set(['_store', '_motif', '_flags', '_controls', '_class', '_bindings', '_baseCtx', '_init', '_eventHandlers', '_keepElementOnDispose', '_styleFx', '_disposing', '_scopedContext', '_siblingsApi', '_siblingsSet', 'element', 'parent', 'props', 'application', 'provider']);
+
+export function fieldsOf(c: any): object {
+    const out = Object.create(null);
+    for (const k of Object.keys(c)) {
+        if (FRAMEWORK_FIELDS.has(k)) continue;
+        const d = Object.getOwnPropertyDescriptor(c, k);
+        if (d) Object.defineProperty(out, k, { ...d, enumerable: true, configurable: true });
+    }
+    return out;
+}
+
+function previewFields(c: any): Record<string, any> {
+    const fields = fieldsOf(c), out: Record<string, any> = {};
+    for (const k of Object.keys(fields)) {
+        const d = Object.getOwnPropertyDescriptor(fields, k)!;
+        out[k] = 'value' in d ? preview(d.value) : { kind: 'getter' };
+    }
+    return out;
+}
+
 export function inspect(path: number[]): any | null {
     const c = componentAt(path);
     if (c === null) return null;
@@ -201,7 +222,7 @@ export function inspect(path: number[]): any | null {
     if (c.props) for (const k of Object.keys(c.props)) props[k] = preview(c.props[k]);
     const result: any = {
         ...nodeOf(c, path.slice(), 0),
-        props, bindings: bindingsOf(c), events: eventsOf(c), hooks: hooksOf(c),
+        props, fields: previewFields(c), bindings: bindingsOf(c), events: eventsOf(c), hooks: hooksOf(c),
         classes: classesOf(c), attributes: attributesOf(c), services: servicesOf(c), effects: effectsOf(c),
     };
     const given: any = functionProps.get(c);

@@ -32,7 +32,7 @@ export interface MotifDevtools {
     getTree(path?: DevtoolsPath, depth?: number): DevtoolsTreeNode | null;
     getElement(path: DevtoolsPath): Node | null;
     pathOfElement(node: Node | null): DevtoolsPath | null;
-    inspect(path: DevtoolsPath): (Omit<DevtoolsTreeNode, 'children'> & { props: Record<string, unknown>; functionProps?: Record<string, unknown>; bindings: unknown[]; events: unknown[]; hooks: unknown[]; classes: { static: string[]; reactive: { id: string; classes: string[] }[] }; attributes: unknown[]; services: unknown; effects: unknown[]; extensions: Record<string, unknown> }) | null;
+    inspect(path: DevtoolsPath): (Omit<DevtoolsTreeNode, 'children'> & { props: Record<string, unknown>; fields: Record<string, unknown>; functionProps?: Record<string, unknown>; bindings: unknown[]; events: unknown[]; hooks: unknown[]; classes: { static: string[]; reactive: { id: string; classes: string[] }[] }; attributes: unknown[]; services: unknown; effects: unknown[]; extensions: Record<string, unknown> }) | null;
     getServices(): { token: string; lifetime: string; created: boolean }[];
     getCounters(): { components: { live: number; inTree: number; notInTree: number; byType: Record<string, number> }; bindings: number; listeners: { dom: number; component: number }; effects: { live: number; owned: number }; reactivity: { runs: number; flushes: number; flushRuns: number; lastFlushDuration: number; maxFlushDuration: number } };
     getWarnings(): { code: string; message: string; details?: unknown; count: number; firstAt: number; lastAt: number }[];
@@ -43,7 +43,8 @@ export interface MotifDevtools {
     getStores(): { id: number; name: string; type: 'reactive' | 'signal' | 'computed'; value: unknown; stale?: boolean; holders: DevtoolsStoreHolder[] }[];
     getExtensions(): string[];
     readExtension(name: string): unknown;
-    readValue(path: DevtoolsPath, source: 'props' | 'functionProps', keys: string[]): DevtoolsResult;
+    readValue(path: DevtoolsPath, source: 'props' | 'functionProps' | 'fields', keys: string[]): DevtoolsResult;
+    readStore(id: number, keys: string[]): DevtoolsResult;
     setClass(path: DevtoolsPath, name: string, on: boolean): DevtoolsResult;
     setAttribute(path: DevtoolsPath, name: string, value: string | null): DevtoolsResult;
     setVisible(path: DevtoolsPath, visible: boolean): Promise<DevtoolsResult>;
