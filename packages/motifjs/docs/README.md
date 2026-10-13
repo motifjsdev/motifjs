@@ -64,7 +64,7 @@ export const MessageBox = () => ({
 | Queries | `Query` |
 | Errors | `MotifError`; every message carries an `MJX` code |
 
-Reactive dependency inspection lives in a separate entry point, `@motifx/core/devtools` (`debugGetDeps`, `debugGetDepMap`).
+Reactive dependency inspection and DevTools support live in a separate entry point, `@motifx/core/devtools`: `debugGetDeps`, `debugGetDepMap`, `registerDevtools` for packages, and the `MotifDevtools` type of the `globalThis.__MOTIF_DEVTOOLS__` object that `app.useDevelopment(true)` turns on.
 
 ## JSX
 

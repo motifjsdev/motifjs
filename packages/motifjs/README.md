@@ -126,6 +126,19 @@ const deps = debugGetDeps(state);
 
 `debugGetDeps(target)` returns the effects subscribed to each key of a reactive object; `debugGetDepMap()` returns the whole dependency map. They share the runtime instance with `@motifx/core`.
 
+`app.useDevelopment(true)` turns on development mode and DevTools together. While they are on, `globalThis.__MOTIF_DEVTOOLS__` holds the DevTools contract: the component tree by `controls` index paths, component contents, the reactivity trace, counters, router and error records, events, and write operations that go through public APIs. Its type is `MotifDevtools` from `@motifx/core/devtools`.
+
+A package can expose its own state to DevTools:
+
+```ts
+import { registerDevtools } from '@motifx/core/devtools';
+
+const devtools = registerDevtools('sortable', {
+    describe: () => ({ lists: liveLists.size }),
+    inspect: (component) => sortableOf(component)?.snapshot(),
+});
+```
+
 ## Documentation
 
 Guides and API reference: [motifjs.com](https://motifjs.com/)
