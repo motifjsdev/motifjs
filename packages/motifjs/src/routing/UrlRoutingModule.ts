@@ -199,12 +199,16 @@ export class UrlRoutingModule {
             this._ownHash = null;
         }
         const shown = this._historyStamp;
-        const arrived = this._readHistoryStamp();
-        this._historyStamp = arrived;
+        let arrived = this._readHistoryStamp();
         let direction: NavigationDirection = 'traverse';
-        if (shown && arrived && shown.session === arrived.session && shown.index !== arrived.index) {
+        if (!arrived && (window as any).history?.state == null) {
+            arrived = this._nextHistoryStamp(true);
+            this._stampCurrentEntry(arrived);
+            direction = 'push';
+        } else if (shown && arrived && shown.session === arrived.session && shown.index !== arrived.index) {
             direction = arrived.index < shown.index ? 'back' : 'forward';
         }
+        this._historyStamp = arrived;
         this._pendingTraversal = { direction, state: this._currentHistoryUserState(), from: shown };
         let result: any;
         try {

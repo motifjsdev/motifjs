@@ -1,5 +1,6 @@
 import { Application, Component, RouterView } from '@motifx/core';
 import { RouteItem } from '@motifx/core';
+import { trackRouter } from '../helpers/router-traversal';
 
 const tick = () => new Promise(r => setTimeout(r, 30));
 
@@ -276,6 +277,32 @@ describe('Navigation stack', () => {
 
             block = false;
             await back();
+            expect(app.router.uri).toBe('/a');
+            expect(live('a')).toEqual([a]);
+        });
+
+        it('a typed address keeps the previous page and the pages before it', async () => {
+            app.useRouter({ routes: routes(), mode: 'hash', stack: true });
+            const nav = trackRouter(app);
+            app.run(host);
+            await tick();
+            await app.navigate('/a');
+            const a = live('a')[0];
+            await app.navigate('/b');
+            const b = live('b')[0];
+
+            await nav.traverse(() => { window.location.hash = '#/c'; });
+            expect(app.router.uri).toBe('/c');
+            expect(b.isDisposed).toBe(false);
+
+            await app.navigate('/d');
+            expect(a.isDisposed).toBe(false);
+
+            await nav.traverse(() => window.history.go(-2));
+            expect(app.router.uri).toBe('/b');
+            expect(live('b')).toEqual([b]);
+
+            await nav.traverse(() => window.history.back());
             expect(app.router.uri).toBe('/a');
             expect(live('a')).toEqual([a]);
         });

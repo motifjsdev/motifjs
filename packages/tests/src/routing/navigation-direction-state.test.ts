@@ -149,6 +149,25 @@ describe('Navigation direction and entry state', () => {
             expect(app.router.uri).toBe('/b');
             expect(app.router.direction).toBe('forward');
         });
+
+        it('hash mode reports a typed address as a push in the same history session', async () => {
+            window.history.replaceState(null, '', '/');
+            start('hash');
+            await app.navigate('/a');
+            const shown = window.history.state.__motifHistory;
+
+            await traverse(() => { window.location.hash = '#/b'; });
+            expect(app.router.uri).toBe('/b');
+            expect(app.router.direction).toBe('push');
+            expect(window.history.state.__motifHistory).toEqual({ index: shown.index + 1, session: shown.session });
+
+            await app.navigate('/c');
+            expect(window.history.state.__motifHistory).toEqual({ index: shown.index + 2, session: shown.session });
+
+            await traverse(() => window.history.back());
+            expect(app.router.uri).toBe('/b');
+            expect(app.router.direction).toBe('back');
+        });
     });
 
     describe('entry state', () => {

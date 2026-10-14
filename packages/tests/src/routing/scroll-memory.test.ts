@@ -381,7 +381,7 @@ describe('Scroll memory', () => {
                 history.pushState(null, '', '/uzun#bolum');
                 window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
             });
-            expect(app.router.direction).toBe('traverse');
+            expect(app.router.direction).toBe('push');
             expect(scrollIntoView).toHaveBeenCalledTimes(1);
             expect(scrollIntoView.mock.calls[0]).toEqual([]);
         });

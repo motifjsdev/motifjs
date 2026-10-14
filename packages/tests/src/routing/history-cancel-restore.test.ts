@@ -230,5 +230,45 @@ describe('History traversal cancel restores the address', () => {
             expect(hashNow()).toBe('#/a');
             expect(app.router.uri).toBe('/a');
         });
+
+        const typed = (hash: string) => nav.traverse(() => { window.location.hash = hash; });
+
+        it('guard-cancelled typed address returns to the shown address', async () => {
+            window.history.replaceState(null, '', '/');
+            start(routes(), 'hash');
+            await app.navigate('/a');
+
+            blocked.add('/c');
+            await typed('#/c');
+
+            expect(app.router.uri).toBe('/a');
+            expect(hashNow()).toBe('#/a');
+        });
+
+        it('onLeave-cancelled typed address returns to the shown address', async () => {
+            window.history.replaceState(null, '', '/');
+            const r = routes();
+            r[1] = { path: '/a', control: control(), onLeave: () => false };
+            start(r, 'hash');
+            await app.navigate('/a');
+
+            await typed('#/c');
+
+            expect(app.router.uri).toBe('/a');
+            expect(hashNow()).toBe('#/a');
+        });
+
+        it('back after a cancelled typed address goes to the previous page', async () => {
+            window.history.replaceState(null, '', '/');
+            start(routes(), 'hash');
+            await app.navigate('/a');
+
+            blocked.add('/c');
+            await typed('#/c');
+            blocked.clear();
+            await back();
+
+            expect(app.router.uri).toBe('/');
+        });
     });
 });
