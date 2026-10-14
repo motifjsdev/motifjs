@@ -125,6 +125,95 @@ const elementTagPlugin = () => {
 
 
 
+const MARKER = /^\*?\s*@DEV-ONLY\s*$/;
+const BEGIN_MARKER = /^\*?\s*@DEV-ONLY-BEGIN\s*$/;
+const END_MARKER = /^\*?\s*@DEV-ONLY-END\s*$/;
+const RANGE_CONTAINERS: Record<string, string> = { Program: 'body', BlockStatement: 'body', StaticBlock: 'body', ClassBody: 'body', SwitchCase: 'consequent' };
+const isMarker = (c: any, pattern: RegExp) => c.type === 'CommentBlock' && typeof c.value === 'string' && pattern.test(c.value);
+
+function devOnlyStrip(production: boolean, outcome?: { stripped: boolean }) {
+    let isDev = !production;
+    if (!production) {
+        const flag = (globalThis as any).__MOTIF_DEV__;
+        if (typeof flag === 'boolean') isDev = flag;
+        if (typeof process !== 'undefined' && process?.env?.MOTIF_DEV === 'false') isDev = false;
+    }
+    const consumed = new WeakSet<object>();
+    const hasMarker = (node: any) => (node.leadingComments || []).some((c: any) => isMarker(c, MARKER) && !consumed.has(c));
+    const forget = (node: any, markers: Set<object>) => {
+        if (!node) return;
+        for (const key of ['leadingComments', 'trailingComments', 'innerComments']) {
+            if (node[key]) node[key] = node[key].filter((c: any) => !markers.has(c));
+        }
+    };
+    const remove = (path: NodePath) => {
+        const markers = new Set<object>((path.node.leadingComments || []).filter((c: any) => isMarker(c, MARKER)));
+        markers.forEach(c => consumed.add(c));
+        forget(path.node, markers);
+        forget(path.getPrevSibling().node, markers);
+        path.remove();
+        if (outcome) outcome.stripped = true;
+    };
+    const stripRanges = (program: NodePath<t.Program>) => {
+        const all = ((program.parent as any).comments || []).filter((c: any) => isMarker(c, BEGIN_MARKER) || isMarker(c, END_MARKER));
+        if (all.length === 0) return;
+        const fail = (c: any, message: string): never => { throw program.hub.buildError({ loc: c.loc } as any, message); };
+        const placed = new Set<object>();
+        const ranges: { items: NodePath[]; all: NodePath[]; container: any; markers: Set<object> }[] = [];
+        const visit = (path: NodePath) => {
+            const node: any = path.node;
+            const items = path.get(RANGE_CONTAINERS[node.type]) as NodePath[];
+            const own = all
+                .filter((c: any) => !placed.has(c) && c.start >= node.start && c.end <= node.end
+                    && !items.some(i => c.start >= i.node.start! && c.end <= i.node.end!))
+                .sort((a: any, b: any) => a.start - b.start);
+            let open: any = null;
+            for (const c of own) {
+                placed.add(c);
+                if (isMarker(c, BEGIN_MARKER)) {
+                    if (open) fail(c, '@DEV-ONLY-BEGIN cannot be nested inside another @DEV-ONLY-BEGIN.');
+                    open = c;
+                } else {
+                    if (!open) fail(c, '@DEV-ONLY-END has no matching @DEV-ONLY-BEGIN in the same block.');
+                    ranges.push({ items: items.filter(i => i.node.start! > open.end && i.node.end! < c.start), all: items, container: node, markers: new Set([open, c]) });
+                    open = null;
+                }
+            }
+            if (open) fail(open, '@DEV-ONLY-BEGIN has no matching @DEV-ONLY-END in the same block.');
+        };
+        visit(program);
+        program.traverse({ enter(p) { if (RANGE_CONTAINERS[p.node.type]) visit(p); } });
+        for (const c of all) {
+            if (!placed.has(c)) fail(c, `${isMarker(c, BEGIN_MARKER) ? '@DEV-ONLY-BEGIN' : '@DEV-ONLY-END'} must stand between statements or class members.`);
+        }
+        if (isDev) return;
+        for (const range of ranges) {
+            forget(range.container, range.markers);
+            range.all.forEach(i => forget(i.node, range.markers));
+            for (const item of range.items) {
+                item.node.leadingComments = item.node.trailingComments = null;
+                item.remove();
+            }
+            if (outcome) outcome.stripped = true;
+        }
+    };
+    return () => ({
+        visitor: {
+            Program(path: NodePath<t.Program>) {
+                stripRanges(path);
+                if (isDev) return;
+                for (const stmtPath of path.get('body') as NodePath[]) {
+                    try { if (hasMarker(stmtPath.node)) remove(stmtPath); } catch { }
+                }
+            },
+            Statement(path: NodePath) {
+                if (isDev) return;
+                try { if (hasMarker(path.node)) remove(path); } catch { }
+            }
+        }
+    });
+}
+
 export default class Compiler {
 
 
@@ -135,15 +224,34 @@ export default class Compiler {
     public diagnostics: MotifDiagnostic[] = [];
     public explanations: MotifExplanation[] = [];
     public storeNames: string | null = null;
+    public production = false;
 
     private namingPlugins(outcome?: { named: boolean }): babel.PluginItem[] {
         return this.storeNames === null ? [] : [storeNamesPlugin(this.storeNames, outcome)];
     }
 
+    private stripPlugins(outcome?: { stripped: boolean }): babel.PluginItem[] {
+        return [devOnlyStrip(this.production, outcome)];
+    }
+
+    public checkDevOnly(code: string, filename: string): void {
+        const file = filename.split('?')[0];
+        babel.transformSync(code, {
+            sourceType: 'module',
+            babelrc: false,
+            configFile: false,
+            code: false,
+            filename: file,
+            parserOpts: { plugins: /\.[mc]?ts$/.test(file) ? ['typescript'] : [] },
+            plugins: [devOnlyStrip(false)],
+        });
+    }
+
     public nameStores(code: string, filename: string): babel.BabelFileResult | null {
-        if (this.storeNames === null) return null;
+        if (this.storeNames === null && !this.production) return null;
         const file = filename.split('?')[0];
         const outcome = { named: false };
+        const strip = { stripped: false };
         const result = babel.transformSync(code, {
             sourceType: 'module',
             babelrc: false,
@@ -155,9 +263,9 @@ export default class Compiler {
             filename: file,
             sourceFileName: file,
             parserOpts: { plugins: /\.[mc]?ts$/.test(file) ? ['typescript'] : [] },
-            plugins: this.namingPlugins(outcome),
+            plugins: [...this.namingPlugins(outcome), ...this.stripPlugins(strip)],
         });
-        return outcome.named ? result : null;
+        return outcome.named || strip.stripped ? result : null;
     }
 
     public start(code: string, filename: string): babel.BabelFileResult | null {
@@ -183,7 +291,7 @@ export default class Compiler {
             filename: file,
             sourceFileName: file,
             parserOpts: { plugins: /\.[mc]?ts$/.test(file) ? ['typescript'] : [] },
-            plugins: [...this.namingPlugins(), [proposal_decorators, { "version": "2023-11" }]],
+            plugins: [...this.namingPlugins(), ...this.stripPlugins(), [proposal_decorators, { "version": "2023-11" }]],
         });
     }
 
@@ -376,59 +484,7 @@ export default class Compiler {
                         },
                     }
                 },
-                function devOnlyStrip() {
-                    let isDev = true;
-                    const flag = (globalThis as any).__MOTIF_DEV__;
-                    if (typeof flag === 'boolean') isDev = flag;
-                    if (typeof process !== 'undefined' && process?.env?.MOTIF_DEV === 'false') isDev = false;
-                    const consumed = new WeakSet<object>();
-                    const hasMarker = (node: any, pattern: RegExp) => {
-                        const comments: any[] = ([] as any[]).concat(node.leadingComments || []);
-                        return comments.some(c => typeof c.value === 'string' && pattern.test(c.value) && !consumed.has(c));
-                    };
-                    const consumeMarkers = (node: any) => {
-                        const comments: any[] = ([] as any[]).concat(node.leadingComments || []);
-                        for (const c of comments) {
-                            if (typeof c.value === 'string' && /@DEV-ONLY/.test(c.value)) consumed.add(c);
-                        }
-                    };
-                    const stripIfMarked = (path: NodePath) => {
-                        if (isDev) return;
-                        try {
-                            if (hasMarker(path.node, /@DEV-ONLY/)) {
-                                consumeMarkers(path.node);
-                                path.remove();
-                            }
-                        } catch { /* ignore single node */ }
-                    };
-                    return {
-                        visitor: {
-                            Program(path: NodePath<t.Program>) {
-                                if (isDev) return;
-                                const bodyPaths = path.get('body') as NodePath[];
-                                for (const stmtPath of bodyPaths) {
-                                    try {
-                                        const node: any = stmtPath.node;
-                                        if (hasMarker(node, /@DEV-ONLY/)) {
-                                            consumeMarkers(node);
-                                            stmtPath.remove();
-                                            continue;
-                                        } 
-                                        const allComments: any[] = ([] as any[]).concat(node.leadingComments || [], node.trailingComments || []);
-                                        if (allComments.some(c => /@DEV-ONLY-BEGIN/.test(c.value) && !consumed.has(c))) {
-                                            consumeMarkers(node);
-                                            stmtPath.remove();
-                                            continue;
-                                        }
-                                    } catch { /* ignore single node */ }
-                                }
-                            },
-                            ClassDeclaration: stripIfMarked,
-                            FunctionDeclaration: stripIfMarked,
-                            VariableDeclaration: stripIfMarked
-                        }
-                    };
-                }
+                devOnlyStrip(this.production)
             ],
 
         })

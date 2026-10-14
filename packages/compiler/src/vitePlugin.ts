@@ -43,6 +43,12 @@ export function shouldNameStores(id: string, src: string): boolean {
   return mayCreateStores(src);
 }
 
+export function shouldStripDevOnly(id: string, src: string): boolean {
+  const file = sourceFile(id);
+  if (file === null || !analyzableFileRegex.test(file) || declarationFileRegex.test(file)) return false;
+  return src.includes('@DEV-ONLY');
+}
+
 export function shouldCheckSuperCalls(id: string, src: string): boolean {
   const file = sourceFile(id);
   if (file === null || !analyzableFileRegex.test(file) || declarationFileRegex.test(file)) return false;
@@ -94,6 +100,7 @@ export interface MotifVitePluginOptions {
   diagnostics?: boolean;
   explain?: boolean | string | RegExp;
   storeNames?: boolean;
+  production?: boolean;
 }
 
 function explainMatches(opt: boolean | string | RegExp | undefined, id: string): boolean {
@@ -121,6 +128,7 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
   const pending = new Set<Promise<void>>();
   let naming = options.storeNames === true;
   let root = process.cwd();
+  let production = options.production ?? process.env.NODE_ENV === 'production';
   const storeLabel = (id: string, src: string): string | null => {
     const file = sourceFile(id);
     if (!naming || file === null || file.replace(/\\/g, '/').includes('/node_modules/') || !mayCreateStores(src)) return null;
@@ -132,6 +140,7 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
     configResolved(config: { isProduction: boolean; root: string }) {
       root = config.root;
       if (options.storeNames === undefined) naming = !config.isProduction;
+      if (options.production === undefined) production = config.isProduction;
     },
     watchChange() {
       isComponentBase = makeResolver();
@@ -150,9 +159,14 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
           .finally(() => { pending.delete(check); });
         pending.add(check);
       }
+      const strip = production && shouldStripDevOnly(id, src);
+      if (!production && !shouldTransform(id) && shouldStripDevOnly(id, src) && /@DEV-ONLY-(BEGIN|END)/.test(src)) {
+        new Compiler().checkDevOnly(src, id);
+      }
       if (shouldLowerDecorators(id, src) && !usesLegacyDecorators(sourceFile(id)!)) {
         const compiler = new Compiler();
         compiler.storeNames = storeLabel(id, src);
+        compiler.production = strip;
         const result = compiler.lowerDecorators(src, id);
         if (result && result.code) {
           return {
@@ -162,9 +176,10 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
         }
         return;
       }
-      if (shouldNameStores(id, src)) {
+      if (shouldNameStores(id, src) || (strip && !shouldTransform(id))) {
         const compiler = new Compiler();
         compiler.storeNames = storeLabel(id, src);
+        compiler.production = strip;
         const result = compiler.nameStores(src, id);
         if (result && result.code) {
           return {
@@ -179,6 +194,7 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
           try {
             const compiler = new Compiler();
             compiler.storeNames = storeLabel(id, src);
+            compiler.production = production;
             const doExplain = explainMatches(options.explain, id);
             var result = doExplain ? compiler.explain(src, id) : compiler.start(src, id);
             if (doExplain) printExplanations(compiler.explanations);

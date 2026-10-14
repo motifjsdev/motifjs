@@ -30,18 +30,39 @@ The same plugin works in a plain Rollup build:
 ```js
 import compiler from '@motifx/compiler';
 
+const production = !process.env.ROLLUP_WATCH;
+
 export default {
     input: 'src/index.tsx',
     output: { dir: 'dist', format: 'esm' },
-    plugins: [compiler()],
+    plugins: [compiler({ production })],
 };
 ```
+
+Rollup has no mode of its own, so `production` tells the plugin that this is a production build. Without it, the plugin treats the build as production when `NODE_ENV` is `production`.
 
 ## Which files are compiled
 
 Files ending in `.tsx`, `.jsx`, `.mtsx`, `.mjsx` or `.aio`. In `.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs` files that contain decorators, only the standard (TC39) decorators are compiled, so `@Injectable` behaves the same in every file in `vite dev` and `vite build`. Files whose nearest `tsconfig.json` enables `experimentalDecorators`, `.d.ts` files and files under `node_modules` are left to Vite. Imports with a `?raw`, `?url`, `?worker`, `?sharedworker` or `?inline` query and virtual modules are left untouched.
 
 While developing (`storeNames`), module-level stores are named for DevTools: in `.ts`, `.tsx`, `.js` and `.jsx` files outside `node_modules`, every top-level `const` or `let` whose value comes from `reactive`, `useModel`, `createSignal`, `createComputed` or `createLazyComputed` of `@motifx/core` is followed by a call that gives the store its variable name and its file. A production build adds nothing.
+
+## Development-only code
+
+A production build removes the code marked for development only, in your own files and in packages under `node_modules`. MotifJS marks its DevTools hooks this way, so they never reach a production bundle, whether or not the app calls `app.useDevelopment(true)`.
+
+```ts
+/* @DEV-ONLY */ console.log('built', this);
+
+/* @DEV-ONLY-BEGIN */
+const probe = createProbe(app);
+probe.attach();
+/* @DEV-ONLY-END */
+```
+
+`/* @DEV-ONLY */` removes the statement that follows it. `/* @DEV-ONLY-BEGIN */` and `/* @DEV-ONLY-END */` remove everything between them together with the two comments: statements, imports and declarations, or members inside a class body. A marker is a block comment that contains only the marker; a line comment that mentions it is not a marker. A range begins and ends in the same block. A `BEGIN` without its `END`, an `END` without its `BEGIN`, a `BEGIN` inside another range or a range marker inside an expression stops the build with an error that points at the marker, while developing as well.
+
+Nothing is removed while developing. A production build is `vite build` in Vite, and in Rollup the `production` option or `NODE_ENV=production`.
 
 ## Options
 
@@ -50,6 +71,7 @@ compiler({
     diagnostics: true,
     explain: false,
     storeNames: undefined,
+    production: undefined,
 });
 ```
 
@@ -58,6 +80,7 @@ compiler({
 | `diagnostics` | `true` | Print compiler warnings (`MJX001`–`MJX004`, `MJX007`, `MJX015`) for patterns that compile but do not behave as they read. `MJX015` (a class component override that does not reach `super` on every path) is also checked in `.ts` / `.js` files. |
 | `explain` | `false` | Print what every JSX expression was lowered to. `true` for all files, or a string / `RegExp` matched against the file path. |
 | `storeNames` | on while developing | Name module-level stores for DevTools with their variable and file (relative to the Vite root). Unset, it follows Vite: on in `vite dev`, off in a production build; `true` or `false` sets it. |
+| `production` | follows the build | Remove [development-only code](#development-only-code). Unset, it follows Vite: on in a production build, off in `vite dev`. Outside Vite it is on when `NODE_ENV` is `production`. `true` or `false` sets it. |
 
 ## Command-line tools
 
