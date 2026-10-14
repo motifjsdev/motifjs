@@ -1079,7 +1079,7 @@ const extractMemberExpressionFromFunction = (exp: t.Expression): t.MemberExpress
 };
 
 const splitMemberExpression = (exp: t.MemberExpression): { object: t.Expression, property: string } | null => {
-    if (t.isIdentifier(exp.property)) {
+    if (!exp.computed && t.isIdentifier(exp.property)) {
         return {
             object: exp.object,
             property: exp.property.name
