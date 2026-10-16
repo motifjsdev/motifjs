@@ -377,8 +377,8 @@ export class Application {
         }
     }
 
-    public onRouterChanged(handler: (args?: RouterNavigatedEventArgs) => unknown): any {
-        return this.on<RouterNavigatedEventArgs>('motifjs-router-navigated', handler);
+    public onRouterChanged(handler: (args: RouterNavigatedEventArgs) => unknown): any {
+        return this.on<RouterNavigatedEventArgs>('motifjs-router-navigated', handler as (args?: RouterNavigatedEventArgs) => void);
     }
 
     public get isVisible(): boolean {
@@ -391,9 +391,9 @@ export class Application {
 
     private _lifecycleOff: Array<() => void> | null = null;
 
-    public onLifecycle(handler: (args?: AppLifecycleEventArgs) => unknown): () => void {
+    public onLifecycle(handler: (args: AppLifecycleEventArgs) => unknown): () => void {
         this._installLifecycleListeners();
-        return this.on<AppLifecycleEventArgs>('motifjs-app-lifecycle', handler);
+        return this.on<AppLifecycleEventArgs>('motifjs-app-lifecycle', handler as (args?: AppLifecycleEventArgs) => void);
     }
 
     private _emitLifecycle(state: AppLifecycleState): void {

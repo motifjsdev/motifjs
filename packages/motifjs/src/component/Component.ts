@@ -305,7 +305,11 @@ function materializeOptionsObject(spec: any, props: any): any {
         ? constructComponentRoot(() => motifComponent(spec.el, props))
         : motifComponent(spec.el, props);
     Object.getOwnPropertyNames(spec).forEach(key => {
-        if (key !== 'el' && key !== 'ctor') {
+        if (key === 'el' || key === 'ctor') return;
+        const descriptor = Object.getOwnPropertyDescriptor(spec, key)!;
+        if (descriptor.get || descriptor.set) {
+            Object.defineProperty(result, key, { get: descriptor.get, set: descriptor.set, enumerable: descriptor.enumerable, configurable: true });
+        } else {
             result[key] = spec[key];
         }
     });

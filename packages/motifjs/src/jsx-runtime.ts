@@ -65,6 +65,7 @@ type MethodLikeProps = {
     onVisibilityChanged?: (sender: ComponentBase, e: VisibilityChangedEventArgs) => void;
     onActivated?: (sender: ComponentBase, e: EventArgs) => void;
     onDeactivated?: (sender: ComponentBase, e: EventArgs) => void;
+    oninitializeComponent?: (sender: ComponentBase, e: EventArgs) => void;
 };
 type MethodLikeKeys = keyof MethodLikeProps;
 
@@ -96,7 +97,13 @@ type motifEventsFor<TElement> = {
     ? MotifDomEventHandler<EV>
     : MotifDomEventHandler<Event>;
 };
-export type MotifDomEventProps = motifEventsFor<HTMLElement>;
+type motifModifiedEventsFor<TElement> = {
+    [P in keyof motifEventsFor<TElement> as `${P & string}:${string}`]?: motifEventsFor<TElement>[P];
+};
+type MotifCustomEventProps = {
+    [K in `on:${string}` | `on-${string}` | `on_${string}`]?: (senderOrData: any, e?: any) => unknown;
+};
+export type MotifDomEventProps = motifEventsFor<HTMLElement> & motifModifiedEventsFor<HTMLElement> & MotifCustomEventProps;
 type MotifTagProps = MotifDomEventProps & {
     class?: MotifClass;
     className?: MotifClass;
@@ -120,6 +127,8 @@ type IntrinsicHTML = {
     [K in keyof HTMLElementTagNameMap]:
     MotifElementProps<HTMLElementTagNameMap[K]> &
     motifEventsFor<HTMLElementTagNameMap[K]> &
+    motifModifiedEventsFor<HTMLElementTagNameMap[K]> &
+    MotifCustomEventProps &
     Partial<MotifBaseProps> &
     MethodLikeProps &
     (K extends 'input' | 'textarea' ? { value?: MotifValue } : {}) & object & { [key: string]: any };
@@ -135,6 +144,7 @@ export type __attr = {
     key?: string | number;
     ref?: ComponentBase | ((component: any) => void);
     initializeComponent?: (sender: ComponentBase) => void;
+    oninitializeComponent?: (sender: ComponentBase, e: EventArgs) => void;
     "x-wait"?: (sender: ComponentBase, e: EventArgs) => boolean;
     "x-building"?: (sender: ComponentBase, e: EventArgs) => void;
     "x-built"?: (sender: ComponentBase, e: EventArgs) => void;

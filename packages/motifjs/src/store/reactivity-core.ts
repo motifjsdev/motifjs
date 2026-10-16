@@ -161,8 +161,8 @@ function cleanup(effect: Effect) {
 }
 
 
-export function effect(fn: EffectFn, onValueChanged?: <T>(value: T) => void) {
-    const e = new Effect(fn, onValueChanged);
+export function effect<T>(fn: () => T, onValueChanged?: (value: NoInfer<T>) => void) {
+    const e = new Effect(fn, onValueChanged as ((value: unknown) => void) | undefined);
     runReported(() => e.run());
     /* @DEV-ONLY */ effectCreated(e);
     return () => e.stop();

@@ -205,6 +205,13 @@ export function getAttributeValue(attribute: NodePath<t.JSXAttribute>, state: St
     }
 }
 
+function switchBranchContent(argument: t.Expression): t.Expression {
+    const empty = () => t.callExpression(t.identifier(motifFragment()), []);
+    if (t.isNullLiteral(argument) || (t.isIdentifier(argument) && argument.name === 'undefined') || t.isUnaryExpression(argument, { operator: 'void' })) return empty();
+    if (t.isCallExpression(argument) && t.isIdentifier(argument.callee) && (argument.callee.name === motifComponent() || argument.callee.name === motifFragment())) return argument;
+    return t.logicalExpression('??', argument, empty());
+}
+
 function collapseJsxWhitespace(raw: string): string {
     const rows = raw.split(/\r\n|\n|\r/);
     const lastRow = rows.length - 1;
@@ -730,7 +737,7 @@ export const getChildren = (
                         const handlerBody = ret && ret.argument ? [t.expressionStatement(
                             t.callExpression(
                                 t.memberExpression(t.identifier('frame'), t.identifier('navigate')),
-                                [ret.argument]
+                                [switchBranchContent(ret.argument)]
                             ))] : [t.expressionStatement(
                                 t.callExpression(
                                     t.memberExpression(t.identifier('frame'), t.identifier('navigate')),
@@ -799,7 +806,7 @@ export const getChildren = (
                         const handlerBody = ret && ret.argument ? [t.expressionStatement(
                             t.callExpression(
                                 t.memberExpression(t.identifier('frame'), t.identifier('navigate')),
-                                [ret.argument]
+                                [switchBranchContent(ret.argument)]
                             ))] : [t.expressionStatement(
                                 t.callExpression(
                                     t.memberExpression(t.identifier('frame'), t.identifier('navigate')),

@@ -207,7 +207,9 @@ export class Binding implements IBaseBinding {
 
                 break;
             default:
-                if (this._component.element && this.propertyName in this._component.element) {
+                if (this.propertyName === 'value' && 'value' in this._component) {
+                    (this._component as any).value = value;
+                } else if (this._component.element && this.propertyName in this._component.element) {
                     (this._component.element as any)[this.propertyName] = value;
                 } else if (this.propertyName in this._component) {
                     (this._component as any)[this.propertyName] = value;
