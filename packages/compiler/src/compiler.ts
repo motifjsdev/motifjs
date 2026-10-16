@@ -15,6 +15,7 @@ import { resolveElementType } from "./elementTags";
 import { beginCollect, endCollect, type MotifDiagnostic } from "./diagnostics";
 import { beginExplain, endExplain, isExplaining, captureOrigin, noteOriginRaw, type MotifExplanation } from "./explain";
 import { storeNamesPlugin } from "./storeNames";
+import { generatedNamesPlugin } from "./generatedNames";
 
 
 function absorbGeneratedCoreImports(statements: NodePath[], into: Map<string, t.ImportSpecifier>): void {
@@ -337,6 +338,7 @@ export default class Compiler {
                 transform_class_static_block,
                 syntax_flow,
                 syntax_jsx,
+                generatedNamesPlugin,
                 function () {
                     return {
                         visitor: {
