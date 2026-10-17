@@ -6,9 +6,11 @@ import { MotifDiagnostic, printDiagnostics } from "./diagnostics";
 import { printExplanations } from "./explain";
 import { analyzeModule, createComponentResolver, mayHaveSuperOverrides, parseModule, superCallMessage } from "./superCalls";
 import { STORE_FACTORY_PATTERN } from "./storeNames";
+import { DECLARED_ELEMENT_PATTERN } from "./elementTags";
 const fileRegex = /\.(jsx|tsx|aio|mjsx|mtsx)$/;
 const decoratorFileRegex = /\.(ts|mts|cts|js|mjs|cjs)$/;
 const declarationFileRegex = /\.d\.[mc]?ts$/;
+const typedScriptRegex = /\.[mc]?ts$/;
 const decoratorSyntaxRegex = /(?:^|[\s(,;{}])@[A-Za-z_$]/;
 const assetQueryRegex = /(?:^|&)(?:raw|url|worker|sharedworker|inline)(?:[&=]|$)/;
 const analyzableFileRegex = /\.(jsx|tsx|mjsx|mtsx|ts|mts|cts|js|mjs|cjs)$/;
@@ -41,6 +43,13 @@ export function shouldNameStores(id: string, src: string): boolean {
   if (file === null || !decoratorFileRegex.test(file) || declarationFileRegex.test(file)) return false;
   if (file.replace(/\\/g, '/').includes('/node_modules/')) return false;
   return mayCreateStores(src);
+}
+
+export function shouldDeclareElements(id: string, src: string): boolean {
+  const file = sourceFile(id);
+  if (file === null || !typedScriptRegex.test(file) || declarationFileRegex.test(file)) return false;
+  if (file.replace(/\\/g, '/').includes('/node_modules/')) return false;
+  return DECLARED_ELEMENT_PATTERN.test(src);
 }
 
 export function shouldStripDevOnly(id: string, src: string): boolean {
@@ -186,6 +195,16 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
         compiler.storeNames = storeLabel(id, src);
         compiler.production = strip;
         const result = compiler.nameStores(src, id);
+        if (result && result.code) {
+          return {
+            code: result.code,
+            map: result.map
+          }
+        }
+        return;
+      }
+      if (shouldDeclareElements(id, src)) {
+        const result = new Compiler().declareElements(src, id);
         if (result && result.code) {
           return {
             code: result.code,

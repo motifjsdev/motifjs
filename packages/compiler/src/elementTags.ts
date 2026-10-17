@@ -1,6 +1,8 @@
 
 export const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
+export const DECLARED_ELEMENT_PATTERN = /\bextends\s+Component\s*</;
+
 const HTML_TAGS: Record<string, string> = {
     HTMLAnchorElement: 'a',
     HTMLAreaElement: 'area',

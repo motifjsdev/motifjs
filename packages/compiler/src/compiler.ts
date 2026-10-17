@@ -11,7 +11,7 @@ import transform_class_static_block from "@babel/plugin-transform-class-static-b
 import { ParseComponent, ParseFrament, recordClassMembers } from './motifParser';
 import { COMPILER_CONTRACT, motifCompiled, motifComponent, motifFragment, motifFunctionComponent, State } from "./constants";
 import { ASYNC_TRACKING_LOCAL, isVirtualizationDataRequest, wrapAwaitsForTracking } from "./asyncTracking";
-import { resolveElementType } from "./elementTags";
+import { DECLARED_ELEMENT_PATTERN, resolveElementType } from "./elementTags";
 import { beginCollect, endCollect, type MotifDiagnostic } from "./diagnostics";
 import { beginExplain, endExplain, isExplaining, captureOrigin, noteOriginRaw, type MotifExplanation } from "./explain";
 import { storeNamesPlugin } from "./storeNames";
@@ -42,18 +42,18 @@ function hasStaticMember(node: t.ClassDeclaration | t.ClassExpression, name: str
     );
 }
 
-function injectDeclaredElementTag(path: NodePath<t.ClassDeclaration | t.ClassExpression>) {
+function injectDeclaredElementTag(path: NodePath<t.ClassDeclaration | t.ClassExpression>): boolean {
     try {
         const node = path.node;
-        if (!t.isIdentifier(node.superClass) || node.superClass.name !== 'Component') return;
-        if (hasStaticMember(node, 'elementTag')) return;
+        if (!t.isIdentifier(node.superClass) || node.superClass.name !== 'Component') return false;
+        if (hasStaticMember(node, 'elementTag')) return false;
 
         const typeArgs: any = (node as any).superTypeParameters ?? (node as any).superTypeArguments;
         const first = typeArgs?.params?.[0];
-        if (!first || !t.isTSTypeReference(first) || !t.isIdentifier(first.typeName)) return;
+        if (!first || !t.isTSTypeReference(first) || !t.isIdentifier(first.typeName)) return false;
 
         const resolved = resolveElementType(first.typeName.name);
-        if (!resolved) return;
+        if (!resolved) return false;
 
         const members: any[] = [
             t.classProperty(t.identifier('elementTag'), t.stringLiteral(resolved.tag), null, null, false, true)
@@ -64,7 +64,9 @@ function injectDeclaredElementTag(path: NodePath<t.ClassDeclaration | t.ClassExp
             );
         }
         node.body.body.unshift(...members);
+        return true;
     } catch { /* enjeksiyon başarısızsa derleme bozulmasın */ }
+    return false;
 }
 
 
@@ -123,6 +125,15 @@ const elementTagPlugin = () => {
         }
     };
 };
+
+const declaredElementPlugin = (outcome: { declared: boolean }) => () => ({
+    name: 'motifjs-declared-element',
+    visitor: {
+        Class(path: NodePath<t.ClassDeclaration | t.ClassExpression>) {
+            if (injectDeclaredElementTag(path)) outcome.declared = true;
+        }
+    }
+});
 
 
 
@@ -249,10 +260,12 @@ export default class Compiler {
     }
 
     public nameStores(code: string, filename: string): babel.BabelFileResult | null {
-        if (this.storeNames === null && !this.production) return null;
         const file = filename.split('?')[0];
+        const typed = /\.[mc]?ts$/.test(file);
+        if (this.storeNames === null && !this.production && !(typed && DECLARED_ELEMENT_PATTERN.test(code))) return null;
         const outcome = { named: false };
         const strip = { stripped: false };
+        const elements = { declared: false };
         const result = babel.transformSync(code, {
             sourceType: 'module',
             babelrc: false,
@@ -263,10 +276,10 @@ export default class Compiler {
             highlightCode: false,
             filename: file,
             sourceFileName: file,
-            parserOpts: { plugins: /\.[mc]?ts$/.test(file) ? ['typescript'] : [] },
-            plugins: [...this.namingPlugins(outcome), ...this.stripPlugins(strip)],
+            parserOpts: { plugins: typed ? ['typescript', 'decorators-legacy'] : [] },
+            plugins: [...this.namingPlugins(outcome), ...this.stripPlugins(strip), declaredElementPlugin(elements)],
         });
-        return outcome.named || strip.stripped ? result : null;
+        return outcome.named || strip.stripped || elements.declared ? result : null;
     }
 
     public start(code: string, filename: string): babel.BabelFileResult | null {
@@ -292,8 +305,27 @@ export default class Compiler {
             filename: file,
             sourceFileName: file,
             parserOpts: { plugins: /\.[mc]?ts$/.test(file) ? ['typescript'] : [] },
-            plugins: [...this.namingPlugins(), ...this.stripPlugins(), [proposal_decorators, { "version": "2023-11" }]],
+            plugins: [...this.namingPlugins(), ...this.stripPlugins(), declaredElementPlugin({ declared: false }), [proposal_decorators, { "version": "2023-11" }]],
         });
+    }
+
+    public declareElements(code: string, filename: string): babel.BabelFileResult | null {
+        const file = filename.split('?')[0];
+        const elements = { declared: false };
+        const result = babel.transformSync(code, {
+            sourceType: 'module',
+            babelrc: false,
+            configFile: false,
+            code: true,
+            sourceMaps: true,
+            comments: true,
+            highlightCode: false,
+            filename: file,
+            sourceFileName: file,
+            parserOpts: { plugins: ['typescript', 'decorators-legacy'] },
+            plugins: [declaredElementPlugin(elements)],
+        });
+        return elements.declared ? result : null;
     }
 
     public explain(code: string, filename: string): babel.BabelFileResult | null {
