@@ -141,6 +141,15 @@ describe('MJX002: bileşen etiketinde camelCase DOM olay adı', () => {
     test('yaşam döngüsü prop\'u uyarı üretmez', () => {
         expect(codesOf(`function A(){ return <Comp onbuilt={(s) => g(s)} />; }`)).not.toContain('MJX002');
     });
+
+    test('uyarı geri çağrının nasıl verileceğini ve bileşenin içinde nasıl bağlanacağını söyler', () => {
+        const message = diags(`function A(){ return <Comp onClick={() => g()} />; }`).find(x => x.code === 'MJX002')!.message;
+        expect(message).toContain('"this.props.onClick" stays undefined');
+        expect(message).toContain("component's own element");
+        expect(message).toContain('without an element it never fires');
+        expect(message).toContain('"onPress"');
+        expect(message).toContain('this.motif.on("click", (_sender, e) => this.props.onPress?.(e))');
+    });
 });
 
 describe('MJX003: anahtarsız liste', () => {
