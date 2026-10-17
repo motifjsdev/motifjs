@@ -23,6 +23,12 @@ export const s1 = effect(() => search.query, (query: string) => log(encodeURICom
 export const s2 = effect(() => search.onlyPinned, (on) => { const b: boolean = on; return b; });
 export const s3 = app.onRouterChanged(({ uri, initial, direction }) => { if (!initial) log(uri, direction); });
 export const s4 = app.onLifecycle(({ state }) => log(state));
+interface CardProps { userId: number; highlighted?: boolean }
+export class Card extends Component<HTMLDivElement, CardProps> { constructor(props: CardProps) { super('div', props); } }
+const cardProps: CardProps = { userId: 1 };
+export const c1 = new Card(cardProps);
+export const c2 = new Component<HTMLDivElement, CardProps>('div', cardProps);
+export function A7() { return <Card userId={1} onclick:stop={(sender, e) => sender.element && e.clientX} on:saved={(saved) => log(saved)} />; }
 // expect TS2322
 export function E1() { return <a onclick:prevent={(e: KeyboardEvent) => e.key} />; }
 // expect TS2345

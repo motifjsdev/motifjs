@@ -103,8 +103,9 @@ type motifModifiedEventsFor<TElement> = {
 type MotifCustomEventProps = {
     [K in `on:${string}` | `on-${string}` | `on_${string}`]?: (senderOrData: any, e?: any) => unknown;
 };
-export type MotifDomEventProps = motifEventsFor<HTMLElement> & motifModifiedEventsFor<HTMLElement> & MotifCustomEventProps;
-type MotifTagProps = MotifDomEventProps & {
+export type MotifDomEventProps = motifEventsFor<HTMLElement>;
+type MotifTagEventProps = motifModifiedEventsFor<HTMLElement> & MotifCustomEventProps;
+type MotifTagProps = MotifDomEventProps & MotifTagEventProps & {
     class?: MotifClass;
     className?: MotifClass;
     style?: MotifStyle;
@@ -113,7 +114,7 @@ type MotifTagProps = MotifDomEventProps & {
     role?: MotifBindable<string>;
 };
 type WithTagProps<T> = T & Omit<MotifTagProps, keyof T>;
-type MotifManagedProps<P> = 0 extends (1 & P) ? IBaseProp<{}> : WithTagProps<Exclude<P, string | Node | undefined>>;
+type MotifManagedProps<P> = 0 extends (1 & P) ? IBaseProp<{}> & MotifTagEventProps : WithTagProps<Exclude<P, string | Node | undefined>>;
 
 // Transform DOM attributes so that non-event, non-method, non-style/class/value props accept either the value or a function returning it
 type MotifElementProps<TElement> = {
