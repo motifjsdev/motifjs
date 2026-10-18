@@ -13,8 +13,13 @@ export class Frame extends Component {
     isBusy: boolean = false;
     constructor(props?: any) {
         super(dom.createComment(''), props);
-        if (props && props.childs && Array.isArray(props.childs) && props.childs.length > 0) {
-            this.controls.add(props.childs);
+        const kids = this.childs;
+        if (Array.isArray(kids) && kids.length > 0) {
+            const placed = this.controls.add(...kids);
+            if (placed.length > 0) {
+                this.current = placed.length === 1 ? placed[0] : placed;
+                this.previouspage = this.current;
+            }
         }
     }
     public async dispose(options: IDisposeOptions = { deep: true }) {
