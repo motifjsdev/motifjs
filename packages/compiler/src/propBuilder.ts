@@ -671,7 +671,9 @@ export const makePreDirectives = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAtt
             if (t.isObjectExpression(value)) {
                 fail('MJX012', `Directive "${name}" does not accept an object literal.`, prop);
             } else if (t.isExpression(value)) {
-                result = t.expressionStatement(t.callExpression(t.identifier(callerName), [returnIfStatement(value, true, t.booleanLiteral(true), true)]));
+                const lowered = returnIfStatement(value, true, t.booleanLiteral(true), true);
+                const getter = t.isFunctionExpression(lowered) || t.isArrowFunctionExpression(lowered) ? lowered : t.arrowFunctionExpression([], lowered);
+                result = t.expressionStatement(t.callExpression(t.identifier(callerName), [getter]));
             }
         } else {
             fail('MJX006', `Directive "${name}" is not supported. Supported: ${supportedDirectivesText()}.`, prop);
