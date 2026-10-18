@@ -20,6 +20,7 @@ const handlesBySlot = new WeakMap<OwnerSlot, Map<any, any>>();
 const pins = new WeakMap<object, OwnerPin>();
 const builtIn = new WeakMap<object, ServiceProvider>();
 const boundMethods = new WeakMap<object, Map<PropertyKey, { fn: Function; bound: Function }>>();
+const keptOnDispose = new WeakSet<object>();
 
 function runWithResolver<T>(resolver: (token: any) => any, create: () => T): T {
     const previous = activeResolver;
@@ -90,6 +91,10 @@ export function runInConstructionScope<T>(scope: ServiceProvider | undefined, cr
 
 export function recordServiceOwner(owner: object): void {
     if (constructionScope && constructionScope._pending) builtIn.set(owner, constructionScope);
+}
+
+export function keepOnDispose(...values: object[]): void {
+    for (const value of values) keptOnDispose.add(value);
 }
 
 export function pinServiceOwner(owner: object): void {
@@ -438,7 +443,7 @@ export class ServiceProvider {
         /* @DEV-ONLY */ scopeDisposed(this);
         const seen = new Set<any>();
         const callDispose = async (obj: any) => {
-            if (!obj || seen.has(obj)) return;
+            if (!obj || seen.has(obj) || keptOnDispose.has(obj)) return;
             seen.add(obj);
             try { if (typeof obj.dispose === 'function') await obj.dispose(); }
             catch { /* ignore */ }

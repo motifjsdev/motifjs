@@ -1,5 +1,5 @@
 import { ServiceCollection } from "./dependencyInjection/ServiceCollection";
-import { ServiceProvider } from "./dependencyInjection/ServiceProvider";
+import { ServiceProvider, keepOnDispose } from "./dependencyInjection/ServiceProvider";
 import { Component } from "./component/Component";
 import { RouteItem } from "./routing/RouteItem";
 import { setRoutes, setDevtoolsEnabled } from "./devtools/devbus";
@@ -46,6 +46,7 @@ export class ApplicationBuilder {
         this.services.addSingleton(ServiceProvider, provider);
         var app = new Application(provider);
         this.services.addSingleton(Application, app);
+        keepOnDispose(provider, app);
         _globalApplication = app;
         return app;
     }
