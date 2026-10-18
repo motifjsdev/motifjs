@@ -23,7 +23,7 @@ export class ListBinding implements IBaseBinding {
     private _effectCleanup?: () => void;
     private _rendered: ComponentBase[] = [];
     private _identityMap = new WeakMap<object, ComponentBase[]>();
-    private container: ComponentBase = motifFragment('list-container');
+    private container: ComponentBase = motifFragment();
     constructor(private component: ComponentBase,
         private itemsFn: () => any[] | Iterable<any>,
         private renderFn: (item: any, index: number) => ComponentBase,
@@ -235,7 +235,7 @@ export class ListBinding implements IBaseBinding {
                 }
             });
 
-            this._syncContainer(newComponents);
+            untracked(() => this._syncContainer(newComponents));
 
             this._rendered = newComponents;
             this.olditems = items === source ? source.slice() : items;
@@ -341,7 +341,7 @@ function longestIncreasingIndices(sources: number[]): number[] {
             predecessors[i] = tails.length > 0 ? tails[tails.length - 1] : -1;
             tails.push(i);
             continue;
-        } 
+        }
         let lo = 0, hi = tails.length - 1;
         while (lo < hi) {
             const mid = (lo + hi) >> 1;
