@@ -1373,16 +1373,37 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
     var bodyExpression = t.objectExpression([]);
 
     var existThis = false;
+    const slotChilds: t.Expression[] = [];
+    const IN_SLOT = 'inside the childs slot';
+    const PLACED_IN_SLOT = 'childs: […] — the component places it with {this.childs}';
+    const emitBound = (cx: t.Expression, bound: t.Expression): t.Node => {
+        if (!isComponentTag) {
+            const st = t.expressionStatement(bound);
+            statements.push(st);
+            return st;
+        }
+        const init = t.objectProperty(t.identifier('initializeComponent'), t.arrowFunctionExpression([id('sender')], t.blockStatement([t.expressionStatement(bound)])));
+        const wrapped = t.callExpression(id(motifComponent()), [t.objectExpression([init])]);
+        transferOrigin(cx, wrapped);
+        slotChilds.push(wrapped);
+        return wrapped;
+    };
+    const loweredOf = (emitted: t.Node, bound: t.Expression): t.Node | string => isComponentTag ? codeOf(bound) + ' — ' + IN_SLOT : emitted;
     if (childs.length > 0) {
         childs.forEach(cx => {
 
             if (t.isCallExpression(cx) && t.isIdentifier(cx.callee) && cx.callee.name.startsWith('sender.bindings.')) {
-                statements.push(t.expressionStatement(cx));
-                explainBindingCall(cx, fileName);
+                emitBound(cx, cx);
+                explainBindingCall(cx, fileName, isComponentTag ? IN_SLOT : undefined);
             }
             else if (t.isArrayExpression(cx)) {
-                statements.push(t.expressionStatement(t.callExpression(id('sender.controls.add'), [cx])));
-                explainChild(cx, fileName, { site: 'child', shape: 'array', lowered: statements[statements.length - 1], reactive: 'static', deps: DEPS.none, note: 'the component array is placed once' });
+                if (isComponentTag) {
+                    slotChilds.push(cx);
+                    explainPlaced(cx, fileName, PLACED_IN_SLOT);
+                } else {
+                    statements.push(t.expressionStatement(t.callExpression(id('sender.controls.add'), [cx])));
+                    explainChild(cx, fileName, { site: 'child', shape: 'array', lowered: statements[statements.length - 1], reactive: 'static', deps: DEPS.none, note: 'the component array is placed once' });
+                }
             }
             else
                 if (t.isFunctionExpression(cx)) {
@@ -1393,8 +1414,9 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
                     statements.push(t.expressionStatement(cx))
                 } else if (isCoalesceLogical(cx)) {
                     // C1: `{a ?? b}` / `{a || b}` — `when` DEĞİL
-                    statements.push(t.expressionStatement(makeCoalesceChild(cx as t.LogicalExpression)));
-                    explainChild(cx, fileName, { site: 'child', shape: 'coalesce', lowered: statements[statements.length - 1], reactive: 'live', deps: DEPS.getter, note: 'reactive text if the result is text, a Frame if it is a component' });
+                    const coalesce = makeCoalesceChild(cx as t.LogicalExpression);
+                    const emitted = emitBound(cx, coalesce);
+                    explainChild(cx, fileName, { site: 'child', shape: 'coalesce', lowered: loweredOf(emitted, coalesce), reactive: 'live', deps: DEPS.getter, note: 'reactive text if the result is text, a Frame if it is a component' });
                 } else if (t.isLogicalExpression(cx)) {
 
 
@@ -1444,8 +1466,8 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
                     //     var ifst = t.ifStatement(t.identifier('val'),
 
                     // var a1 = t.callExpression(id('sender.bind.logic'), [kx, cx.right]);
-                    statements.push(t.expressionStatement(a1))
-                    explainChild(cx, fileName, { site: 'child', shape: 'when', lowered: a1, reactive: 'live', deps: DEPS.cond, note: 'JS truthiness; false → never built, a NEW instance is built on each switch to true. Deliberate alternative: x-wait' });
+                    emitBound(cx, a1);
+                    explainChild(cx, fileName, { site: 'child', shape: 'when', lowered: isComponentTag ? codeOf(a1) + ' — ' + IN_SLOT : a1, reactive: 'live', deps: DEPS.cond, note: 'JS truthiness; false → never built, a NEW instance is built on each switch to true. Deliberate alternative: x-wait' });
 
 
                 } else {
@@ -1471,16 +1493,15 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
                             }
 
                         }
+                    } else if (t.isArrowFunctionExpression(cx)) {
+                        const method = t.callExpression(t.identifier('sender.bindings.method'), [cx]);
+                        const emitted = emitBound(cx, method);
+                        explainChild(cx, fileName, { site: 'child', shape: 'method', lowered: loweredOf(emitted, method), reactive: 'live', deps: DEPS.getter, note: 'reactive text if the result is text, a Frame if it is a component (the instance is rebuilt on every change)' });
+                    } else {
+                        slotChilds.push(cx);
+                        explainPlaced(cx, fileName, PLACED_IN_SLOT);
                     }
                 }
-        });
-    }
-    if (isComponentTag) {
-        childs.forEach(cx => {
-            if (t.isCallExpression(cx) && t.isIdentifier(cx.callee) && cx.callee.name.startsWith('sender.bindings.')) { explainBindingCall(cx, fileName, 'inside the childs slot'); return; }
-            if (t.isLogicalExpression(cx)) { explainChild(cx, fileName, { site: 'child', shape: 'when', lowered: 'bindings.when(…) — inside the childs slot', reactive: 'live', deps: DEPS.cond }); return; }
-            if (t.isArrowFunctionExpression(cx)) { explainChild(cx, fileName, { site: 'child', shape: 'method', lowered: 'childs: [fn] — bindings.method when the component places it', reactive: 'live', deps: DEPS.getter }); return; }
-            explainPlaced(cx, fileName, 'childs: […] — the component places it with {this.childs}');
         });
     }
 
@@ -1517,7 +1538,7 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
 
 
     } else {
-        var tts = t.objectProperty(id('childs'), t.arrayExpression(childs));
+        var tts = t.objectProperty(id('childs'), t.arrayExpression(slotChilds));
         if (objectExpression.length > 0) {
             //var expr = t.objectProperty(t.identifier('props'), t.objectExpression({ ...objectExpression, ...spreadProps }));
             bodyExpression.properties.push(...objectExpression)
