@@ -104,7 +104,7 @@ export class TransportTo extends Component<any, { name: string }> {
             this._slotRegisteredListener = undefined;
         }
         if (this._slotUnregisteredListener) {
-            Application.main.off(SLOT_UNREGISTERED_EVENT, this._slotUnregisteredListener);
+            this._slotUnregisteredListener();
             this._slotUnregisteredListener = undefined;
         }
         if (this.controls.onAdd === this._onAddRef) this.controls.onAdd = undefined;
