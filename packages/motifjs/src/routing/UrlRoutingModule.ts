@@ -1,4 +1,4 @@
-import { $, Application, dom, safeCallSilentAsync } from "..";
+import { $, Application, dom } from "..";
 import { Component } from "../";
 import { NavigationDirection, NavigationOptions, ResolveResult, RouteInfo, RouteResolveContext, RouterOptions, StackEntryInfo } from "./";
 import type { RouteSnapshot } from "./routerState";
@@ -238,7 +238,8 @@ export class UrlRoutingModule {
         const traversal = this._pendingTraversal;
         this._pendingTraversal = null;
         /* @DEV-ONLY */ const devNav = navigationStarted(uri);
-        const result = await safeCallSilentAsync(async () => {
+        const requestedUri = uri;
+        const run = async () => {
 
             const suppressBeforeEachThisCall = this._suppressBeforeEachOnce;
             if (suppressBeforeEachThisCall) {
@@ -259,7 +260,12 @@ export class UrlRoutingModule {
             if (suppressMiddlewaresThisCall) {
                 gate = { proceed: true, uri };
             } else {
-                gate = await this._runMiddlewares(uri);
+                try {
+                    gate = await this._runMiddlewares(uri);
+                } catch (error) {
+                    reportError('MJX306', error, 'middleware');
+                    return { ok: false, uri, cancelled: true, reason: 'middleware' };
+                }
             }
 
             if (!gate.proceed) {
@@ -277,11 +283,20 @@ export class UrlRoutingModule {
             let redirectedFrom: string | undefined;
             let redirectError: Error | undefined;
             let redirectChain = '';
+            let redirectThrew = false;
             if (target.ok && target.route?.redirect) {
                 const requested = uri;
                 const visited: string[] = [requested];
                 while (target.ok && target.route?.redirect) {
-                    const next = this._resolveRedirect(target, uri);
+                    let next: string | null;
+                    try {
+                        next = this._resolveRedirect(target, uri);
+                    } catch (error) {
+                        reportError('MJX306', error, 'redirect');
+                        redirectError = error as Error;
+                        redirectThrew = true;
+                        break;
+                    }
                     if (!next) break;
                     if (visited.length > UrlRoutingModule.MAX_REDIRECTS || visited.some(v => pathOf(v) === pathOf(next))) {
                         redirectChain = [...visited, next].join(' → ');
@@ -293,7 +308,7 @@ export class UrlRoutingModule {
                     target = this.resolve(uri);
                 }
                 if (redirectError) {
-                    reportWarning('MJX303', [redirectChain]);
+                    if (!redirectThrew) reportWarning('MJX303', [redirectChain]);
                     uri = requested;
                     target = this._buildFallbackResult(uri, 'error', { path: uri, error: redirectError });
                 } else if (uri !== requested) {
@@ -428,7 +443,14 @@ export class UrlRoutingModule {
 
             return target;
 
-        }, 'UrlRoutingModule.navigate');
+        };
+        let result: any;
+        try {
+            result = await run();
+        } catch (error) {
+            reportError('MJX317', error, requestedUri);
+            result = { ok: false, uri: requestedUri, cancelled: true, reason: 'error', error };
+        }
         /* @DEV-ONLY */ navigationFinished(devNav, result, (r: ResolveResult) => this.chainOf(r));
         return result;
     }
@@ -706,7 +728,14 @@ export class UrlRoutingModule {
                     params
                 };
                 // Fonksiyon ise: doğrudan çağırmayı dener (factory gibi).
-                if (!item.validate(e)) return false;
+                let accepted: boolean;
+                try {
+                    accepted = !!item.validate(e);
+                } catch (error) {
+                    reportError('MJX306', error, 'validate');
+                    accepted = false;
+                }
+                if (!accepted) return false;
             }
         }
         return true;

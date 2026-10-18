@@ -62,6 +62,7 @@ export const motifMessages = {
     MJX314: (alias: string, parentPath: string) => `Child route alias should start with '/': "${alias}" under parent "${parentPath}".`,
     MJX315: (alias: string) => `Route alias resolves to the route's own path: "${alias}".`,
     MJX316: (alias: string) => `Multiple routes use the same alias: "${alias}".`,
+    MJX317: (uri: string) => `Navigation to '${uri}' failed.`,
 
     MJX401: (token: string) => `Service not registered for token: ${token}`,
     MJX402: (token: string) => `Async factory used with get() for token ${token}; use getAsync().`,
