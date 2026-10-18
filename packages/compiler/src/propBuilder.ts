@@ -4,37 +4,27 @@ import { NodePath } from '@babel/traverse';
 import { motifComponent, State } from './constants';
 import { fail } from './diagnostics';
 
+export const lowerAttrValue = (value: t.Expression | t.ObjectMethod | null | undefined): t.Expression | null => {
+    if (value == null) return null;
+    if (t.isStringLiteral(value)) return value;
+    if (t.isBooleanLiteral(value)) return value;
+    if (t.isArrowFunctionExpression(value) || t.isFunctionExpression(value)) return value;
+    if (t.isCallExpression(value) && t.isIdentifier(value.callee)) {
+        return value.callee.name !== 'motifComponent' && value.callee.name !== motifComponent() ? value : null;
+    }
+    if (t.isIdentifier(value)) return value;
+    if (t.isUnaryExpression(value) && !t.isLiteral(value.argument)) return t.arrowFunctionExpression([], value);
+    if (t.isExpression(value)) return returnIfStatement(value, false);
+    return null;
+};
+
 export const makeHtmlAttr = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>,
     name: string,
     value: t.Expression | t.ObjectMethod,
     path: NodePath<t.JSXElement>
 ): t.ObjectProperty | null => {
-    if (t.isStringLiteral(value) && value !== null) {
-        return t.objectProperty(t.stringLiteral(name), value);
-    } else if (t.isBooleanLiteral(value)) {
-        return t.objectProperty(t.stringLiteral(name), value || t.booleanLiteral(true));
-    } else if (t.isArrowFunctionExpression(value) && value !== null) {
-        return t.objectProperty(t.stringLiteral(name), value);
-    } else if (t.isFunctionExpression(value)) {
-        return t.objectProperty(t.stringLiteral(name), value);
-    } else {
-        if (value != null) {
-            if (t.isCallExpression(value) && t.isIdentifier(value.callee)) {
-                if (value.callee.name !== 'motifComponent' && value.callee.name !== motifComponent()) {
-                    return t.objectProperty(t.stringLiteral(name), value);
-                }
-            } else if (t.isIdentifier(value)) {
-                return t.objectProperty(t.stringLiteral(name), value);
-
-            } else if (t.isUnaryExpression(value) && !t.isLiteral(value.argument)) {
-                return t.objectProperty(t.stringLiteral(name), t.arrowFunctionExpression([], value));
-            } else if (t.isExpression(value)) {
-                return t.objectProperty(t.stringLiteral(name), returnIfStatement(value, false));
-            }
-        }
-
-    }
-    return null;
+    const lowered = lowerAttrValue(value);
+    return lowered === null ? null : t.objectProperty(t.stringLiteral(name), lowered);
 }
 
 function isStringLike(node: t.Node): node is t.StringLiteral | t.TemplateLiteral {
@@ -65,7 +55,7 @@ function literalTruthOf(val: t.Node): boolean | undefined {
     return undefined;
 }
 
-function splitClassObject(obj: t.ObjectExpression, staticNames: t.Expression[], live: t.Expression[]) {
+function splitClassObject(obj: t.ObjectExpression, staticNames: t.Expression[], live: (t.Expression | t.SpreadElement)[]) {
     const props: (t.ObjectProperty | t.ObjectMethod | t.SpreadElement)[] = [];
     obj.properties.forEach(p => {
         if (!t.isObjectProperty(p)) {
@@ -93,7 +83,7 @@ export const mergeHtmlAttributes = (htmlAttrlist: t.ObjectProperty[]): t.Express
     const htmlProps: t.ExpressionStatement[] = [];
     if (htmlAttrlist.length > 0) {
         var totalAttr: t.ObjectProperty[] = [];
-        var totalBindClass: t.Expression[] = [];
+        var totalBindClass: (t.Expression | t.SpreadElement)[] = [];
         var totalStringClass: t.Expression[] = [];
         htmlAttrlist.forEach(attr => {
             if (t.isStringLiteral(attr.key) || t.isTemplateLiteral(attr.key)) {
@@ -138,6 +128,11 @@ export const mergeHtmlAttributes = (htmlAttrlist: t.ObjectProperty[]): t.Express
                                 }
                             } else if (t.isFunctionExpression(element) || t.isArrowFunctionExpression(element)) {
                                 totalBindClass.push(element);
+                            } else if (t.isSpreadElement(element)) {
+                                totalBindClass.push(element);
+                            } else {
+                                const lowered = lowerAttrValue(t.isConditionalExpression(element) ? t.arrowFunctionExpression([], element) : element);
+                                if (lowered !== null) totalBindClass.push(lowered);
                             }
                         });
                     }
