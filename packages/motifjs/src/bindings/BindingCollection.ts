@@ -419,9 +419,11 @@ export class BindingCollection implements IBindingCollection {
         /* @DEV-ONLY */ frameCreated(frame, 'Switch');
         this._component.controls.add(frame);
         var currentValue: any;
+        var hasValue = false;
         var defaultRunned = false;
         const ef = effect(discriminatorFn, (value) => {
-            if (currentValue == value) return;
+            if (hasValue && currentValue == value) return;
+            hasValue = true;
             currentValue = value;
             const caseKey = String(value);
             if (Object.prototype.hasOwnProperty.call(cases, caseKey)) {

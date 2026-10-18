@@ -800,9 +800,13 @@ export const getChildren = (
 
                         const handlerFn = t.arrowFunctionExpression([t.identifier('frame')], t.blockStatement(handlerBody));
                         if (caseNode.test) {
-                            if (t.isStringLiteral(caseNode.test) || t.isNumericLiteral(caseNode.test) || t.isBooleanLiteral(caseNode.test)) {
+                            if (t.isStringLiteral(caseNode.test) || t.isNumericLiteral(caseNode.test)) {
                                 casesObjProps.push(
                                     t.objectProperty(caseNode.test, handlerFn)
+                                );
+                            } else if (t.isBooleanLiteral(caseNode.test)) {
+                                casesObjProps.push(
+                                    t.objectProperty(t.stringLiteral(String(caseNode.test.value)), handlerFn)
                                 );
                             } else {
                                 // Optionally: throw or skip
@@ -833,6 +837,7 @@ export const getChildren = (
                         discriminatorFn = t.arrowFunctionExpression([], discriminant);
                     }
 
+                    if (!defaultFn) defaultFn = trailingReturnHandler(expression.callee.body.body, switchStmt);
                     const args = [discriminatorFn, t.objectExpression(casesObjProps)];
 
                     if (defaultFn) args.push(defaultFn);
@@ -869,9 +874,13 @@ export const getChildren = (
 
                         const handlerFn = t.arrowFunctionExpression([t.identifier('frame')], t.blockStatement(handlerBody));
                         if (caseNode.test) {
-                            if (t.isStringLiteral(caseNode.test) || t.isNumericLiteral(caseNode.test) || t.isBooleanLiteral(caseNode.test)) {
+                            if (t.isStringLiteral(caseNode.test) || t.isNumericLiteral(caseNode.test)) {
                                 casesObjProps.push(
                                     t.objectProperty(caseNode.test, handlerFn)
+                                );
+                            } else if (t.isBooleanLiteral(caseNode.test)) {
+                                casesObjProps.push(
+                                    t.objectProperty(t.stringLiteral(String(caseNode.test.value)), handlerFn)
                                 );
                             } else {
                                 // Optionally: throw or skip
@@ -880,6 +889,7 @@ export const getChildren = (
                             defaultFn = handlerFn;
                         }
                     }
+                    if (!defaultFn) defaultFn = trailingReturnHandler(expression.body.body, switchStmt);
                     const discriminatorFn = t.arrowFunctionExpression([], discriminant);
                     const args = [discriminatorFn, t.objectExpression(casesObjProps)];
                     if (defaultFn) args.push(defaultFn);
@@ -1016,6 +1026,15 @@ export const getChildren = (
     return lowered;
 
 }
+
+const trailingReturnHandler = (body: t.Statement[], switchStmt: t.SwitchStatement): t.ArrowFunctionExpression | undefined => {
+    const after = body.slice(body.indexOf(switchStmt) + 1);
+    const ret = after.find((st): st is t.ReturnStatement => t.isReturnStatement(st));
+    if (!ret || !ret.argument || t.isNullLiteral(ret.argument) || (t.isIdentifier(ret.argument) && ret.argument.name === 'undefined')) return undefined;
+    return t.arrowFunctionExpression([t.identifier('frame')], t.blockStatement([t.expressionStatement(
+        t.callExpression(t.memberExpression(t.identifier('frame'), t.identifier('navigate')), [switchBranchContent(ret.argument)])
+    )]));
+};
 
 function id(name: string): t.Identifier {
     return t.identifier(name);
