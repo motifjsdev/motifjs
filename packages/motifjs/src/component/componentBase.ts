@@ -771,9 +771,9 @@ const ComponentHelper = {
                         }
 
                         if (active && (type === 'all' || type === 'active')) {
-                                value.onActive?.();
+                                callReported(() => value.onActive?.(), 'MJX105');
                         } else if ((type === 'all' || type === 'active')) {
-                                value.offActive?.();
+                                callReported(() => value.offActive?.(), 'MJX105');
                         }
 
                         /* ---------- Exact (tam eşleşme) ---------- */
@@ -783,12 +783,12 @@ const ComponentHelper = {
                         }
 
                         if (exact && (type === 'all' || type === 'exact')) {
-                                value.onExact?.();
+                                callReported(() => value.onExact?.(), 'MJX105');
                         } else if ((type === 'all' || type === 'exact')) {
-                                value.offExact?.();
+                                callReported(() => value.offExact?.(), 'MJX105');
                         }
                 } catch (error) {
-
+                        reportError('MJX105', error);
                 }
 
         }
