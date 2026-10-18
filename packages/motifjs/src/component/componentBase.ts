@@ -1737,7 +1737,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                         element.parent = this;
                                         element.build(false);
                                 }
-                                if (element.isWait) {
+                                if (element.isWait || (!element.isVisible && (element.element as unknown as Node | null)?.nodeType !== Node.COMMENT_NODE)) {
                                         if (keepsTrace(element)) {
                                                 const opts: any = element.motif.options;
                                                 (building ? ph : target as any).appendChild(opts.placeholder ?? (opts.placeholder = dom.createComment("h")));
