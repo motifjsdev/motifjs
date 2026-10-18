@@ -191,7 +191,7 @@ export function getAttributeName(attribute: NodePath<t.JSXAttribute>): string {
     return t.isJSXNamespacedName(label) ? label.namespace.name + ':' + label.name.name : label.name;
 }
 
-export function getAttributeValue(attribute: NodePath<t.JSXAttribute>, state: State): t.StringLiteral | t.Expression | t.CallExpression | t.ObjectMethod | null {
+export function getAttributeValue(attribute: NodePath<t.JSXAttribute>, state: State, componentProp = false): t.StringLiteral | t.Expression | t.CallExpression | t.ObjectMethod | null {
     const slot = attribute.get('value') as NodePath<t.JSXAttribute['value']>;
     switch (slot.node?.type) {
         case 'JSXElement':
@@ -199,7 +199,7 @@ export function getAttributeValue(attribute: NodePath<t.JSXAttribute>, state: St
         case 'StringLiteral':
             return slot.node;
         case 'JSXExpressionContainer':
-            return transformJSXExpressionContainer(slot as NodePath<t.JSXExpressionContainer>);
+            return transformJSXExpressionContainer(slot as NodePath<t.JSXExpressionContainer>, state, componentProp);
         default:
             return null;
     }
@@ -244,10 +244,61 @@ function memberTagToExpression(tag: t.JSXMemberExpression): t.MemberExpression {
     return built as t.MemberExpression;
 }
 
-export function transformJSXExpressionContainer(container: NodePath<t.JSXExpressionContainer>): t.Expression {
+const isMotifCall = (e: t.Node): boolean =>
+    t.isCallExpression(e) && t.isIdentifier(e.callee) && (e.callee.name === motifComponent() || e.callee.name === motifFragment());
+
+const hasMarkupBranch = (node: t.Node): boolean =>
+    t.isConditionalExpression(node) ? hasMarkupBranch(node.consequent) || hasMarkupBranch(node.alternate) : isMotifCall(node);
+
+function lowerTernary(expression: t.ConditionalExpression, state: State): t.CallExpression {
+    const frameId = t.identifier('frame');
+
+    const normalize = (e: t.Expression): t.Expression => {
+        if (isMotifCall(e)) return e;
+        return mkText(e);
+    };
+
+    const buildBranch = (node: t.Expression): t.Statement[] => {
+        if (t.isConditionalExpression(node)) {
+            const trueBody = buildBranch(node.consequent);
+            const falseBody = buildBranch(node.alternate);
+            return [
+                t.expressionStatement(
+                    t.callExpression(t.identifier('sender.bindings.ternaryCall'), [
+                        t.arrowFunctionExpression([], node.test as t.Expression),
+                        t.arrowFunctionExpression([], t.blockStatement(trueBody)),
+                        t.arrowFunctionExpression([], t.blockStatement(falseBody))
+                    ])
+                )
+            ];
+        }
+        return [t.expressionStatement(
+            t.callExpression(
+                t.memberExpression(frameId, t.identifier('navigate')),
+                [normalize(node)]
+            )
+        )];
+    };
+
+    const trueFn = t.arrowFunctionExpression([frameId], t.blockStatement(buildBranch(expression.consequent)));
+    const falseFn = t.arrowFunctionExpression([frameId], t.blockStatement(buildBranch(expression.alternate)));
+    const condFn = t.arrowFunctionExpression([], expression.test);
+    if (!state.get(motifFragment())) {
+        state.set(motifFragment(), motifFragment());
+    }
+
+    return t.callExpression(id('sender.bindings.ternary'), [condFn, trueFn, falseFn]);
+}
+
+export function transformJSXExpressionContainer(container: NodePath<t.JSXExpressionContainer>, state?: State, componentProp = false): t.Expression {
     const inner = container.node.expression as t.Expression;
     const lazyAttribute = t.isConditionalExpression(inner) && container.parentPath?.isJSXAttribute();
-    return lazyAttribute ? t.arrowFunctionExpression([], inner) : inner;
+    if (!lazyAttribute) return inner;
+    if (componentProp && state && hasMarkupBranch(inner)) {
+        const setup = t.arrowFunctionExpression([id('sender')], t.blockStatement([t.expressionStatement(lowerTernary(inner as t.ConditionalExpression, state))]));
+        return t.arrowFunctionExpression([], t.callExpression(id(motifFragment()), [t.objectExpression([t.objectProperty(t.identifier('initializeComponent'), setup)])]));
+    }
+    return t.arrowFunctionExpression([], inner);
 }
 
 const isMarkupTagName = (name: string): boolean =>
@@ -401,7 +452,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
             }
             else if (prop.isJSXAttribute()) {
                 let name = getAttributeName(prop);
-                let value = getAttributeValue(prop, state);
+                let value = getAttributeValue(prop, state, tagIsComponent());
                 const mergedHook = lifecycleHookOf(name);
                 if (mergedHook !== null && mergedHooks.has(mergedHook) && value != null) {
                     if (t.isExpression(value)) {
@@ -901,44 +952,7 @@ export const getChildren = (
             }
 
             if (t.isConditionalExpression(expression)) {
-                const frameId = t.identifier('frame');
-
-                const isMotifCall = (e: t.Expression) => t.isCallExpression(e) && t.isIdentifier(e.callee) && (e.callee.name === motifComponent() || e.callee.name === motifFragment());
-                const normalize = (e: t.Expression): t.Expression => {
-                    if (isMotifCall(e)) return e;
-                    return mkText(e);
-                };
-
-                const buildBranch = (node: t.Expression): t.Statement[] => {
-                    if (t.isConditionalExpression(node)) {
-                        const trueBody = buildBranch(node.consequent);
-                        const falseBody = buildBranch(node.alternate);
-                        return [
-                            t.expressionStatement(
-                                t.callExpression(t.identifier('sender.bindings.ternaryCall'), [
-                                    t.arrowFunctionExpression([], node.test as t.Expression),
-                                    t.arrowFunctionExpression([], t.blockStatement(trueBody)),
-                                    t.arrowFunctionExpression([], t.blockStatement(falseBody))
-                                ])
-                            )
-                        ];
-                    }
-                    return [t.expressionStatement(
-                        t.callExpression(
-                            t.memberExpression(frameId, t.identifier('navigate')),
-                            [normalize(node)]
-                        )
-                    )];
-                };
-
-                const trueFn = t.arrowFunctionExpression([frameId], t.blockStatement(buildBranch(expression.consequent)));
-                const falseFn = t.arrowFunctionExpression([frameId], t.blockStatement(buildBranch(expression.alternate)));
-                const condFn = t.arrowFunctionExpression([], expression.test);
-                if (!state.get(motifFragment())) {
-                    state.set(motifFragment(), motifFragment());
-                }
-
-                return t.callExpression(id('sender.bindings.ternary'), [condFn, trueFn, falseFn]);
+                return lowerTernary(expression, state);
             }
 
             if (t.isMemberExpression(expression)) {
