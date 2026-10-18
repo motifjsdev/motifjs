@@ -182,7 +182,7 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
         compiler.storeNames = storeLabel(id, src);
         compiler.production = strip;
         const result = compiler.lowerDecorators(src, id);
-        if (result && result.code) {
+        if (result && result.code != null) {
           return {
             code: result.code,
             map: result.map
@@ -195,7 +195,7 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
         compiler.storeNames = storeLabel(id, src);
         compiler.production = strip;
         const result = compiler.nameStores(src, id);
-        if (result && result.code) {
+        if (result && result.code != null) {
           return {
             code: result.code,
             map: result.map
@@ -205,7 +205,7 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
       }
       if (shouldDeclareElements(id, src)) {
         const result = new Compiler().declareElements(src, id);
-        if (result && result.code) {
+        if (result && result.code != null) {
           return {
             code: result.code,
             map: result.map
@@ -225,7 +225,7 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
             if (showDiagnostics && compiler.diagnostics.length > 0) {
               printDiagnostics(compiler.diagnostics);
             }
-            if (result && result.code) {
+            if (result && result.code != null) {
               return {
                 code: result.code,
                 map: result.map
