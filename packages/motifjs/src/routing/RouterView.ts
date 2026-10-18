@@ -49,7 +49,7 @@ export class RouterView extends Component {
 
     public override onDisposed() {
         try {
-            RouterViewRegistry.unregister(this.props.name ?? 'default', this.scopeId);
+            RouterViewRegistry.unregister(this.props.name ?? 'default', this);
         } catch { /* ignore */ }
     }
 

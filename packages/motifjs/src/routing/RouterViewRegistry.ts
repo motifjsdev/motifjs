@@ -4,9 +4,11 @@ export class RouterViewRegistry {
         if (!this.outlets.has(name)) this.outlets.set(name, new Map());
         this.outlets.get(name)!.set(scopeId, instance);
     }
-    static unregister(name: string, scopeId: string) {
-        this.outlets.get(name)?.delete(scopeId);
-        if (this.outlets.get(name)?.size === 0) this.outlets.delete(name);
+    static unregister(name: string, instance: any) {
+        const group = this.outlets.get(name);
+        if (!group) return;
+        for (const [scopeId, value] of group) if (value === instance) group.delete(scopeId);
+        if (group.size === 0) this.outlets.delete(name);
     }
     static find(name: string, scopeId?: string): any | null {
         if (scopeId && this.outlets.get(name)?.has(scopeId)) {
