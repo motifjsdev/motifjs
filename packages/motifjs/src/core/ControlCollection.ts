@@ -36,10 +36,12 @@ export class ControlCollection {
     }
     insert(index?: number, ...controls: ComponentBase[]): ComponentBase[] {
         const flat: ComponentBase[] = ([] as any[]).concat(...controls as any);
-        return flat.filter(x => x != undefined && !x.isDisposed).map(control => this._insertOne(index, control));
+        return flat.filter(x => x != undefined && !x.isDisposed).map(control => this._insertOne(index, control)).filter(x => x != undefined); 
     }
     private _insertOne(index: number | undefined, control: ComponentBase): ComponentBase {
         control = resolveComponent(control);
+        if (control == undefined) return control;
+
         if (typeof control == 'string' || typeof control == 'number' || typeof control == 'boolean' || typeof control == 'bigint') {
             control = new Component(dom.createTextNode(control), null as any);
         }
