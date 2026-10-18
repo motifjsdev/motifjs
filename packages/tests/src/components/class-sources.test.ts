@@ -171,7 +171,7 @@ describe('reactive class sources', () => {
         root.dispose();
     });
 
-    test('a failing source counts as no classes', async () => {
+    test('a failing source is reported and keeps its previous classes', async () => {
         const root = host();
         const c = new Component('p');
         const s = reactive({ fail: false });
@@ -195,5 +195,5 @@ const EXPECTED: Record<string, string[]> = {
     keyed: ["+active", "+base", "[built] active base", "-active", "+m", "+n", "[flip] base m n", "+active", "[on] base m n active"],
     lifecycle: ["+x", "[before build] x", "[built] x", "[detached] x", "-x", "+y", "[off while detached] y", "[added back] y", "-y", "+x", "[on] x", "-x", "[after dispose] "],
     hidden: ["-x", "+y", "[hidden off] y", "[shown] y", "-y", "+x", "[on] x"],
-    failing: ["+ok", "[built] ok", "-ok", "[failing] ", "+ok", "[recovered] ok"],
+    failing: ["+ok", "[built] ok", "[failing] ok", "[recovered] ok"],
 };

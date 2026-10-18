@@ -1,4 +1,5 @@
 import { IClass } from "../";
+import { reportError } from "../common/diagnostics";
 import { ComponentBase } from "./";
 import { effect } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
@@ -305,8 +306,9 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
                 let v = fn();
                 if (key !== undefined && typeof v === 'function') v = v();
                 next = key !== undefined ? (v ? new Set<string>([key]) : new Set<string>()) : this._normalizeToSet(v);
-            } catch {
-                next = new Set();
+            } catch (error) {
+                reportError('MJX208', error);
+                return;
             }
             const prev = new Set(rec.set);
             this._applySourceDiff(id, prev, next, el);
