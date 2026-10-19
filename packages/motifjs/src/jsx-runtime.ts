@@ -4,10 +4,10 @@ type motifPrimitive = string | number | boolean | Node | Text | Element | null |
 
 declare const DEV: boolean;
 
-export type MotifStyle = string | (() => any) | Array<any> | Object | Partial<CSSStyleDeclaration> | CSSStyleDeclaration;
-export type MotifClass = string | Record<string, any> | Array<any> | (() => any);
-export type MotifValue = string | number | boolean | Record<string, any> | Array<any> | (() => any);
-export type MotifBindable<T> = T | string | (() => T | string);
+export type MotifStyle = string | null | (() => any) | Array<any> | Object | Partial<CSSStyleDeclaration> | CSSStyleDeclaration;
+export type MotifClass = string | null | Record<string, any> | Array<any> | (() => any);
+export type MotifValue = string | number | boolean | null | Record<string, any> | Array<any> | (() => any);
+export type MotifBindable<T> = T | string | null | (() => T | string | null);
 
 export interface MotifBaseProps {
     children?: any;

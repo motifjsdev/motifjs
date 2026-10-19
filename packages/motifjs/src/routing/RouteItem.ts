@@ -1,5 +1,6 @@
 import { ComponentBase } from "../component";
 import { Scanner } from "./scanner";
+import type { NavigationDirection, NavigationOptions } from "./common";
 
 export interface RouterValidateEventArgs {
     uri: string,
@@ -34,7 +35,7 @@ export interface RouteItemBase {
 
     onEnter?: (context: { path?: string; params?: Record<string, any>; meta?: Record<string, any>; to?: { path: string; params: Record<string, any>; meta: Record<string, any> } }) => void | Promise<void>;
 
-    onLeave?: (context: { from: { path: string; params: Record<string, any>; meta: Record<string, any> }; to: { path: string; params: Record<string, any>; meta: Record<string, any> } }) => boolean | void | { cancel: true; reason?: string } | Promise<boolean | void | { cancel: true; reason?: string }>;
+    onLeave?: (context: { from: { path: string; params: Record<string, any>; meta: Record<string, any> }; to: { path: string; params: Record<string, any>; meta: Record<string, any>; redirectedFrom?: string; direction?: NavigationDirection; options?: NavigationOptions; state?: any } }) => boolean | void | { cancel: true; reason?: string } | Promise<boolean | void | { cancel: true; reason?: string }>;
 
     onUpdate?: (context: { from: { path: string; params: Record<string, any> }; to: { path: string; params: Record<string, any> }; meta: Record<string, any> }) => void | Promise<void>;
 
