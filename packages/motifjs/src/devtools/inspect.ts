@@ -77,6 +77,7 @@ export function recordService(owner: object, token: any): void {
 export function setScopeResolver(fn: (owner: object) => any): void { scopeResolver = fn; }
 
 export function rootProvider(): any { return root?.provider ?? null; }
+const isServiceProvider = (v: any): boolean => !!v && typeof v._getFor === 'function' && typeof v.createScope === 'function';
 
 export const tokenName = (t: any): string => typeof t === 'function' ? (t.name || '[AnonymousClass]') : String(t);
 export const isComponent = (v: any): boolean => typeof v.build === 'function' && 'isDisposed' in v && 'motif' in v;
@@ -162,7 +163,7 @@ function attributesOf(c: any) {
 }
 
 function providerOf(c: any): any {
-    for (let p = c; p; p = p.parent) if (p.provider) return p.provider;
+    for (let p = c; p; p = p.parent) if (isServiceProvider(p.provider)) return p.provider;
     return null;
 }
 
@@ -207,7 +208,7 @@ function effectsOf(c: any) {
     });
 }
 
-export const FRAMEWORK_FIELDS = new Set(['_store', '_motif', '_flags', '_controls', '_class', '_bindings', '_baseCtx', '_init', '_eventHandlers', '_keepElementOnDispose', '_styleFx', '_disposing', '_scopedContext', '_siblingsApi', '_siblingsSet', 'element', 'parent', 'props', 'application', 'provider']);
+export const FRAMEWORK_FIELDS = new Set(['_store', '_motif', '_flags', '_controls', '_class', '_bindings', '_baseCtx', '_init', '_eventHandlers', '_keepElementOnDispose', '_styleFx', '_disposing', '_scopedContext', '_siblingsApi', '_siblingsSet', 'element', 'parent', 'props', 'application']);
 
 export function fieldsOf(c: any): object {
     const out = Object.create(null);
@@ -278,7 +279,7 @@ export function holdersOf(idOf: (v: object) => number | undefined): Map<number, 
     const providers = new Set<any>();
     const walk = (c: any, path: number[]) => {
         scan(c, field => ({ kind: 'component', path, type: typeOf(c), field }), FRAMEWORK_FIELDS);
-        if (c.provider) providers.add(c.provider);
+        if (isServiceProvider(c.provider)) providers.add(c.provider);
         const items: any[] = c._controls?.items ?? [];
         for (let i = 0; i < items.length; i++) walk(items[i], [...path, i]);
     };

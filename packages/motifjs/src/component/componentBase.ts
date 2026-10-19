@@ -1,5 +1,4 @@
 import { ControlCollection, dom, Disposable, IClass, IDisposable, Application, isExactMatch, startsWithPath, reactive, safeCallSilent, safeCallSilentAsync, safeCall, safeCallAsync } from "..";
-import { ServiceProvider } from "..";
 import { BindingCollection, IBaseBinding } from "../bindings";
 import { effect } from "../store/reactivity-core";
 import { ComponentEmiter } from "./ComponentEmiter";
@@ -10,7 +9,7 @@ import { Flags, UnwrapValueRefs } from "../store/common";
 import { getTransitionInfo, runCssTransition, TransitionProps } from "../common/transition";
 import { callReported, motifError, reportError, reportWarning } from "../common/diagnostics";
 import { ComponentMotif } from "./ComponentMotif";
-import { pinServiceOwner, recordServiceOwner, retireServiceOwner, unpinServiceOwner } from "../dependencyInjection/ServiceProvider";
+import { ServiceProvider, pinServiceOwner, recordServiceOwner, retireServiceOwner, unpinServiceOwner } from "../dependencyInjection/ServiceProvider";
 import { contentBlocks as liveContentBlocks } from "./contentBlockRegistry";
 import { OPTIONS_OWNER, TRANSITION_SLOT } from "./optionsSlots";
 import { deferUntilEntered, isTransitionMode, pendingLeaves, trackEnter, trackLeave, transitionSettings, TransitionMode } from "../common/transitionRegistry";
@@ -2280,8 +2279,8 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         public get serviceProvider(): ServiceProvider | null {
                 let c: ComponentBase | null = this as unknown as ComponentBase;
                 while (c) {
-                        const p = (c as any).provider as ServiceProvider | undefined;
-                        if (p) return p;
+                        const p = (c as any).provider;
+                        if (p instanceof ServiceProvider) return p;
                         const recorded = teardownApplications.get(c);
                         if (recorded) return recorded.state === 'disposed' ? null : recorded.provider;
                         c = c.parent;
