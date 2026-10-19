@@ -1,16 +1,16 @@
-import { ComponentBase, IBaseProp } from ".";
+import { ComponentBase, IBaseProp, IDisposeOptions } from ".";
 import { Component, assertLoadedComponent, resolveToComponent, unwrapModule } from "./Component";
 import { Frame } from "./Frame";
 import { trackedCleanup } from "../disposable/Cleanup";
 import { motifError, reportError } from "../common/diagnostics";
 
-export interface LazyOptions<T = any> { 
-    Loaderview?: ComponentBase; 
-    Placeholderview?: ComponentBase; 
+export interface LazyOptions<T = any> {
+    Loaderview?: ComponentBase;
+    Placeholderview?: ComponentBase;
     Fallbackview?: ComponentBase;
     minDelayMs?: number;
     onError?: (error: unknown) => void;
-    mapResult?: (result: T) => any; 
+    mapResult?: (result: T) => any;
     timeoutMs?: number;
     signal?: AbortSignal;
     retry?: number | LazyRetryOptions;
@@ -39,38 +39,61 @@ function defaultMapper(result: any) {
     return unwrapModule(result);
 }
 
+const CLOSED = Symbol('motif.lazy.closed');
 
+type LazyFrame = Frame & { _closing?: () => void };
+let LazyFrameClass: (new () => LazyFrame) | undefined;
+function createLazyFrame(): LazyFrame {
+    LazyFrameClass ??= class extends Frame {
+        _closing?: () => void;
+        public override async dispose(options: IDisposeOptions = { deep: true }): Promise<void> {
+            this._closing?.();
+            await super.dispose(options);
+        }
+    };
+    return new LazyFrameClass();
+}
 
 export function Lazy<T>(props: { caller: () => Promise<T>, options?: LazyOptions<T> }): Component;
 export function Lazy(props: any): Component;
 export function Lazy(props: any): Component {
     const opts: LazyOptions<any> = (props && props.options) || {};
-    const frame = new Frame();
+    const frame = createLazyFrame();
     const timers = new Set<ReturnType<typeof setTimeout>>();
+    const cleanups = new Set<() => void>();
+    let closed = false;
     const trackTimer = (id: ReturnType<typeof setTimeout>) => { try { timers.add(id); } catch { } return id; };
     const clearAllTimers = () => {
         try { timers.forEach(id => { try { clearTimeout(id); } catch { } }); } catch { }
         try { timers.clear(); } catch { }
     };
-    try { frame.motif.register(trackedCleanup(() => clearAllTimers())); } catch { }
+    const close = () => {
+        closed = true;
+        clearAllTimers();
+        cleanups.forEach(c => { try { c(); } catch { } });
+        cleanups.clear();
+    };
+    frame._closing = close;
+    try { frame.motif.on('x:disposing', close); } catch { }
+    try { frame.motif.register(trackedCleanup(close)); } catch { }
     const initial = opts.Placeholderview ?? opts.Loaderview;
     if (initial != null) {
         frame.navigate(resolveToComponent(initial));
     }
 
-    const attemptLoad = () => {
+    const abortError = (err: unknown) => ((err as any)?.code === 'MJX111' ? err : motifError('MJX111'));
+
+    const attemptLoad = (): Promise<any> => {
+        const load = props.caller();
         if (!opts.timeoutMs && !opts.signal) {
-            return props.caller();
+            return load;
         }
-        const parts: Promise<any>[] = [props.caller()];
+        const parts: Promise<any>[] = [load];
+        const undo: Array<() => void> = [];
         if (opts.timeoutMs && opts.timeoutMs > 0) {
             parts.push(new Promise<any>((_, reject) => {
                 const id = trackTimer(setTimeout(() => reject(motifError('MJX110', opts.timeoutMs!)), opts.timeoutMs));
-                parts[0].finally(() => { try { clearTimeout(id); timers.delete(id); } catch { } }).catch(() => { /* noop */ });
-                if (opts.signal) {
-                    const onAbortClear = () => { try { clearTimeout(id); timers.delete(id); } catch { } };
-                    try { opts.signal.addEventListener("abort", onAbortClear, { once: true }); } catch { }
-                }
+                undo.push(() => { try { clearTimeout(id); timers.delete(id); } catch { } });
             }));
         }
         if (opts.signal) {
@@ -79,20 +102,15 @@ export function Lazy(props: any): Component {
                     reject(motifError('MJX111'));
                     return;
                 }
-                const onAbort = () => {
-                    opts.signal!.removeEventListener("abort", onAbort);
-                    clearAllTimers();
-                    reject(motifError('MJX111'));
-                };
-                opts.signal!.addEventListener("abort", onAbort, { once: true });
+                const onAbort = () => reject(motifError('MJX111'));
+                try { opts.signal!.addEventListener("abort", onAbort, { once: true }); } catch { }
+                undo.push(() => { try { opts.signal!.removeEventListener("abort", onAbort); } catch { } });
             }));
         }
-        return Promise.race(parts);
+        return Promise.race(parts).finally(() => { undo.forEach(u => u()); });
     };
 
     const retry = normalizeRetry(opts.retry);
-    const cleanups = new Set<() => void>();
-    try { frame.motif.register(trackedCleanup(() => { cleanups.forEach(c => { try { c(); } catch { } }); cleanups.clear(); })); } catch { }
 
     const waitBeforeRetry = (attempt: number): Promise<boolean> => new Promise<boolean>(resolve => {
         let settled = false;
@@ -131,21 +149,25 @@ export function Lazy(props: any): Component {
             try {
                 return await attemptLoad();
             } catch (err) {
-                if (opts.signal?.aborted || (frame as any).isDisposed || attempt >= retry.count) throw err;
+                if (closed) throw CLOSED;
+                if (opts.signal?.aborted) throw abortError(err);
+                if (attempt >= retry.count) throw err;
                 attempt++;
                 try { opts.onRetry?.(attempt, err); } catch { }
                 const go = await waitBeforeRetry(attempt);
-                if (!go || opts.signal?.aborted || (frame as any).isDisposed) throw err;
+                if (closed) throw CLOSED;
+                if (!go || opts.signal?.aborted) throw abortError(undefined);
             }
         }
     };
 
-    const loadPromise = retry.count > 0 ? loadWithRetry() : attemptLoad();
+    const loadPromise = loadWithRetry();
 
     const startTs = Date.now();
 
-    const fail = (err: any) => {
-        try { opts.onError?.(err); } catch { /* swallow */ }
+    const fail = (err: unknown) => {
+        if (closed || err === CLOSED) return;
+        try { opts.onError?.(err); } catch { }
         if (opts.signal?.aborted) return;
         if (opts.Fallbackview != null) {
             frame.navigate(resolveToComponent(opts.Fallbackview));
@@ -169,7 +191,7 @@ export function Lazy(props: any): Component {
 
     loadPromise
         .then((result: any) => {
-            if (opts.signal?.aborted) { return; }
+            if (closed || opts.signal?.aborted) { return; }
             const mapper = opts.mapResult ?? defaultMapper;
             const target = mapper(result);
             const elapsed = Date.now() - startTs;
@@ -177,7 +199,8 @@ export function Lazy(props: any): Component {
             const remaining = Math.max(0, minDelay - elapsed);
             if (remaining > 0) {
                 const id = trackTimer(setTimeout(() => {
-                    if (!opts.signal?.aborted) {
+                    timers.delete(id);
+                    if (!closed && !opts.signal?.aborted) {
                         place(target);
                     }
                 }, remaining));
