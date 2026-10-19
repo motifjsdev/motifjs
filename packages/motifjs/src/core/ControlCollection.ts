@@ -36,9 +36,14 @@ export class ControlCollection {
     }
     insert(index?: number, ...controls: ComponentBase[]): ComponentBase[] {
         const flat: ComponentBase[] = ([] as any[]).concat(...controls as any);
-        return flat.filter(x => x != undefined && !x.isDisposed).map(control => this._insertOne(index, control)).filter(x => x != undefined); 
+        let previous: ComponentBase | undefined;
+        return flat.filter(x => x != undefined && !x.isDisposed).map(control => {
+            const added = this._insertOne(index, control, previous);
+            if (added != undefined) previous = added;
+            return added;
+        }).filter(x => x != undefined);
     }
-    private _insertOne(index: number | undefined, control: ComponentBase): ComponentBase {
+    private _insertOne(index: number | undefined, control: ComponentBase, previous?: ComponentBase): ComponentBase {
         control = resolveComponent(control);
         if (control == undefined) return control;
 
@@ -49,7 +54,8 @@ export class ControlCollection {
         if (control.parent) { control.parent.controls.detach(control); }
 
         if (index != undefined && index >= 0) {
-            this.items.splice(index, 0, control);
+            const after = previous ? this.items.indexOf(previous) : -1;
+            this.items.splice(after >= 0 ? after + 1 : index, 0, control);
         } else {
             pushTight(this.items, control);
         }
