@@ -132,3 +132,76 @@ describe('options on a plain tag', () => {
         await root.dispose();
     });
 });
+
+describe('focus values and document-level exit methods', () => {
+    afterEach(() => { document.body.innerHTML = ''; });
+
+    test.each([
+        ['focus', 0, ['focus()']],
+        ['focus', '', ['focus()']],
+        ['focus', null, ['focus()']],
+        ['focus', undefined, ['focus()']],
+        ['focus', true, ['focus()']],
+        ['focus', false, ['blur()']],
+        ['focus', { preventScroll: true }, ['focus({"preventScroll":true})']],
+    ])('%s = %p', async (name, value, expected) => {
+        const { root, c, calls } = mountTag('input', ['focus', 'blur'], { [name]: value });
+        await tick();
+        expect(calls).toEqual(expected);
+        expect((c.element as Element).hasAttribute('focus')).toBe(false);
+        await root.dispose();
+    });
+
+    function stubDocument(names: string[]) {
+        const calls: string[] = [];
+        const saved = names.map(n => [n, Object.getOwnPropertyDescriptor(document, n)] as const);
+        for (const name of names) {
+            Object.defineProperty(document, name, {
+                configurable: true,
+                writable: true,
+                value: (...args: any[]) => { calls.push(args.length ? `${name}(${args.length})` : `${name}()`); },
+            });
+        }
+        const restore = () => {
+            for (const [n, d] of saved) {
+                if (d) Object.defineProperty(document, n, d); else delete (document as any)[n];
+            }
+        };
+        return { calls, restore };
+    }
+
+    test.each([
+        ['exitFullscreen', true, ['exitFullscreen()']],
+        ['exitFullscreen', false, []],
+        ['exitPointerLock', true, ['exitPointerLock()']],
+        ['exitPointerLock', 1, ['exitPointerLock()']],
+        ['exitPictureInPicture', true, ['exitPictureInPicture()']],
+        ['exitPictureInPicture', 0, []],
+    ])('%s = %p calls the document method and writes no attribute', async (name, value, expected) => {
+        const { calls, restore } = stubDocument(['exitFullscreen', 'exitPointerLock', 'exitPictureInPicture']);
+        try {
+            const { root, c } = mountTag('div', [], { [name]: value });
+            await tick();
+            expect(calls).toEqual(expected);
+            expect((c.element as Element).hasAttribute(name.toLowerCase())).toBe(false);
+            await root.dispose();
+        } finally {
+            restore();
+        }
+    });
+
+    test('requestFullscreen = false leaves fullscreen through the document', async () => {
+        const { calls, restore } = stubDocument(['exitFullscreen']);
+        try {
+            const { root, c } = mountTag('div', ['requestFullscreen'], {});
+            Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => c.element });
+            c.attr.add({ requestFullscreen: false });
+            await tick();
+            expect(calls).toEqual(['exitFullscreen()']);
+            await root.dispose();
+        } finally {
+            restore();
+            delete (document as any).fullscreenElement;
+        }
+    });
+});

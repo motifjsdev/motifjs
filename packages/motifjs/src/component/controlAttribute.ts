@@ -21,6 +21,17 @@ const METHOD_ATTRS = new Set<string>([
 const OPEN_METHODS: Record<string, string> = { show: 'close', showModal: 'close', showPopover: 'hidePopover' };
 const WHEN_TRUTHY_METHODS = new Set<string>(['close', 'hidePopover', 'requestSubmit', 'checkValidity', 'reportValidity', 'showPicker', 'load']);
 const ARGUMENT_METHODS = new Set<string>(['setSelectionRange', 'setRangeText', 'setPointerCapture', 'releasePointerCapture', 'fastSeek']);
+const DOCUMENT_METHODS = new Set<string>(['exitFullscreen', 'exitPointerLock', 'exitPictureInPicture']);
+
+function callDocumentMethod(name: string) {
+    try {
+        const d: any = document;
+        if (d && typeof d[name] === 'function') {
+            const p = d[name]();
+            if (p && typeof p.then === 'function') p.catch(() => { });
+        }
+    } catch { }
+}
 
 const PROPERTY_FIRST = new Set<string>(['checked', 'selected', 'muted', 'indeterminate', 'srcObject']);
 
@@ -121,6 +132,15 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
         if (el && typeof key === 'string' && METHOD_ATTRS.has(key)) {
             const k = key as string;
             const method = (el as any)[k];
+            const schedule = (fn: () => void) => { try { queueMicrotask(fn); } catch { try { setTimeout(fn, 0); } catch { } } };
+            const cacheValue = () => {
+                this._attrMap.set(key, raw);
+            };
+            if (DOCUMENT_METHODS.has(k)) {
+                schedule(() => { if (raw) callDocumentMethod(k); });
+                cacheValue();
+                return;
+            }
             if (typeof method === 'function') {
                 const invoke = (fn: Function, arg?: any) => {
                     try {
@@ -133,23 +153,15 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                         }
                     } catch { }
                 };
-                const schedule = (fn: () => void) => { try { queueMicrotask(fn); } catch { try { setTimeout(fn, 0); } catch { } } };
-                const cacheValue = () => {
-                    this._attrMap.set(key, raw);
-                };
 
                 if (k === 'focus') {
                     const action = () => {
                         if (raw === false) {
                             const blur = (el as any).blur; if (typeof blur === 'function') invoke(blur);
-                        } else if (raw === true) {
-                            invoke(method);
-                        } else if (typeof raw === 'object' && raw != null && raw !== true) {
-                            invoke(method, raw);
-                        } else if (Array.isArray(raw)) {
+                        } else if (raw && typeof raw === 'object') {
                             invoke(method, raw);
                         } else {
-                            invoke(method, raw);
+                            invoke(method);
                         }
                     };
                     schedule(action);
@@ -207,27 +219,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                         if (raw) {
                             invoke(method);
                         } else {
-
-                            try {
-                                const d: any = document;
-                                if (d && d.fullscreenElement === el && typeof d.exitFullscreen === 'function') {
-                                    d.exitFullscreen();
-                                }
-                            } catch { }
-                        }
-                    };
-                    schedule(action);
-                    cacheValue();
-                    return;
-                }
-
-                if (k === 'exitFullscreen') {
-                    const action = () => {
-                        if (raw) {
-                            try {
-                                const d: any = document;
-                                if (d && typeof d.exitFullscreen === 'function') d.exitFullscreen();
-                            } catch { }
+                            try { if ((document as any).fullscreenElement === el) callDocumentMethod('exitFullscreen'); } catch { }
                         }
                     };
                     schedule(action);
@@ -240,24 +232,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                         if (raw) {
                             invoke(method);
                         } else {
-                            try {
-                                const d: any = document;
-                                if (d && typeof d.exitPointerLock === 'function') d.exitPointerLock();
-                            } catch { }
-                        }
-                    };
-                    schedule(action);
-                    cacheValue();
-                    return;
-                }
-
-                if (k === 'exitPointerLock') {
-                    const action = () => {
-                        if (raw) {
-                            try {
-                                const d: any = document;
-                                if (d && typeof d.exitPointerLock === 'function') d.exitPointerLock();
-                            } catch { }
+                            callDocumentMethod('exitPointerLock');
                         }
                     };
                     schedule(action);
@@ -288,22 +263,6 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                     cacheValue();
                     return;
                 }
-                if (k === 'exitPictureInPicture') {
-                    const action = () => {
-                        if (raw) {
-                            try {
-                                const d: any = document as any;
-                                if (d && typeof d.exitPictureInPicture === 'function') {
-                                    const p = d.exitPictureInPicture(); if (p && typeof p.then === 'function') p.catch(() => { });
-                                }
-                            } catch { }
-                        }
-                    };
-                    schedule(action);
-                    cacheValue();
-                    return;
-                }
-
                 if (k in OPEN_METHODS) {
                     const action = () => {
                         if (raw === false) {
