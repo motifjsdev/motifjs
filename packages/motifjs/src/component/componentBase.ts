@@ -2090,7 +2090,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 const colon = full.indexOf(":");
                 const name = colon < 0 ? full : full.slice(0, colon);
                 const mods = colon < 0 ? NO_MODS : full.slice(colon + 1).split(":");
-                const evt = name.startsWith("on") ? name.slice(2).toLowerCase() : name.toLowerCase();
+                const evt = name.startsWith("on") && name.toLowerCase() !== "online" ? name.slice(2).toLowerCase() : name.toLowerCase();
                 let flags = domEvent ? EV_DOM : 0;
                 let options: AddEventListenerOptions | undefined;
                 if (mods.length) {
