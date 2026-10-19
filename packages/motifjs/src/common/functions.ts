@@ -57,12 +57,22 @@ export function createComponent(tag: any, options: any) {
 }
 
 
+const PLAIN_URI = /^[\w\-.~!$&'()*+,;=:@%/?#\[\]]*$/;
+const DOT_SEGMENT = /\/\.{1,2}(?=\/|$|\?|#)/;
+export function canonicalUri(uri: string): string {
+    if (typeof uri !== 'string' || !uri.startsWith('/') || uri.startsWith('//')) return uri;
+    if (PLAIN_URI.test(uri) && !DOT_SEGMENT.test(uri)) return uri;
+    try {
+        const u = new URL(uri, 'http://motif.local');
+        return u.pathname + u.search + u.hash;
+    } catch { return uri; }
+}
 export function normalizePath(p: string): string {
     return '/' + p.replace(/^\/+|\/+$/g, '');
 }
 export function startsWithPath(requestPath: string, prefix: string): boolean {
-    const rp = normalizePath(requestPath);
-    const pp = normalizePath(prefix);
+    const rp = normalizePath(canonicalUri(requestPath));
+    const pp = normalizePath(canonicalUri(prefix));
     return rp === pp || rp.startsWith(pp + '/');
 }
 
@@ -74,7 +84,7 @@ export function isExactMatch(requestPath: string, target: string): boolean {
                 .replace(/\\/g, "/")
                 .replace(/\/{2,}/g, "/");
         }
-        return strip(requestPath) === strip(target);
+        return strip(canonicalUri(requestPath)) === strip(canonicalUri(target));
     } catch (error) {
         reportError('MJX610', error);
         return false;

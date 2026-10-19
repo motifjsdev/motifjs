@@ -74,7 +74,7 @@ export class RoutingEngine {
                 }
                 const value = params[paramName];
                 if (value !== undefined && value !== null && value !== '') {
-                    return String(value);
+                    return encodeURIComponent(String(value));
                 }
                 return defaultValue ?? '';
 

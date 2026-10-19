@@ -12,6 +12,26 @@ export const enum CharacterCodes {
 
 
 
+const decodeSegment = (value: string): string => {
+    try { return decodeURIComponent(value); } catch { return value; }
+};
+
+const PLAIN_STATIC = /^[\w\-.~!$&'()*+,;=:@%/]*$/;
+const staticForms = new Map<string, string>();
+const canonicalStatic = (value: string): string => {
+    if (!value || PLAIN_STATIC.test(value)) return value;
+    const known = staticForms.get(value);
+    if (known !== undefined) return known;
+    let result = value;
+    const lead = value.startsWith('/');
+    const body = lead ? value.slice(1) : value;
+    if (body && body !== '.' && body !== '..' && !body.includes('/') && !body.includes('?') && !body.includes('#')) {
+        try { result = (lead ? '/' : '') + new URL('/' + body, 'http://motif.local').pathname.slice(1); } catch { }
+    }
+    staticForms.set(value, result);
+    return result;
+};
+
 export interface IToken {
     type: 'static' | 'optional' | 'parameter';
     regexs: [];
@@ -124,7 +144,7 @@ export class Scanner {
         }
 
         const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const charClass = "[\\w\\d\\_\\-\\%\\&\\$\\+\\#\\,\\.\\{\\}\\(\\)\\[\\]\\?\\:\\=\\;\\'\\\"\\~\\\\]";
+        const charClass = "[^/]";
 
         for (const t of this.tokens) {
             if (t.type === 'parameter' && t.isOptinal && t.hasLeadingSlash && typeof t.leadingSlashTokenIndex === 'number') {
@@ -185,7 +205,7 @@ export class Scanner {
                 if (visited[k]) { k++; continue; }
                 const t = this.tokens[k];
                 if (t.type === 'static') {
-                    if (!t.consumed) pattern += escapeRegex(t.input);
+                    if (!t.consumed) pattern += escapeRegex(canonicalStatic(t.input));
                     visited[k] = true;
                     k++;
                     continue;
@@ -214,7 +234,7 @@ export class Scanner {
                         if (sj.type === 'static' && this.tokens[j + 1] && this.tokens[j + 1].type === 'parameter') {
                             const prm = this.tokens[j + 1] as IToken;
                             if (prm.isOptinal && prm.hasLeadingStatic && typeof prm.leadingStaticTokenIndex === 'number' && prm.leadingStaticTokenIndex === j) {
-                                const lit = escapeRegex(sj.input);
+                                const lit = escapeRegex(canonicalStatic(sj.input));
                                 const cap = buildCapture(j + 1, true);
                                 groupInner += `(?:${lit}${cap})?`;
                                 visited[j] = true;
@@ -235,7 +255,7 @@ export class Scanner {
                             pattern += `(?:/${cap})?`;
                         } else if (t.hasLeadingStatic && typeof t.leadingStaticTokenIndex === 'number') {
                             const prev = this.tokens[t.leadingStaticTokenIndex];
-                            const lit = prev && prev.type === 'static' ? escapeRegex(prev.input) : '';
+                            const lit = prev && prev.type === 'static' ? escapeRegex(canonicalStatic(prev.input)) : '';
                             pattern += `(?:${lit}${cap})?`;
                         } else {
                             pattern += `(?:${cap})?`;
@@ -320,7 +340,7 @@ export class Scanner {
                     if (indx !== 0) {
                         var all = this.tokens.find(t => t.parameterIndex == indx);
                         if (all) {
-                            let val: any = t;
+                            let val: any = typeof t === 'string' ? decodeSegment(t) : t;
                             if ((val === undefined || val === '') && all.isOptinal) {
                                 const def = (all.default === undefined || all.default === '') ? undefined : all.default;
                                 val = def;

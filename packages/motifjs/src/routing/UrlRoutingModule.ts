@@ -1,3 +1,4 @@
+import { canonicalUri } from "../common/functions";
 import { $, Application, dom } from "..";
 import { Component } from "../";
 import { NavigationDirection, NavigationOptions, ResolveResult, RouteInfo, RouteResolveContext, RouterOptions, StackEntryInfo } from "./";
@@ -239,6 +240,7 @@ export class UrlRoutingModule {
         this._pendingTraversal = null;
         /* @DEV-ONLY */ const devNav = navigationStarted(uri);
         const requestedUri = uri;
+        uri = canonicalUri(uri);
         const run = async () => {
 
             const suppressBeforeEachThisCall = this._suppressBeforeEachOnce;
@@ -276,7 +278,7 @@ export class UrlRoutingModule {
                     reason: 'middleware'
                 };
             }
-            uri = gate.uri;
+            uri = canonicalUri(gate.uri);
 
             let target = this.resolve(uri);
 
@@ -298,6 +300,7 @@ export class UrlRoutingModule {
                         break;
                     }
                     if (!next) break;
+                    next = canonicalUri(next);
                     if (visited.length > UrlRoutingModule.MAX_REDIRECTS || visited.some(v => pathOf(v) === pathOf(next))) {
                         redirectChain = [...visited, next].join(' → ');
                         redirectError = motifError('MJX303', redirectChain);
@@ -614,6 +617,7 @@ export class UrlRoutingModule {
     }
 
     public resolve(uri: string): ResolveResult {
+        uri = canonicalUri(uri);
         const candidates: Array<{ rec: RouteRecord; params: Record<string, any> }> = [];
         const pageSearch = this._pageSearch();
         for (const rec of this.routeCollection?.records! || []) {
