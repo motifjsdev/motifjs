@@ -131,10 +131,10 @@ describe('a class that does not place {this.childs}', () => {
         await settle();
         expect(m.log).toEqual(['built']);
         expect(kidsIn('.kid')).toBe(1);
-        expect(m.NoSlot._placesChilds).toBeUndefined();
     });
 
-    test('a slot-placing class is marked by the compiler', () => {
-        expect(m.Tagged._placesChilds).toBe(true);
+    test('the compiler leaves no placement marker on either class', () => {
+        expect((m.NoSlot as any)._placesChilds).toBeUndefined();
+        expect((m.Tagged as any)._placesChilds).toBeUndefined();
     });
 });

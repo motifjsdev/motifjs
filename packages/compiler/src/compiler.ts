@@ -70,35 +70,6 @@ function injectDeclaredElementTag(path: NodePath<t.ClassDeclaration | t.ClassExp
 }
 
 
-const isThisChilds = (e: t.Node | null | undefined): boolean =>
-    !!e && t.isMemberExpression(e) && !e.computed && t.isThisExpression(e.object)
-    && t.isIdentifier(e.property) && e.property.name === 'childs';
-
-function placesChilds(path: NodePath<t.ClassDeclaration | t.ClassExpression>): boolean {
-    let found = false;
-    path.traverse({
-        Class(inner) { inner.skip(); },
-        FunctionDeclaration(inner) { inner.skip(); },
-        FunctionExpression(inner) { inner.skip(); },
-        JSXExpressionContainer(slot) {
-            if (!t.isJSXElement(slot.parent) && !t.isJSXFragment(slot.parent)) return;
-            const e = slot.node.expression;
-            const value = t.isArrowFunctionExpression(e) && !t.isBlockStatement(e.body) ? e.body : e;
-            if (isThisChilds(value)) { found = true; slot.stop(); }
-        }
-    });
-    return found;
-}
-
-function injectChildsSlotMarker(path: NodePath<t.ClassDeclaration | t.ClassExpression>) {
-    try {
-        const node = path.node;
-        if (!node.superClass || hasStaticMember(node, '_placesChilds')) return;
-        if (!placesChilds(path)) return;
-        node.body.body.unshift(t.classProperty(t.identifier('_placesChilds'), t.booleanLiteral(true), null, null, false, true));
-    } catch { }
-}
-
 const isTypeOnlyField = (member: t.Node): boolean =>
     t.isClassProperty(member) && (!!member.declare || !!member.abstract);
 
@@ -119,7 +90,6 @@ const elementTagPlugin = () => {
                     visited.add(path.node);
                     stripTypeOnlyFields(path);
                     injectDeclaredElementTag(path);
-                    injectChildsSlotMarker(path);
                 }
             }
         }

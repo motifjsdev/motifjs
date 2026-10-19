@@ -64,7 +64,8 @@ describe('yalnız tip bildiren sınıf alanları', () => {
         `);
         expect(out).not.toMatch(/this\.props\s*=/);
         expect(out).toContain('this.count = 1');
-        expect(out).toMatch(/_placesChilds = true/);
+        expect(out).not.toMatch(/_placesChilds/);
+        expect(out).toContain('controls.add');
     });
 
     test('ilk değeri olmayan sıradan alan alan olarak kalır', () => {

@@ -26,14 +26,16 @@ describe('sınıf ifadesi', () => {
         expect(count(out, /\.elementNamespace = "http:\/\/www\.w3\.org\/2000\/svg"/g)).toBe(1);
     });
 
-    test('childs slotu işareti bir kez eklenir', () => {
+    test('childs slotu olan sınıf ifadesi işaretsiz derlenir', () => {
         const out = compile(`const Box = class extends Component { view() { return <div>{this.childs}</div>; } };`);
-        expect(count(out, /\._placesChilds = true/g)).toBe(1);
+        expect(count(out, /_placesChilds/g)).toBe(0);
+        expect(out).toContain('controls.add');
     });
 
     test('mixin içindeki sınıf ifadesi derlenir', () => {
         const out = compile(`const withSlot = (Base) => class extends Base { view() { return <div>{this.childs}</div>; } };`);
-        expect(count(out, /\._placesChilds = true/g)).toBe(1);
+        expect(count(out, /_placesChilds/g)).toBe(0);
+        expect(out).toContain('controls.add');
     });
 
     test('declare alanı sınıf ifadesinde de kod üretmez', () => {

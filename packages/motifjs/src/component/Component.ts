@@ -34,7 +34,6 @@ export class Component<TElement extends ElementType = any, TProps extends object
 
     public static elementTag?: string;
     public static elementNamespace?: string;
-    public static _placesChilds?: boolean;
 
     constructor(elementOrParams: TElement | string | IBaseProp<TProps>);
     constructor(element: TElement | string, options: IBaseProp<TProps>);
@@ -113,11 +112,12 @@ export class Component<TElement extends ElementType = any, TProps extends object
                     super(CreateFragment(), (fragmentProps ?? {}) as TProps);
                 }
 
-                // Her iki durumda da JSX çocukları (props.childs) içeriğe eklenir.
+                // view() yazmayan sınıfta JSX çocukları (props.childs) içeriğin kendisidir ve köke eklenir;
+                // view() yazan sınıf çocukları kendisi yerleştirir.
                 // Alt sınıflar initializeComponent'i ezdiği için FragmentNode.initializeComponent'e güvenilemez.
                 const kids = this.childs;
                 if (Array.isArray(kids) && kids.length) {
-                    if (derivedCtor?._placesChilds !== true) {
+                    if (typeof derivedCtor?.prototype?.view !== 'function') {
                         for (const kid of kids) {
                             if (kid) this.controls.add(kid);
                         }
