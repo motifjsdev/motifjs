@@ -1072,7 +1072,7 @@ function disposeFinish(c: any, options: IDisposeOptions, asChild: boolean): void
                 if (c._controls) c._controls.items = [];
                 safeCall(() => { ComponentHelper.callDisposed.call(c, c); }, 'disposeAsync.callDisposed');
                 safeCall(() => { c._baseCtx?._emiters?.clear(); }, 'disposeAsync.emiters');
-                if (options?.deep) {
+                if (options?.deep !== false) {
                         deepCleanup(c);
                 }
                 return;
