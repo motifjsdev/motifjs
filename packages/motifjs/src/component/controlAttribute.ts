@@ -49,12 +49,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
 
     };
     remove(key: string): ComponentBase<ElementType, any> {
-        const stopper = this._watchers.get(key);
-        if (stopper) {
-            try { stopper.stop(); } catch { }
-            try { stopper.binding && this._parent.bindings.remove(stopper.binding); } catch { }
-            this._watchers.delete(key);
-        }
+        this._release(key);
         this._attrMap.delete(key);
         const el = this._getElement();
         if (el) {
@@ -81,14 +76,8 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
     };
 
     parse(values: any, key: any) {
-
+        this._release(key);
         if (typeof values === 'function') {
-            const stopper = this._watchers.get(key);
-            if (stopper) {
-                try { stopper.stop(); } catch { }
-                try { stopper.binding && this._parent.bindings.remove(stopper.binding); } catch { }
-                this._watchers.delete(key);
-            }
             const run = () => effect(() => {
                 const v = values();
                 this._applyValue(key, v);
@@ -430,6 +419,14 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
         }
 
         this._attrMap.set(key, raw);
+    }
+
+    private _release(key: string | symbol) {
+        const stopper = this._watchersStore?.get(key);
+        if (!stopper) return;
+        try { stopper.stop(); } catch { }
+        try { stopper.binding && this._parent.bindings.remove(stopper.binding); } catch { }
+        this._watchersStore!.delete(key);
     }
 
     private _getElement(): Element | null {
