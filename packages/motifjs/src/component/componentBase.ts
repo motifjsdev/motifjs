@@ -682,8 +682,9 @@ const ComponentHelper = {
                 const trace = c.motif.options.placeholder as Node | undefined;
                 const ownTrace = c.isVisible && trace && insertHost && trace.parentNode === insertHost ? trace : null;
                 const referenceNode: Node | null = ownTrace ?? (insertHost ? followingAnchor(this, currentIndex + 1, insertHost) : null);
+                const ownerHidden = inHiddenFragment(this) && (c.element as Node).nodeType !== Node.COMMENT_NODE;
 
-                if (!c.isVisible) {
+                if (!c.isVisible || ownerHidden) {
                         if (keepsTrace(c)) {
                                 if (!(c as any).motif.options.placeholder) {
                                         (c as any).motif.options.placeholder = dom.createComment("h");
@@ -723,7 +724,7 @@ const ComponentHelper = {
                         }
                         if (ownTrace && ownTrace.parentNode) ownTrace.parentNode.removeChild(ownTrace);
                 }
-                if (c.isVisible) {
+                if (c.isVisible && !ownerHidden) {
                         const enteredInBuild = !cisBuilt && (c as any)._baseCtx?._enterSeq !== enterSeq;
                         !enteredInBuild && wantsEnterTransition(c) && c.motif.options.transition.enterTransition(() => { });
                         if (cisBuilt) {
@@ -734,9 +735,10 @@ const ComponentHelper = {
         getContent(this: ComponentBase): any {
                 if (this.isDisposed || !this.element) { return null; }
                 if ((this.element as Node).nodeType == Node.COMMENT_NODE) {
+                        const hidden = inHiddenFragment(this);
                         this.motif.options.cache?.appendChild(this.element as Node);
                         this.controls.forEach(child => {
-                                const node = child.isWait || !child.isVisible
+                                const node = child.isWait || ((!child.isVisible || hidden) && (child.element as unknown as Node | null)?.nodeType !== Node.COMMENT_NODE)
                                         ? (keepsTrace(child) ? ((child.motif.options as any).placeholder ??= dom.createComment("h")) as Node : undefined)
                                         : ComponentHelper.getContent.call(child) as Node;
                                 if (node) this.motif.options.cache?.appendChild(node);
@@ -795,6 +797,15 @@ const ComponentHelper = {
 
 function keepsTrace(c: ComponentBase): boolean {
         return optionsOf(c)?.hideStrategy !== 'detach';
+}
+
+function inHiddenFragment(owner: ComponentBase | null | undefined): boolean {
+        let c: any = owner;
+        while (c && (c.element as Node | null)?.nodeType === Node.COMMENT_NODE) {
+                if (!c.isVisible) return true;
+                c = c.parent;
+        }
+        return false;
 }
 
 export function domAnchor(c: ComponentBase, host: Node): Node | null {
@@ -1730,13 +1741,14 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         }
 
                         const kids = childrenOf(this);
+                        const hiddenRoot = isFragment && inHiddenFragment(this);
                         for (const element of kids.length ? kids.slice() : kids) {
                                 var target = isFragment ? this.motif.options.cache : this.element;
                                 if (!element.isWait) {
                                         element.parent = this;
                                         element.build(false);
                                 }
-                                if (element.isWait || (!element.isVisible && (element.element as unknown as Node | null)?.nodeType !== Node.COMMENT_NODE)) {
+                                if (element.isWait || ((!element.isVisible || hiddenRoot) && (element.element as unknown as Node | null)?.nodeType !== Node.COMMENT_NODE)) {
                                         if (keepsTrace(element)) {
                                                 const opts: any = element.motif.options;
                                                 (building ? ph : target as any).appendChild(opts.placeholder ?? (opts.placeholder = dom.createComment("h")));
@@ -1968,11 +1980,9 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         if (this.isDisposed) { return; }
                         if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
                                 this.controls.items.filter(c => !c.isBuilt).forEach(c => ComponentHelper.internalBuild.call(this, c));
-                                this.controls.forEach(c => {
-                                        c.motif.show();
-                                });
+                                this._attachChildrenFromTraces();
                                 this.isVisible = true;
-                                ComponentHelper.activateTree(this, false);
+                                ComponentHelper.activateTree(this);
                                 return;
                         }
                         if (!this.isBuilt) {
@@ -2009,16 +2019,12 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 ComponentHelper.callVisibilityChanged(this, false);
                                 if (this.isDisposed) { return; }
                                 if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
-                                        const waits: Promise<unknown>[] = [];
-                                        this.controls.forEach(c => {
-                                                if (skip && c.isVisible && c.element && !c.isDisposed && c.motif.options?.transition) {
-                                                        c.motif.options.transition.skipNextLeave = true;
-                                                }
-                                                waits.push(c.motif.hide());
-                                        });
+                                        const waits = this._detachChildrenToTraces(skip);
                                         this.isVisible = false;
-                                        ComponentHelper.deactivateTree(this, false);
-                                        return waits.length ? Promise.all(waits) : undefined;
+                                        const settle = () => { if (!this.isDisposed) ComponentHelper.deactivateTree(this); };
+                                        if (waits) return waits.then(settle);
+                                        settle();
+                                        return;
                                 }
                                 var parent = (this.element as Node).parentElement;
                                 // if (!parent) {
@@ -2043,6 +2049,55 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         });
                 }
 
+        }
+        private _detachChildrenToTraces(skip: boolean): Promise<unknown> | undefined {
+                const waits: Promise<unknown>[] = [];
+                this.controls.forEach(c => {
+                        if (c.isVisible && !c.isWait && c.isBuilt && c.element && !c.isDisposed) {
+                                const w = c._detachToTrace(skip);
+                                if (w) waits.push(w);
+                        }
+                });
+                return waits.length ? Promise.all(waits) : undefined;
+        }
+
+        private _detachToTrace(skip: boolean): Promise<unknown> | undefined {
+                const transition = this.motif.options.transition;
+                if (transition.skipNextLeave === true) { skip = true; transition.skipNextLeave = false; }
+                const swap = (): Promise<unknown> | undefined => {
+                        if (this.isDisposed) { return; }
+                        if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
+                                return this._detachChildrenToTraces(skip);
+                        }
+                        const parent = (this.element as Node).parentElement;
+                        if (parent) {
+                                if (!this.motif.options.placeholder) this.motif.options.placeholder = dom.createComment("h");
+                                parent.replaceChild(this.motif.options.placeholder!, this.element as Node);
+                        }
+                        return;
+                };
+                if (skip) { return swap(); }
+                return new Promise<void>((resolve) => {
+                        transition.leaveTransition(() => { resolve(swap() as Promise<void> | undefined); });
+                });
+        }
+
+        private _attachChildrenFromTraces(): void {
+                this.controls.forEach(c => {
+                        if (c.isVisible && !c.isWait && c.element && !c.isDisposed) c._attachFromTrace();
+                });
+        }
+
+        private _attachFromTrace(): void {
+                if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
+                        this._attachChildrenFromTraces();
+                        return;
+                }
+                const placeholder = this.motif.options.placeholder as Node | undefined;
+                const parent = placeholder?.parentElement;
+                if (!parent) { return; }
+                wantsEnterTransition(this) && this.motif.options.transition.enterTransition(() => { });
+                parent.replaceChild(this.element as Node, placeholder!);
         }
         private _toggle() {
                 if (this.isDisposed || !this.element) { return; }

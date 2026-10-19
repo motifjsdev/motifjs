@@ -92,8 +92,8 @@ describe('await motif.hide() settles after the leave has ended', () => {
         await frag.motif.hide();
 
         expect(frag.isVisible).toBe(false);
-        expect(a.isVisible).toBe(false);
-        expect(b.isVisible).toBe(false);
+        expect(a.isVisible).toBe(true);
+        expect(b.isVisible).toBe(true);
         expect((a.element as HTMLElement).parentNode).toBeNull();
         expect((b.element as HTMLElement).parentNode).toBeNull();
 
