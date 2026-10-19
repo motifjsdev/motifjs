@@ -302,7 +302,7 @@ export function resolveToComponent(input: unknown, props?: any): any {
 }
 
 function materializeOptionsObject(spec: any, props: any): any {
-    const result: any = typeof spec.el === 'string'
+    const result: any = typeof spec.el === 'string' || spec.el instanceof Node
         ? constructComponentRoot(() => motifComponent(spec.el, props))
         : motifComponent(spec.el, props);
     Object.getOwnPropertyNames(spec).forEach(key => {
