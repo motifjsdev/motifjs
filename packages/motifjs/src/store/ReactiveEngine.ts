@@ -13,6 +13,52 @@ const AllreactiveMap: WeakMap<any, any> = new WeakMap();
 function armgetter() { return AllreactiveMap; }
 
 
+function cloneDeep(item: any, seen: WeakMap<object, any>): any {
+    if (item === null || typeof item !== 'object') return item;
+    const source: any = getRaw(item);
+    if (seen.has(source)) return seen.get(source);
+    if (source instanceof Number || source instanceof String || source instanceof Boolean) return source.valueOf();
+    if (source instanceof Date) {
+        const copy = new Date(source.getTime());
+        seen.set(source, copy);
+        return copy;
+    }
+    if (source instanceof RegExp) {
+        const copy = new RegExp(source.source, source.flags);
+        copy.lastIndex = source.lastIndex;
+        seen.set(source, copy);
+        return copy;
+    }
+    if (source instanceof WeakMap || source instanceof WeakSet) return source;
+    if (typeof source.nodeType === 'number' && typeof source.cloneNode === 'function') {
+        const copy = source.cloneNode(true);
+        seen.set(source, copy);
+        return copy;
+    }
+    if (source instanceof Map) {
+        const copy = new Map();
+        seen.set(source, copy);
+        source.forEach((value: any, key: any) => copy.set(cloneDeep(key, seen), cloneDeep(value, seen)));
+        return copy;
+    }
+    if (source instanceof Set) {
+        const copy = new Set();
+        seen.set(source, copy);
+        source.forEach((value: any) => copy.add(cloneDeep(value, seen)));
+        return copy;
+    }
+    if (Array.isArray(source)) {
+        const copy: any[] = [];
+        seen.set(source, copy);
+        for (let i = 0; i < source.length; i++) copy[i] = cloneDeep(source[i], seen);
+        return copy;
+    }
+    const copy = Object.create(Object.getPrototypeOf(source));
+    seen.set(source, copy);
+    for (const key of Object.keys(source)) copy[key] = cloneDeep(source[key], seen);
+    return copy;
+}
+
 export class ReactiveEngine {
     _gci: any;
     public startGc(_intervalMs: number = 10000) { /* no-op */ }
@@ -114,46 +160,7 @@ export class ReactiveEngine {
         return JSON.parse(JSON.stringify(this.deepClone(item)));
     }
     deepClone(item: any) {
-        var self = this;
-        if (!item) { return item; }
-        var types = [Number, String, Boolean],
-            result;
-        types.forEach(function (type) {
-            if (item instanceof type) {
-                result = type(item);
-            }
-        });
-
-        if (typeof result == "undefined") {
-            if (Object.prototype.toString.call(item) === "[object Array]") {
-                result = [];
-                item.forEach(function (child: any, index: any, array: any[]) {
-                    result[index] = self.deepClone(child);
-                });
-            } else if (typeof item == "object") {
-                if (item.nodeType && typeof item.cloneNode == "function") {
-                    result = item.cloneNode(true);
-                } else if (!item.prototype) {
-                    if (item instanceof Date) {
-                        result = new Date(item);
-                    } else {
-                        result = <any>{};
-                        for (var i in item) {
-                            result[i] = self.deepClone(item[i]);
-                        }
-                    }
-                } else {
-                    if (false && item.constructor) {
-                        result = new item.constructor();
-                    } else {
-                        result = item;
-                    }
-                }
-            } else {
-                result = item;
-            }
-        }
-        return result;
+        return cloneDeep(item, new WeakMap());
     }
     pauseTracking() {
         pauseTracking();
