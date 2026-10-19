@@ -63,6 +63,7 @@ export const motifMessages = {
     MJX315: (alias: string) => `Route alias resolves to the route's own path: "${alias}".`,
     MJX316: (alias: string) => `Multiple routes use the same alias: "${alias}".`,
     MJX317: (uri: string) => `Navigation to '${uri}' failed.`,
+    MJX318: (path: string) => `Route '${path}' was given a component instance that is already disposed; give a class, a factory or a lazy import so a fresh page can be created.`,
 
     MJX401: (token: string) => `Service not registered for token: ${token}`,
     MJX402: (token: string) => `Async factory used with get() for token ${token}; use getAsync().`,

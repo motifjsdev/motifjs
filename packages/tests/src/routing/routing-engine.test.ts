@@ -123,7 +123,7 @@ describe('RoutingEngine - Component Lifecycle & Execution', () => {
             engine.register(new Component('div') as any, app, routingModule);
             
             const control = TestComponent;
-            const instance = await (engine as any).createInstance(control);
+            const instance = await (engine as any).createInstance({ path: '/class', control });
             
             expect(instance).toBeInstanceOf(TestComponent);
         });
@@ -136,7 +136,7 @@ describe('RoutingEngine - Component Lifecycle & Execution', () => {
             engine.register(new Component('div') as any, app, routingModule);
             
             const factory = () => new TestComponent('Factory');
-            const instance = await (engine as any).createInstance(factory);
+            const instance = await (engine as any).createInstance({ path: '/factory', control: factory });
             
             expect(instance).toBeInstanceOf(TestComponent);
             expect(instance.componentName).toBe('Factory');
@@ -150,7 +150,7 @@ describe('RoutingEngine - Component Lifecycle & Execution', () => {
             engine.register(new Component('div') as any, app, routingModule);
             
             const lazyControl = Promise.resolve({ default: TestComponent });
-            const instance = await (engine as any).createInstance(lazyControl);
+            const instance = await (engine as any).createInstance({ path: '/lazy', control: lazyControl });
             
             expect(instance).toBeInstanceOf(TestComponent);
         });
@@ -163,7 +163,7 @@ describe('RoutingEngine - Component Lifecycle & Execution', () => {
             engine.register(new Component('div') as any, app, routingModule);
             
             const asyncFactory = () => Promise.resolve(new TestComponent('Async'));
-            const instance = await (engine as any).createInstance(asyncFactory);
+            const instance = await (engine as any).createInstance({ path: '/async', control: asyncFactory });
             
             expect(instance).toBeInstanceOf(TestComponent);
             expect(instance.componentName).toBe('Async');
@@ -184,7 +184,7 @@ describe('RoutingEngine - Component Lifecycle & Execution', () => {
                 keepAlive: true
             };
             
-            const instance1 = await (engine as any).createInstance(route.control);
+            const instance1 = await (engine as any).createInstance(route);
             (engine as any).controlCache.set(route, instance1);
             
             const cached = (engine as any).controlCache.get(route);
@@ -205,10 +205,10 @@ describe('RoutingEngine - Component Lifecycle & Execution', () => {
                 keepAlive: false
             };
             
-            const instance1 = await (engine as any).createInstance(route.control);
+            const instance1 = await (engine as any).createInstance(route);
             
             // Without caching, should create new instance each time
-            const instance2 = await (engine as any).createInstance(route.control);
+            const instance2 = await (engine as any).createInstance(route);
             
             expect(instance1).not.toBe(instance2);
         });
@@ -226,7 +226,7 @@ describe('RoutingEngine - Component Lifecycle & Execution', () => {
                 keepAlive: true
             };
             
-            const instance1 = await (engine as any).createInstance(route.control);
+            const instance1 = await (engine as any).createInstance(route);
             instance1.isDisposed = true;
             (engine as any).controlCache.set(route, instance1);
             
@@ -237,7 +237,7 @@ describe('RoutingEngine - Component Lifecycle & Execution', () => {
                 let control = (engine as any).controlCache.get(route);
                 if (!control || control.isDisposed) {
                     (engine as any).controlCache.delete(route);
-                    control = await (engine as any).createInstance(route.control);
+                    control = await (engine as any).createInstance(route);
                     (engine as any).controlCache.set(route, control);
                 }
                 controlList.push(control);

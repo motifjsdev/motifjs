@@ -1,7 +1,7 @@
 import { Component, ComponentBase, assertLoadedComponent, resolveToComponent, unwrapModule, notifyActivated, notifyDeactivated } from "../";
 import { cancelAnimationsDeep } from "../component/navigation";
 import { errorHandler } from "../common/ErrorHandler";
-import { callReported, reportError, reportWarning } from "../common/diagnostics";
+import { callReported, motifError, reportError, reportWarning } from "../common/diagnostics";
 import { NavigationDirection, NavigationOptions, ResolveResult } from "./";
 import { RouterView, RouterViewBuilt } from "./";
 import { UrlRoutingModule } from "./";
@@ -36,13 +36,26 @@ export class RoutingEngine {
     }
 
     private controlCache: Map<RouteItem, any> = new Map();
+    private _given: WeakSet<RouteItem> = new WeakSet();
+
+    private _instanceGiven(item: RouteItem | null | undefined): boolean {
+        return !!item && (item.control instanceof ComponentBase || this._given.has(item));
+    }
+
+    private _keepsInstance(item: RouteItem | null | undefined): boolean {
+        return !!item && (item.keepAlive === true || this._instanceGiven(item));
+    }
 
     public async evict(route?: RouteItem | null): Promise<void> {
-        const targets: RouteItem[] = route ? [route] : Array.from(this.controlCache.keys());
+        await this._release(route ? [route] : Array.from(this.controlCache.keys()), false);
+    }
+
+    private async _release(targets: RouteItem[], includeGiven: boolean): Promise<void> {
         for (const r of targets) {
             const inst = this.controlCache.get(r);
             if (!inst || inst.isDisposed) { this.controlCache.delete(r); continue; }
             if (this._previousInstances.includes(inst)) continue;
+            if (!includeGiven && this._instanceGiven(r)) continue;
             this.controlCache.delete(r);
             try { await inst.dispose(); } catch (error) { reportError('MJX307', error); }
         }
@@ -57,7 +70,7 @@ export class RoutingEngine {
         const stack = this.stack;
         this.stack = null;
         if (stack) { try { await stack.dispose(); } catch { } }
-        await this.evict();
+        await this._release(Array.from(this.controlCache.keys()), true);
     }
 
     generatePathString(routeDefinition: string, params: Record<string, any>): string {
@@ -146,7 +159,7 @@ export class RoutingEngine {
                 paramsChanged = true;
 
                 const leafRoute = path.route;
-                if (leafRoute && !leafRoute.keepAlive && this.controlCache.has(leafRoute)) {
+                if (leafRoute && !this._keepsInstance(leafRoute) && this.controlCache.has(leafRoute)) {
                     if (stack) {
                         this.controlCache.delete(leafRoute);
                     } else {
@@ -208,7 +221,7 @@ export class RoutingEngine {
         for (let i = 0; i < path.chain.length; i++) {
             const element = path.chain[i];
             const kept = restored && restored.chain[i] === element ? restored.instances[i] : undefined;
-            if (kept && !kept.isDisposed && !element.keepAlive) {
+            if (kept && !kept.isDisposed && !this._keepsInstance(element)) {
                 controlList[i] = kept;
                 this.controlCache.set(element, kept);
                 continue;
@@ -217,19 +230,19 @@ export class RoutingEngine {
                 let control = this.controlCache.get(element);
                 if (!control || control.isDisposed) {
                     this.controlCache.delete(element);
-                    const task = this.createInstance(element.control, run.scope, run.route).then(inst => {
+                    const task = this.createInstance(element, run.scope, run.route).then(inst => {
                         this.controlCache.set(element, inst);
                         controlList[i] = inst;
                     });
                     prepTasks.push(task);
                 } else {
                     controlList[i] = control;
-                    if (element.keepAlive && !this._previousInstances.includes(control)) {
+                    if (this._keepsInstance(element) && !this._previousInstances.includes(control)) {
                         this._pendingActivate.add(control);
                     }
                 }
             } else {
-                const task = this.createInstance(element.control, run.scope, run.route).then(inst => {
+                const task = this.createInstance(element, run.scope, run.route).then(inst => {
                     this.controlCache.set(element, inst);
                     controlList[i] = inst;
                 });
@@ -351,7 +364,7 @@ export class RoutingEngine {
 
         const top = prevInstances[d];
         const topItem = prevChain[d];
-        if (stack.isRetaining(nav) && top && !top.isDisposed && !topItem?.keepAlive) {
+        if (stack.isRetaining(nav) && top && !top.isDisposed && !this._keepsInstance(topItem)) {
             const outlet = outletFor(d);
             if (outlet && outlet.current === top) {
                 outlet.current = null;
@@ -365,14 +378,14 @@ export class RoutingEngine {
             }
             for (let i = d; i < prevInstances.length; i++) {
                 const item = prevChain[i];
-                if (item && !item.keepAlive && this.controlCache.get(item) === prevInstances[i]) this.controlCache.delete(item);
+                if (item && !this._keepsInstance(item) && this.controlCache.get(item) === prevInstances[i]) this.controlCache.delete(item);
             }
             result.top = top;
             result.retained = stack.retain(nav.from!, this._previousPath?.uri ?? '', prevChain, prevInstances, d, outlet, motion.animate);
             return result;
         }
 
-        const deferTop = motion.animate && !!top && !top.isDisposed && !topItem?.keepAlive;
+        const deferTop = motion.animate && !!top && !top.isDisposed && !this._keepsInstance(topItem);
         for (let i = prevInstances.length - 1; i >= d; i--) {
             const inst = prevInstances[i];
             const item = prevChain[i];
@@ -381,7 +394,7 @@ export class RoutingEngine {
                 if (item && this.controlCache.get(item) === inst) this.controlCache.delete(item);
                 continue;
             }
-            if (deferTop && i > d && !item?.keepAlive) {
+            if (deferTop && i > d && !this._keepsInstance(item)) {
                 if (item && this.controlCache.get(item) === inst) this.controlCache.delete(item);
                 continue;
             }
@@ -391,7 +404,7 @@ export class RoutingEngine {
                     outlet.current = null;
                     outlet.previouspage = null;
                 }
-                if (item?.keepAlive) {
+                if (this._keepsInstance(item)) {
                     cancelAnimationsDeep(inst);
                     try { inst.parent?.controls.silentDetach(inst); } catch { /* ignore */ }
                     if (!this.controlCache.has(item)) this.controlCache.set(item, inst);
@@ -452,7 +465,7 @@ export class RoutingEngine {
                     outlet.previouspage = null;
                 }
 
-                if (item?.keepAlive) {
+                if (this._keepsInstance(item)) {
                     cancelAnimationsDeep(inst);
                     try { inst.parent?.controls.silentDetach(inst); } catch { /* ignore */ }
                     if (!this.controlCache.has(item)) this.controlCache.set(item, inst);
@@ -472,7 +485,7 @@ export class RoutingEngine {
         return runInConstructionScope(scope, () => state ? state.constructWith(route, create) : create());
     }
 
-    private async parseControl(control: RouteItem['control'], scope?: ServiceProvider, route?: RouteSnapshot): Promise<any> {
+    private async parseControl(control: RouteItem['control'], scope?: ServiceProvider, route?: RouteSnapshot, item?: RouteItem): Promise<any> {
         var instance = this._construct(scope, route, () => this._resolveFrom(scope, control));
         if (instance) {
             return instance;
@@ -480,6 +493,7 @@ export class RoutingEngine {
         let val = control as any;
         if (val instanceof Promise) {
             val = unwrapModule(await val);
+            if (item && val instanceof ComponentBase) this._given.add(item);
         }
 
         instance = this._construct(scope, route, () => this._resolveFrom(scope, val));
@@ -503,13 +517,16 @@ export class RoutingEngine {
         try { return this.application?.provider ?? Application.main?.provider; } catch { return undefined; }
     }
 
-    private async createInstance(control: RouteItem['control'], scope?: ServiceProvider, route?: RouteSnapshot): Promise<any> {
-        return await this._instanceCreator(control, scope, route);
+    private async createInstance(item: RouteItem, scope?: ServiceProvider, route?: RouteSnapshot): Promise<any> {
+        return await this._instanceCreator(item, scope, route);
     }
 
-    private async _instanceCreator(control: RouteItem['control'], scope?: ServiceProvider, route?: RouteSnapshot): Promise<any> {
-        let val = await this.parseControl(control, scope, route) as any;
+    private async _instanceCreator(item: RouteItem, scope?: ServiceProvider, route?: RouteSnapshot): Promise<any> {
+        let val = await this.parseControl(item.control, scope, route, item) as any;
         assertLoadedComponent(val);
+        if (val instanceof ComponentBase && val.isDisposed) {
+            throw motifError('MJX318', item.fullPath || item.path || item.name || '');
+        }
         // if (val instanceof Promise) {
         //         return result.default ? result.default : result;
 
@@ -553,7 +570,7 @@ export class RoutingEngine {
 
             let inst = instances[index] as ComponentBase; 
             if (inst?.isDisposed) {
-                inst = await this.createInstance(chain[index].control, this._rootProvider()?._currentScope());
+                inst = await this.createInstance(chain[index], this._rootProvider()?._currentScope());
                 instances[index] = inst;
             }
             const outletName = (chain[index] && chain[index].extend && chain[index].extend.targetOutlet) || 'default';
