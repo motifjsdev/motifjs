@@ -1005,6 +1005,9 @@ export const getChildren = (
             if (t.isTemplateLiteral(expression) && expression.expressions.length > 0) { 
                 return t.arrowFunctionExpression([], expression);
             }
+            if (t.isOptionalMemberExpression(expression) || t.isOptionalCallExpression(expression)) {
+                return t.arrowFunctionExpression([], expression);
+            }
 
             return expression;
         }

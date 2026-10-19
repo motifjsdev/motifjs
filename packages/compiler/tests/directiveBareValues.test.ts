@@ -16,9 +16,9 @@ describe('x-wait / x-display: her değer çalışma anına getter olarak gider',
         ['x-display', 'false', /sender\.bindings\.display\(\(\)\s*=>\s*false\)/],
         ['x-display', 'true', /sender\.bindings\.display\(\(\)\s*=>\s*true\)/],
         ['x-wait', 'true', /sender\.bindings\.wait\(\(\)\s*=>\s*true\)/],
-        ['x-display', 's.box?.open', /sender\.bindings\.display\(\(\)\s*=>\s*s\.box\?\.open\)/],
-        ['x-wait', 's.job?.running', /sender\.bindings\.wait\(\(\)\s*=>\s*s\.job\?\.running\)/],
-        ['x-wait', 's.job?.isRunning()', /sender\.bindings\.wait\(\(\)\s*=>\s*s\.job\?\.isRunning\(\)\)/],
+        ['x-display', 's.box?.open', /sender\.bindings\.display\(\(\)\s*=>\s*typeof s\.box\?\.open === "function" \? s\.box\?\.open\?\.\(\) : s\.box\?\.open\)/],
+        ['x-wait', 's.job?.running', /sender\.bindings\.wait\(\(\)\s*=>\s*typeof s\.job\?\.running === "function" \? s\.job\?\.running\?\.\(\) : s\.job\?\.running\)/],
+        ['x-wait', 's.job?.isRunning()', /sender\.bindings\.wait\(\(\)\s*=>\s*\{\s*const __ro = s\.job\?\.isRunning\(\);\s*return typeof __ro === "function" \? __ro\(\) : __ro;\s*\}\)/],
         ['x-wait', 's.a ? true : false', /sender\.bindings\.wait\(\(\)\s*=>\s*s\.a\s*\?\s*true\s*:\s*false\)/],
     ])('%s={%s}', (dir, value, shape) => {
         const out = compile(view(`${dir}={${value}}`));

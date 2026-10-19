@@ -343,6 +343,23 @@ export const returnIfStatement = (value: any, enableDefaultreturn: boolean = tru
             return t.arrowFunctionExpression([], t.blockStatement([rtrn]));
         }
 
+    } else if (t.isOptionalMemberExpression(value)) {
+        return t.arrowFunctionExpression([], callFunctions
+            ? t.conditionalExpression(
+                t.binaryExpression('===', t.unaryExpression('typeof', value), t.stringLiteral('function')),
+                t.optionalCallExpression(value, [], true),
+                value)
+            : value);
+    } else if (t.isOptionalCallExpression(value)) {
+        if (!callFunctions) return t.arrowFunctionExpression([], value);
+        const result = t.identifier('__ro');
+        return t.arrowFunctionExpression([], t.blockStatement([
+            t.variableDeclaration('const', [t.variableDeclarator(result, value)]),
+            t.returnStatement(t.conditionalExpression(
+                t.binaryExpression('===', t.unaryExpression('typeof', result), t.stringLiteral('function')),
+                t.callExpression(result, []),
+                result))
+        ]));
     } else if (t.isMemberExpression(value) || t.isIdentifier(value)) {
         rtrn = t.returnStatement(callFunctions
             ? t.conditionalExpression(
@@ -558,9 +575,11 @@ export const makeDirectives = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttrib
                     t.isArrowFunctionExpression(value) && value !== null ||
                     t.isObjectExpression(value) ||
                     t.isMemberExpression(value) ||
+                    t.isOptionalMemberExpression(value) ||
                     t.isObjectMethod(value) ||
                     t.isIdentifier(value) ||
-                    t.isCallExpression(value) && value !== null) {
+                    t.isCallExpression(value) && value !== null ||
+                    t.isOptionalCallExpression(value)) {
                     if (t.isFunctionExpression(value)) {
                         result = t.expressionStatement(t.callExpression(t.identifier(callerName), [value]));
                     } else if (t.isArrowFunctionExpression(value)) {
