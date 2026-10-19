@@ -165,6 +165,7 @@ function applyJsxFrameworkProps(target: any, props: any, refs: any[]): any {
     const configuredBefore = handlerCount(target, '_onConfigHandlers');
     const initializingBefore = handlerCount(target, '_onInitializingHandlers');
     const initializedBefore = handlerCount(target, '_onInitializedHandlers');
+    const preconfigBefore = (target as any).motif.options?._preconfig?.length ?? 0;
     ParseProps(runover, target as ComponentBase);
 
     callAddedHandlers(target, '_onInitializingHandlers', initializingBefore, 'onInitializing');
@@ -174,9 +175,9 @@ function applyJsxFrameworkProps(target: any, props: any, refs: any[]): any {
     // ÇOKTAN çalışmıştır (`isConfigured`); sonradan kaydedilen preconfig/onConfig bir daha
     // çağrılmayacağı için burada elle koşulur. Yalnızca yeni eklenenler çalıştırılır.
     if ((target as any).isConfigured) {
-        const pre = (target as any).motif.options?._preconfig;
-        if (typeof pre === 'function') {
-            safeCallSilent(() => pre(target), 'motifComponent.preconfig');
+        const pres = (target as any).motif.options?._preconfig ?? [];
+        for (let i = preconfigBefore; i < pres.length; i++) {
+            safeCallSilent(() => pres[i](target), 'motifComponent.preconfig');
         }
         for (let i = configuredBefore; i < handlerCount(target, '_onConfigHandlers'); i++) {
             const fn = hookList(target, '_onConfigHandlers')[i];

@@ -556,8 +556,7 @@ const ComponentHelper = {
                 if (!component || component.isDisposed || component.isConfigured) { return; }
                 component.isConfigured = true;
 
-                const preconfig = component._motif?.options?._preconfig;
-                if (preconfig) {
+                for (const preconfig of component._motif?.options?._preconfig ?? []) {
                         safeCallSilent(() => preconfig(component), 'Component._preconfig');
                 }
 
@@ -2548,7 +2547,7 @@ export function ParseProps(props: any, component: ComponentBase): boolean {
                                 ParseProps(props[key], component);
                                 delete props[key];
                         } else if (key.startsWith("preconfig")) {
-                                component.motif.options._preconfig = props[key];
+                                if (typeof props[key] === 'function') (component.motif.options._preconfig ??= []).push(props[key]);
                                 delete props[key];
                         } else if (key === '__childExpr') {
                                 delete props[key];
