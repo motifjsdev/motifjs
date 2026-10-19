@@ -759,8 +759,8 @@ export class UrlRoutingModule {
                 }
                 if (!el || !(el instanceof HTMLAnchorElement)) return;
                 // opt-in via data-router-link veya rel="router"
-                const rel = el.getAttribute('rel') || '';
-                const optIn = el.getAttribute("x-command") == 'router' || el.hasAttribute('data-router-link') || rel.toLowerCase() === 'router';
+                const rel = (el.getAttribute('rel') || '').toLowerCase().split(/\s+/);
+                const optIn = el.getAttribute("x-command") == 'router' || el.hasAttribute('data-router-link') || rel.includes('router');
                 if (!optIn) return;
                 // modifier keys veya target="_blank" => ignore
                 const a = el as HTMLAnchorElement;
