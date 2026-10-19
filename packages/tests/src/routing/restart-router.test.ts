@@ -43,6 +43,7 @@ describe('restartRouter', () => {
     });
 
     afterEach(() => {
+        window.history.replaceState({}, '', '/');
         try { app?.dispose(); } catch { }
         host.remove();
     });

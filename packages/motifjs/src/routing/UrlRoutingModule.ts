@@ -94,7 +94,7 @@ export class UrlRoutingModule {
     private _ownHashWrites = 0;
     private _ownHash: string | null = null;
 
-    private _addressMode(): NonNullable<RouterOptions['mode']> {
+    public _addressMode(): NonNullable<RouterOptions['mode']> {
         const w = window as any;
         return this._routerOptions.mode || (w?.location?.protocol === 'file:' ? 'hash' : 'history');
     }

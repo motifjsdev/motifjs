@@ -184,15 +184,19 @@ export class Application {
         Application._disposingCount++;
         startedApplicationBuilder = false;
         let routerDone: Promise<void> | undefined;
+        const addressMode = this._startedRouter?._addressMode() ?? null;
         safeCallSilent(() => { this._removeLifecycleListeners(); }, 'Application.dispose.lifecycle');
         safeCallSilent(() => { routerDone = (this as any).urlRoutingModule?.dispose?.(); }, 'Application.dispose.router');
         safeCallSilent(() => { engine.stopGc(); }, 'Application.dispose.gcStop');
         safeCallSilent(() => {
             try {
                 const w = window as any;
-                if (w && w.history && typeof w.history.replaceState === 'function') {
-                    // Normalize to root path; for hash mode also clear the hash
+                if (!w || !w.history || typeof w.history.replaceState !== 'function') return;
+                if (addressMode === 'history') {
                     w.history.replaceState({}, '', '/');
+                } else if (addressMode === 'hash' || addressMode === 'file') {
+                    const loc = w.location;
+                    if (loc && loc.hash) w.history.replaceState({}, '', String(loc.pathname) + String(loc.search));
                 }
             } catch { /* ignore */ }
         }, 'Application.dispose.resetUrl');
