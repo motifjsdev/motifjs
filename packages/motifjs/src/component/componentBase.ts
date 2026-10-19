@@ -1818,6 +1818,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         }
 
         public setState() {
+                if (this.isDisposed) { return; }
                 this.controls.forEach(c => {
                         c.setState();
                 });
@@ -1825,6 +1826,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         }
 
         public reState() {
+                if (this.isDisposed) { return; }
                 reactivateBindings(this);
                 this.controls.forEach(c => {
                         c.reState();

@@ -26,6 +26,7 @@ export class BindingCollection implements IBindingCollection {
     private _modelWriters?: WeakMap<IBaseBinding, (value: any) => void>;
     private _component: ComponentBase;
     private _branchScope: Array<() => void> | null = null;
+    private _effects: Array<{ restart: () => void }> | null = null;
 
     constructor(component: ComponentBase) {
         this._component = component;
@@ -37,6 +38,20 @@ export class BindingCollection implements IBindingCollection {
         }
         this._component.motif.register(quietCleanup(stop));
     }
+    private _keepEffect(start: () => () => void, teardown?: () => void): void {
+        let stop = start();
+        const record = { restart: () => { stop(); stop = start(); } };
+        (this._effects ??= []).push(record);
+        this._own(() => {
+            stop();
+            teardown?.();
+            const list = this._effects;
+            if (list) {
+                const i = list.indexOf(record);
+                if (i >= 0) list.splice(i, 1);
+            }
+        });
+    }
 
     when(computeFn: () => any, renderFn: (isTrue: boolean) => any) {
 
@@ -45,22 +60,24 @@ export class BindingCollection implements IBindingCollection {
         this._component.controls.add(frame);
         let shown = false;
         let last: any;
-        const stop = effect(computeFn, (value) => {
-            if (shown && (Object.is(last, value) || (!last && !value))) return;
-            shown = true;
-            last = value;
-            untracked(() => {
-                if (value) {
-                    frame.navigate(renderFn(value as any))
-                } else {
-                    const empty = motifFragment();
-                    /* @DEV-ONLY */ emptyCreated(empty);
-                    frame.navigate(empty);
-                }
+        this._keepEffect(() => {
+            const stop = effect(computeFn, (value) => {
+                if (shown && (Object.is(last, value) || (!last && !value))) return;
+                shown = true;
+                last = value;
+                untracked(() => {
+                    if (value) {
+                        frame.navigate(renderFn(value as any))
+                    } else {
+                        const empty = motifFragment();
+                        /* @DEV-ONLY */ emptyCreated(empty);
+                        frame.navigate(empty);
+                    }
+                });
             });
+            /* @DEV-ONLY */ effectOwner(this._component, 'when');
+            return stop;
         });
-        /* @DEV-ONLY */ effectOwner(this._component, 'when');
-        this._own(stop);
 
         return null as any;
 
@@ -164,35 +181,37 @@ export class BindingCollection implements IBindingCollection {
             host.controls.insert(host.controls.items.indexOf(previous), next);
             host.controls.remove(previous);
         };
-        const stop = effect(cb, (result) => {
-            if (host.isDisposed) return;
-            const isText = typeof result === 'string' || typeof result === 'number' || typeof result === 'boolean' || typeof result === 'bigint';
-            if (isText || (text && result == null)) {
-                if (text) {
-                    text.setText(result as any);
+        this._keepEffect(() => {
+            const stop = effect(cb, (result) => {
+                if (host.isDisposed) return;
+                const isText = typeof result === 'string' || typeof result === 'number' || typeof result === 'boolean' || typeof result === 'bigint';
+                if (isText || (text && result == null)) {
+                    if (text) {
+                        text.setText(result as any);
+                        return;
+                    }
+                    text = new Component(dom.createTextNode(result as any));
+                    place(text, frame);
+                    frame = null;
                     return;
                 }
-                text = new Component(dom.createTextNode(result as any));
-                place(text, frame);
-                frame = null;
-                return;
-            }
-            if (!frame) {
-                frame = new Frame();
-                /* @DEV-ONLY */ frameCreated(frame, 'Expression');
-                place(frame, text);
-                text = null;
-            }
-            if (result == null) {
-                const empty = motifFragment();
-                /* @DEV-ONLY */ emptyCreated(empty);
-                frame.navigate(empty);
-            } else {
-                frame.navigate(result as any);
-            }
+                if (!frame) {
+                    frame = new Frame();
+                    /* @DEV-ONLY */ frameCreated(frame, 'Expression');
+                    place(frame, text);
+                    text = null;
+                }
+                if (result == null) {
+                    const empty = motifFragment();
+                    /* @DEV-ONLY */ emptyCreated(empty);
+                    frame.navigate(empty);
+                } else {
+                    frame.navigate(result as any);
+                }
+            });
+            /* @DEV-ONLY */ effectOwner(host, 'method');
+            return stop;
         });
-        /* @DEV-ONLY */ effectOwner(host, 'method');
-        host.motif.register(quietCleanup(stop));
     }
 
     ternary(conditionFn: () => any, trueFn: (frame: Frame) => any, falseFn: (frame: Frame) => any) {
@@ -219,30 +238,31 @@ export class BindingCollection implements IBindingCollection {
                 try { stop(); } catch { }
             }
         };
-        const stopEffect = effect(condFn, (condition) => {
-            if (!first && Object.is(last, condition)) return;
-            last = condition;
-            const run = () => {
-                stopInner();
-                const outer = this._branchScope;
-                this._branchScope = inner;
-                try {
-                    if (condition) { onTrue(); } else { onFalse(); }
-                } finally {
-                    this._branchScope = outer;
+        this._keepEffect(() => {
+            const stopEffect = effect(condFn, (condition) => {
+                if (!first && Object.is(last, condition)) return;
+                last = condition;
+                const run = () => {
+                    stopInner();
+                    const outer = this._branchScope;
+                    this._branchScope = inner;
+                    try {
+                        if (condition) { onTrue(); } else { onFalse(); }
+                    } finally {
+                        this._branchScope = outer;
+                    }
+                };
+                if (first) {
+                    first = false;
+                    untracked(run);
+                    return;
                 }
-            };
-            if (first) {
-                first = false;
-                untracked(run);
-                return;
-            }
-            defer(() => { if (!stopped && !this._component.isDisposed) run(); });
-        });
-        /* @DEV-ONLY */ effectOwner(this._component, 'ternary');
-        this._own(() => {
+                defer(() => { if (!stopped && !this._component.isDisposed) run(); });
+            });
+            /* @DEV-ONLY */ effectOwner(this._component, 'ternary');
+            return stopEffect;
+        }, () => {
             stopped = true;
-            stopEffect();
             stopInner();
         });
     }
@@ -254,11 +274,13 @@ export class BindingCollection implements IBindingCollection {
     }
 
     watch(cb: () => any) {
-        const ef = effect(() => {
-            cb();
+        this._keepEffect(() => {
+            const ef = effect(() => {
+                cb();
+            });
+            /* @DEV-ONLY */ effectOwner(this._component, 'watch');
+            return ef;
         });
-        /* @DEV-ONLY */ effectOwner(this._component, 'watch');
-        this._component.motif.register(quietCleanup(ef));
     }
     remove(binding: IBaseBinding): void {
         const index = this._items.indexOf(binding);
@@ -397,6 +419,7 @@ export class BindingCollection implements IBindingCollection {
     deactivateAll(): void {
         this._items.forEach(binding => binding.deactivate());
         this._items = [];
+        this._effects = null;
     }
 
     reActivateAll(): void {
@@ -404,6 +427,15 @@ export class BindingCollection implements IBindingCollection {
             if (typeof binding.reActivate !== 'function') continue;
             try {
                 binding.reActivate();
+            } catch (error) {
+                reportError('MJX208', error);
+            }
+        }
+        const effects = this._effects;
+        if (!effects) return;
+        for (const record of [...effects]) {
+            try {
+                record.restart();
             } catch (error) {
                 reportError('MJX208', error);
             }
@@ -421,28 +453,30 @@ export class BindingCollection implements IBindingCollection {
         var currentValue: any;
         var hasValue = false;
         var defaultRunned = false;
-        const ef = effect(discriminatorFn, (value) => {
-            if (hasValue && currentValue == value) return;
-            hasValue = true;
-            currentValue = value;
-            const caseKey = String(value);
-            if (Object.prototype.hasOwnProperty.call(cases, caseKey)) {
-                cases[caseKey](frame);
-                defaultRunned = false;
-            } else if (defaultFn) {
-                if (defaultRunned) return;
-                defaultRunned = true;
-                defaultFn(frame);
-            } else {
-                if (defaultRunned) return;
-                defaultRunned = true;
-                const empty = motifFragment();
-                /* @DEV-ONLY */ emptyCreated(empty);
-                frame.navigate(empty);
-            }
+        this._keepEffect(() => {
+            const ef = effect(discriminatorFn, (value) => {
+                if (hasValue && currentValue == value) return;
+                hasValue = true;
+                currentValue = value;
+                const caseKey = String(value);
+                if (Object.prototype.hasOwnProperty.call(cases, caseKey)) {
+                    cases[caseKey](frame);
+                    defaultRunned = false;
+                } else if (defaultFn) {
+                    if (defaultRunned) return;
+                    defaultRunned = true;
+                    defaultFn(frame);
+                } else {
+                    if (defaultRunned) return;
+                    defaultRunned = true;
+                    const empty = motifFragment();
+                    /* @DEV-ONLY */ emptyCreated(empty);
+                    frame.navigate(empty);
+                }
+            });
+            /* @DEV-ONLY */ effectOwner(this._component, 'switch');
+            return ef;
         });
-        /* @DEV-ONLY */ effectOwner(this._component, 'switch');
-        this._component.motif.register(quietCleanup(ef));
 
         return null as any;
     }
