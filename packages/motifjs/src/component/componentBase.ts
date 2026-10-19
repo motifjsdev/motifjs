@@ -216,6 +216,7 @@ function createTransitionApi(owner: ComponentBase): TransitionApi {
 
                                 x.oncancel = () => {
                                         safeCleanup();
+                                        resolve && resolve();
                                 };
                                 return x;
                         }
@@ -2006,19 +2007,20 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         const transition = this.motif.options.transition;
                         const skip = transition.skipNextLeave === true;
                         if (skip) transition.skipNextLeave = false;
-                        const finish = () => {
+                        const finish = (): Promise<unknown> | undefined => {
                                 ComponentHelper.callVisibilityChanged(this, false);
                                 if (this.isDisposed) { return; }
                                 if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
+                                        const waits: Promise<unknown>[] = [];
                                         this.controls.forEach(c => {
                                                 if (skip && c.isVisible && c.element && !c.isDisposed && c.motif.options?.transition) {
                                                         c.motif.options.transition.skipNextLeave = true;
                                                 }
-                                                c.motif.hide();
+                                                waits.push(c.motif.hide());
                                         });
                                         this.isVisible = false;
                                         ComponentHelper.deactivateTree(this, false);
-                                        return;
+                                        return waits.length ? Promise.all(waits) : undefined;
                                 }
                                 var parent = (this.element as Node).parentElement;
                                 // if (!parent) {
@@ -2034,10 +2036,13 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 ComponentHelper.deactivateTree(this);
                         };
                         if (skip) {
-                                finish();
-                                return;
+                                return finish();
                         }
-                        return transition.leaveTransition(finish).finished;
+                        return new Promise<void>((resolve) => {
+                                transition.leaveTransition(() => {
+                                        resolve(finish() as Promise<void> | undefined);
+                                });
+                        });
                 }
 
         }
