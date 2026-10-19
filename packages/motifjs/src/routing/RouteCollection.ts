@@ -24,6 +24,7 @@ export function compareRouteRecords(a: RouteRecord, b: RouteRecord): number {
 export class RouteCollection {
 
     public records: RouteRecord[] = [];
+    public readonly table: Map<any, RouteItem> = new Map();
     private routesMap: Map<any, RouteItem> = new Map();
     constructor(private routes: RouteItem[]) {
         this.build();
@@ -32,6 +33,7 @@ export class RouteCollection {
     private build() {
         this.records = [];
         this.routesMap.clear();
+        this.table.clear();
 
         for (const r of this.routes) this.walk([], "", r);
 
@@ -48,6 +50,7 @@ export class RouteCollection {
             if (node.name != null) {
                 this.routesMap.set(node.name, node);
             }
+            this.table.set(node.name ?? node.fullPath, node);
         }
         const nextChain = [...chain, node];
         const aliases = node.alias == null ? [] : (Array.isArray(node.alias) ? node.alias : [node.alias]);

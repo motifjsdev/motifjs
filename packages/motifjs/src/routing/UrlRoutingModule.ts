@@ -25,7 +25,6 @@ export class UrlRoutingModule {
     private _routerOptions: RouterOptions;
     private routingEngine: RoutingEngine;
     routeCollection!: RouteCollection
-    private routesMap: Map<any, RouteItem> = new Map();
     private mainApp!: Component;
     private application: Application;
     private _suppressBeforeEachOnce: boolean = false;
@@ -727,9 +726,9 @@ export class UrlRoutingModule {
             if (typeof item.validate === 'function') {
                 const e: RouterValidateEventArgs = {
                     uri,
-                    key: item.name ?? rec.fullPath,
+                    key: item.name ?? item.fullPath,
                     // createInstance: control alanından gerçek component instance'ını üretir.
-                    routes: this.routesMap,
+                    routes: this.routeCollection.table,
                     params
                 };
                 // Fonksiyon ise: doğrudan çağırmayı dener (factory gibi).
