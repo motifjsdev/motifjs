@@ -3,7 +3,7 @@ import type { NavigationDirection, ScrollMemoryOptions } from './common';
 
 export interface ScrollViewport {
     scrollTop(): number;
-    scrollTo(top: number): void;
+    scrollTo(top: number, left?: number, behavior?: ScrollBehavior): void;
     scrollToAnchor(id: string, follow?: boolean): boolean;
 }
 
@@ -55,13 +55,19 @@ export class ScrollMemory {
         this.persist();
     }
 
-    public arrived(uri: string, direction?: NavigationDirection): void {
+    public arrived(uri: string, direction?: NavigationDirection, restore: boolean = true): void {
         this.visited = true;
         const { path, hash } = splitUri(uri);
         const inPage = !!hash && path === this.currentPath && (direction === 'push' || direction === 'replace' || direction === 'traverse');
         this.currentPath = path;
         this.currentKey = this.keyOf(path);
+        if (!restore) { this.cancelRestore(); return; }
         this.restore(this.currentKey, this.options.anchor === false ? '' : hash || (this.locationAnchor ? locationHash() : ''), inPage);
+    }
+
+    public scrollTo(top: number, left?: number, behavior: ScrollBehavior = 'auto'): void {
+        this.cancelRestore();
+        this.viewport.scrollTo(top, left, behavior);
     }
 
     public saved(key: string): number {
@@ -188,9 +194,9 @@ function windowViewport(): ScrollViewport {
         scrollTop: () => {
             try { return window.scrollY || document.documentElement?.scrollTop || 0; } catch { return 0; }
         },
-        scrollTo: (top) => {
-            try { window.scrollTo({ top, behavior: 'instant' }); }
-            catch { try { window.scrollTo(0, top); } catch { } }
+        scrollTo: (top, left, behavior = 'instant') => {
+            try { window.scrollTo(left === undefined ? { top, behavior } : { top, left, behavior }); }
+            catch { try { window.scrollTo(left ?? 0, top); } catch { } }
         },
         scrollToAnchor: (id, follow) => {
             try {
@@ -222,11 +228,11 @@ function containerViewport(container: NonNullable<ScrollMemoryOptions['container
             if (!el) return fallback.scrollTop();
             return el.scrollTop || 0;
         },
-        scrollTo: (top) => {
+        scrollTo: (top, left, behavior = 'instant') => {
             const el = resolve();
-            if (!el) { fallback.scrollTo(top); return; }
-            try { el.scrollTo({ top, behavior: 'instant' }); }
-            catch { try { el.scrollTop = top; } catch { } }
+            if (!el) { fallback.scrollTo(top, left, behavior); return; }
+            try { el.scrollTo(left === undefined ? { top, behavior } : { top, left, behavior }); }
+            catch { try { el.scrollTop = top; if (left !== undefined) el.scrollLeft = left; } catch { } }
         },
         scrollToAnchor: (id, follow) => fallback.scrollToAnchor(id, follow),
     };

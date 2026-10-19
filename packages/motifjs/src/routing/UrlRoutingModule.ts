@@ -427,7 +427,8 @@ export class UrlRoutingModule {
                 try { await this.routingEngine.execute(target, stackNav, snapshotOf(target)); } catch (e2) { reportError('MJX305', e2); }
             }
             if (this._stack) this.application._routerState.touch();
-            if (navOptions.scroll) { 
+            if (navOptions.scroll) {
+                this._scroll?.arrived(this._uriWithHash(appliedPath, uri), direction, false);
                 this._handleScrollBehavior(navOptions.scroll);
             } else {
                 this._scroll?.arrived(this._uriWithHash(appliedPath, uri), direction);
@@ -881,20 +882,14 @@ export class UrlRoutingModule {
 
     private _handleScrollBehavior(scrollOption?: NavigationOptions['scroll']) {
         if (!scrollOption) return;
-
+        const target = typeof scrollOption === 'object'
+            ? { top: scrollOption.top || 0, left: scrollOption.left || 0, behavior: scrollOption.behavior || 'auto' }
+            : { top: 0, left: undefined, behavior: scrollOption === 'top' ? 'auto' as ScrollBehavior : scrollOption };
         try {
-            if (scrollOption === 'top') {
-                window.scrollTo({ top: 0, behavior: 'auto' });
-            } else if (scrollOption === 'smooth') {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            } else if (scrollOption === 'instant') {
-                window.scrollTo({ top: 0, behavior: 'instant' });
-            } else if (typeof scrollOption === 'object') {
-                window.scrollTo({
-                    top: scrollOption.top || 0,
-                    left: scrollOption.left || 0,
-                    behavior: scrollOption.behavior || 'auto'
-                });
+            if (this._scroll) {
+                this._scroll.scrollTo(target.top, target.left, target.behavior);
+            } else {
+                window.scrollTo(target.left === undefined ? { top: target.top, behavior: target.behavior } : target);
             }
         } catch { }
     }
