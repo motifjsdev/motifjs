@@ -1,4 +1,5 @@
 import { ServiceCollection } from "./dependencyInjection/ServiceCollection";
+import { Flags } from "./store/common";
 import { ServiceProvider, keepOnDispose } from "./dependencyInjection/ServiceProvider";
 import { Component } from "./component/Component";
 import { RouteItem } from "./routing/RouteItem";
@@ -486,3 +487,5 @@ export function useApplication() {
         }
     }
 }
+
+Object.defineProperty(Application.prototype, Flags.SKIP, { value: true });

@@ -6,7 +6,7 @@ import { ComponentEmiter } from "./ComponentEmiter";
 import { controlAttribute } from "./controlAttribute";
 import { controlClass } from "./controlClass";
 import { ComponentBaseOptions, ElementType, EventArgs, HtmlElementEvents, OptionalParams, RouterClassingSettings, shimAnimation, VisibilityChangedEventArgs } from "./types";
-import { UnwrapValueRefs } from "../store/common";
+import { Flags, UnwrapValueRefs } from "../store/common";
 import { getTransitionInfo, runCssTransition, TransitionProps } from "../common/transition";
 import { callReported, motifError, reportError, reportWarning } from "../common/diagnostics";
 import { ComponentMotif } from "./ComponentMotif";
@@ -2817,3 +2817,5 @@ export function notifyDeactivated(component: ComponentBase): void {
         pinServiceOwner(component);
         ComponentHelper.deactivateTree(component);
 }
+
+Object.defineProperty(ComponentBase.prototype, Flags.SKIP, { value: true });

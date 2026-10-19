@@ -1,4 +1,5 @@
 import { ServiceCollection, ServiceDescriptor } from "./ServiceCollection";
+import { Flags } from "../store/common";
 import { motifError } from "../common/diagnostics";
 import { Signal } from "../store/Signal";
 import { setScopeResolver } from "../devtools/inspect";
@@ -544,3 +545,5 @@ export class ServiceProvider {
 }
 
 /* @DEV-ONLY */ setScopeResolver(pinnedScopeOf);
+
+Object.defineProperty(ServiceProvider.prototype, Flags.SKIP, { value: true });

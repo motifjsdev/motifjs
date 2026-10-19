@@ -51,7 +51,7 @@ export class ReactiveEngine {
             model = { value: model } as any;
         }
         const targetType = getTargetType(model);
-        if (targetType === TargetType.SYSTEM || TargetType.INVALID) {
+        if (targetType === TargetType.SYSTEM) {
             return model as any
         }
 

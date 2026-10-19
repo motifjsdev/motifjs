@@ -6,6 +6,7 @@ export const Flags = {
     IS_SUPERFICIAL: Symbol.for('motif.isSuperficial'),
     RAW: Symbol.for('motif.raw'),
     GET_SETUP: Symbol.for('motif.getSetup'),
+    SKIP: Symbol.for('motif.skip'),
 } as const;
 
 export const enum TargetType {
@@ -61,12 +62,7 @@ const proxyableTags = new Map<string, TargetType>([
 ]);
 
 export function getTargetType(value: any): TargetType {
-    var proto = Object.getPrototypeOf(value);
-    var cname = "";
-    if (proto && proto.constructor) {
-        cname = proto.constructor.name;
-    }
-    if ((cname === "Control" || cname == "RouteManager" || cname == "ServiceManager")) {
+    if ((value as any)[Flags.SKIP] === true) {
         return TargetType.SYSTEM;
     }
     if (!Object.isExtensible(value)) {

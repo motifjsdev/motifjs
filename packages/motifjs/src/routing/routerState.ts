@@ -1,4 +1,5 @@
 import { Signal } from "../store/Signal";
+import { Flags } from "../store/common";
 import { motifError } from "../common/diagnostics";
 import type { UrlRoutingModule } from "./UrlRoutingModule";
 import type { NavigationDirection, NavigationOptions, ResolveResult, Router } from "./common";
@@ -55,6 +56,7 @@ export function createRouter(state: RouterState, module: () => UrlRoutingModule 
     };
     const target = () => state.read()?.target;
     return {
+        [Flags.SKIP]: true,
         get params() { return target()?.params ?? {}; },
         get route() { return target()?.route ?? null; },
         get ok() { return target()?.ok ?? false; },
