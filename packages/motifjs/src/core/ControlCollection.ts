@@ -206,10 +206,10 @@ export class ControlCollection {
     moveToIndex(control: ComponentBase, index: number): void {
         if (!control || control.isDisposed) return;
         if (!Number.isFinite(index as any)) return;
-        if (index < 0) index = 0;
-        if (index > this.items.length) index = this.items.length;
         if (this.items.indexOf(control) === -1) return;
-        const before = index >= this.items.length ? null : this.items[index];
+        const rest = this.items.filter(x => x !== control);
+        if (index < 0) index = 0;
+        const before = index >= rest.length ? null : rest[index];
         this.move(control, before);
     }
 }
