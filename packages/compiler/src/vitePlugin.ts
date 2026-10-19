@@ -146,10 +146,10 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
   return {
     name: 'transform-file-motif-jsx',
     enforce: 'pre' as const,
-    config(this: { meta?: { rolldownVersion?: string } } | undefined, config: { optimizeDeps?: { rolldownOptions?: { transform?: { jsx?: unknown } } } }) {
+    config(this: any, config: any): any {
       if (!this?.meta?.rolldownVersion) return;
-      if (config.optimizeDeps?.rolldownOptions?.transform?.jsx !== undefined) return;
-      return { optimizeDeps: { rolldownOptions: { transform: { jsx: 'preserve' as const } } } };
+      if (config?.optimizeDeps?.rolldownOptions?.transform?.jsx !== undefined) return;
+      return { optimizeDeps: { rolldownOptions: { transform: { jsx: 'preserve' } } } };
     },
     configResolved(config: { isProduction: boolean; root: string }) {
       root = config.root;
