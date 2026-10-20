@@ -1,6 +1,8 @@
 
-import { ComponentBase, ConditionalWrapper, motifFragment } from "../";
-import { IBaseBinding } from "./";
+import { ComponentBase } from "../component/componentBase";
+import { ConditionalWrapper } from "../component/ConditionalWrapper";
+import { motifFragment } from "../component/Component";
+import { IBaseBinding } from "./IBaseBinding";
 
 
 export class ConditionalBinding implements IBaseBinding {

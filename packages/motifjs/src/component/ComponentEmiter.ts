@@ -1,7 +1,8 @@
-import { Emitter, Event as DelegateEvent } from "../delegate";
-import { IDisposable } from "../disposable";
+import { Emitter } from "../delegate/Emitter";
+import { Event as DelegateEvent } from "../delegate/Event";
+import { IDisposable } from "../disposable/IDisposable";
 import { trackedCleanup } from "../disposable/Cleanup";
-import { ComponentBase } from "../";
+import { ComponentBase } from "./componentBase";
 import { EventArgs } from "./types";
 import { callReported } from "../common/diagnostics";
 import { lazyBindMethods } from "../common/lazyBind";

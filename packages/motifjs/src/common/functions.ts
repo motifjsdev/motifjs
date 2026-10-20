@@ -2,8 +2,9 @@
 
 import { NodeTypes } from ".";
 import { reportError } from "./diagnostics";
-import { Component, ComponentBase } from "../component";
-import { IDisposable } from "../disposable";
+import { ComponentBase } from "../component/componentBase";
+import { makeComponent } from "../component/componentSlots";
+import { IDisposable } from "../disposable/IDisposable";
 
 export const toKebab = (str: string) => str.replace(/[A-Z]+(?![a-z])|[A-Z]/g, ($, ofs) => (ofs ? "-" : "") + $.toLowerCase());
 
@@ -53,7 +54,7 @@ export function isComponent(source: any) {
     return source instanceof ComponentBase
 }
 export function createComponent(tag: any, options: any) {
-    return new Component(tag, options)
+    return makeComponent(tag, options)
 }
 
 

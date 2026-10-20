@@ -1,4 +1,4 @@
-import { track, trigger, effect, createScheduledEffect, untracked, ScheduledEffect } from "../";
+import { track, trigger, effect, createScheduledEffect, untracked, ScheduledEffect } from "./reactivity-core";
 import { pauseTracking, resetTracking } from "./common";
 import { effectOwner } from "../devtools/reactivity";
 const SIGNAL_TARGET = Symbol('SignalTarget');

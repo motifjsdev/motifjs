@@ -9,13 +9,15 @@ import { lintRoutes } from "./devtools/routeLinter";
 import { RouterView } from "./routing/RouterView";
 import { UrlRoutingModule } from "./routing/UrlRoutingModule";
 import { RouterState, createRouter } from "./routing/routerState";
-import { NavigationDirection, NavigationOptions, Router, RouteResolveContext, RouterNavigatedEventArgs, RouterEvents, RouterOptions, ScrollMemoryOptions, StackOptions } from "./routing";
+import { NavigationDirection, NavigationOptions, Router, RouteResolveContext, RouterNavigatedEventArgs, RouterEvents, RouterOptions, ScrollMemoryOptions, StackOptions } from "./routing/common";
 import { errorHandler, safeCall, safeCallSilent, setErrorConsoleLogging } from "./common/ErrorHandler";
-import { engine, configureReactivityLeakMonitor } from "./store";
+import { engine } from "./store";
+import { configureReactivityLeakMonitor } from "./store/reactivity-core";
 import { MotifError, callReported, formatMotifMessage, motifError, reportError } from "./common/diagnostics";
 import { flushCompilerContractWarnings } from "./common/compilerContract";
 import { isTransitionMode, transitionSettings, TransitionMode } from "./common/transitionRegistry";
-import { ComponentBase } from "./component";
+import { ComponentBase } from "./component/componentBase";
+import { componentSlots } from "./component/componentSlots";
 export interface IStartup {
     configuration?: (services: any) => void;
 
@@ -493,3 +495,4 @@ export function useApplication() {
 }
 
 Object.defineProperty(Application.prototype, Flags.SKIP, { value: true });
+componentSlots.application = Application;

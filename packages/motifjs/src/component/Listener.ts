@@ -1,5 +1,5 @@
-import { Component } from "./";
-import { IBaseProp } from "./";
+import { Component } from "./Component";
+import { IBaseProp } from "./componentBase";
 import { LazyOptions } from "./Lazy";
 import { motifError } from "../common/diagnostics";
 

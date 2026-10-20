@@ -1,4 +1,4 @@
-import { ComponentBase, IBaseProp, IDisposeOptions } from ".";
+import { ComponentBase, IBaseProp, IDisposeOptions } from "./componentBase";
 import { Component, assertLoadedComponent, resolveToComponent, unwrapModule } from "./Component";
 import { Frame } from "./Frame";
 import { trackedCleanup } from "../disposable/Cleanup";

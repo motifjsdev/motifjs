@@ -1,7 +1,7 @@
-import { Component } from "../";
-import { ComponentBase } from "../";
-import { dom } from "../core";
-import { effect } from "../";
+import { Component } from "./Component";
+import { ComponentBase } from "./componentBase";
+import { dom } from "../core/dom";
+import { effect } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
 
 export class ConditionalWrapper extends ComponentBase<Comment, { render: () => any }> {

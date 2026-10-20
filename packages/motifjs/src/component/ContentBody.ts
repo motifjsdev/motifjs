@@ -1,5 +1,7 @@
 
-import { Component, ComponentBase, EventArgs } from "../";
+import { Component } from "./Component";
+import { ComponentBase } from "./componentBase";
+import { EventArgs } from "./types";
 import { reportWarning } from "../common/diagnostics";
 
 

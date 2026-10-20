@@ -1,9 +1,9 @@
-import { IClass } from "../";
+import { IClass } from "../common/IAttribute";
 import { reportError } from "../common/diagnostics";
-import { ComponentBase } from "./";
+import { ComponentBase } from "./componentBase";
 import { effect } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
-import { IBaseBinding } from "../bindings";
+import { IBaseBinding } from "../bindings/IBaseBinding";
 
 
 

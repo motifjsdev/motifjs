@@ -1,5 +1,5 @@
-import { Application } from "..";
-import { RouteItem } from "./";
+import { Application } from "../application";
+import { RouteItem } from "./RouteItem";
 
 export type RouteResolveContext = {
     uri: string;

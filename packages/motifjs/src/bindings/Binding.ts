@@ -1,8 +1,8 @@
 
-import { ComponentBase } from "../";
+import { ComponentBase } from "../component/componentBase";
 import { effect } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
-import { BindingFormatInfo, IBaseBinding } from "./";
+import { BindingFormatInfo, IBaseBinding } from "./IBaseBinding";
 
 
 export function isCheckedInput(el: any): boolean {

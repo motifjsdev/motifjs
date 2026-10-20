@@ -1,4 +1,5 @@
-import { List, NameValuePair } from "./";
+import { List } from "./List";
+import { NameValuePair } from "./NameValuePair";
 
 export class Dictionary<KType, VType> {
     private __values: List<NameValuePair<KType, VType>> = new List<NameValuePair<KType, VType>>();

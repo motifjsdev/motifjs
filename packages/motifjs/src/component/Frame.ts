@@ -1,8 +1,9 @@
-import { dom } from "../core";
-import { Component } from "../";
-import { ComponentBase, IDisposeOptions } from "../";
-import { Lazy, LazyOptions } from "../";
+import { dom } from "../core/dom";
+import { Component } from "./Component";
+import { ComponentBase, IDisposeOptions } from "./componentBase";
+import { Lazy, LazyOptions } from "./Lazy";
 import { disposeNavigationTarget, navigateHost } from "./navigation";
+import { componentSlots } from "./componentSlots";
 
 
 export class Frame extends Component {
@@ -42,3 +43,4 @@ export class Frame extends Component {
         await this.navigate(lazyFrame, keepOldControl);
     }
 }
+componentSlots.frame = Frame;

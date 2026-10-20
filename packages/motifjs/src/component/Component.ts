@@ -1,5 +1,8 @@
-import { dom } from "../";
-import { ComponentBase, IBaseProp, ParseProps, applyComponentOptions, applyFallthroughProps, applyTransitionProp, extractRefs, safeCallSilent, takePendingRefs, untracked } from "../";
+import { dom } from "../core/dom";
+import { ComponentBase, IBaseProp, ParseProps, applyComponentOptions, applyFallthroughProps, applyTransitionProp, extractRefs, takePendingRefs } from "./componentBase";
+import { safeCallSilent } from "../common/ErrorHandler";
+import { untracked } from "../store/reactivity-core";
+import { componentSlots } from "./componentSlots";
 import { constructComponentRoot, disposeUnplacedChilds } from "./componentBase";
 import { resolveComponent } from "./resolveComponent";
 import { ElementType, EventArgs } from "./types";
@@ -373,3 +376,5 @@ export class motifDocument {
         //console.warn("MainApp:", MainApp);
     }
 }
+componentSlots.component = Component;
+componentSlots.fragment = FragmentNode;

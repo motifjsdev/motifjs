@@ -1,12 +1,17 @@
 
 
-import { Component, ComponentBase, Frame, motifFragment } from "../";
+import { ComponentBase } from "../component/componentBase";
+import type { Frame } from "../component/Frame";
+import { makeComponent, makeFragment, makeFrame } from "../component/componentSlots";
 import { quietCleanup } from "../disposable/Cleanup";
-import { dom } from "../";
-import { effect, untracked } from "../";
+import { dom } from "../core/dom";
+import { effect, untracked } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
 import { listCreated, frameCreated, emptyCreated } from "../devtools/tree";
-import { Binding, BindingFormatInfo, IBaseBinding, IBindingCollection, ListBinding, ListBindingOptions, readModelValue } from "./";
+import { Binding, readModelValue } from "./Binding";
+import { BindingFormatInfo, IBaseBinding } from "./IBaseBinding";
+import { IBindingCollection } from "./IBindingCollection";
+import { ListBinding, ListBindingOptions } from "./ListBinding";
 import { reportError } from "../common/diagnostics";
 import { lazyBindMethods } from "../common/lazyBind";
 import { pushTight } from "../common/pushTight";
@@ -55,7 +60,7 @@ export class BindingCollection implements IBindingCollection {
 
     when(computeFn: () => any, renderFn: (isTrue: boolean) => any) {
 
-        var frame = new Frame();
+        var frame = makeFrame();
         /* @DEV-ONLY */ frameCreated(frame, 'When');
         this._component.controls.add(frame);
         let shown = false;
@@ -69,7 +74,7 @@ export class BindingCollection implements IBindingCollection {
                     if (value) {
                         frame.navigate(renderFn(value as any))
                     } else {
-                        const empty = motifFragment();
+                        const empty = makeFragment();
                         /* @DEV-ONLY */ emptyCreated(empty);
                         frame.navigate(empty);
                     }
@@ -190,19 +195,19 @@ export class BindingCollection implements IBindingCollection {
                         text.setText(result as any);
                         return;
                     }
-                    text = new Component(dom.createTextNode(result as any));
+                    text = makeComponent(dom.createTextNode(result as any));
                     place(text, frame);
                     frame = null;
                     return;
                 }
                 if (!frame) {
-                    frame = new Frame();
+                    frame = makeFrame();
                     /* @DEV-ONLY */ frameCreated(frame, 'Expression');
                     place(frame, text);
                     text = null;
                 }
                 if (result == null) {
-                    const empty = motifFragment();
+                    const empty = makeFragment();
                     /* @DEV-ONLY */ emptyCreated(empty);
                     frame.navigate(empty);
                 } else {
@@ -215,7 +220,7 @@ export class BindingCollection implements IBindingCollection {
     }
 
     ternary(conditionFn: () => any, trueFn: (frame: Frame) => any, falseFn: (frame: Frame) => any) {
-        const frame = new Frame();
+        const frame = makeFrame();
         /* @DEV-ONLY */ frameCreated(frame, 'Ternary');
         this._component.controls.add(frame);
         this._ternaryCallTop(
@@ -447,7 +452,7 @@ export class BindingCollection implements IBindingCollection {
         cases: Record<string | number, (frame: Frame) => any>,
         defaultFn?: (frame: Frame) => any
     ) {
-        const frame = new Frame();
+        const frame = makeFrame();
         /* @DEV-ONLY */ frameCreated(frame, 'Switch');
         this._component.controls.add(frame);
         var currentValue: any;
@@ -469,7 +474,7 @@ export class BindingCollection implements IBindingCollection {
                 } else {
                     if (defaultRunned) return;
                     defaultRunned = true;
-                    const empty = motifFragment();
+                    const empty = makeFragment();
                     /* @DEV-ONLY */ emptyCreated(empty);
                     frame.navigate(empty);
                 }

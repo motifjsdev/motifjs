@@ -1,8 +1,10 @@
 // import { dom } from "../browser";
 import { TRANSITION_SLOT } from "../component/optionsSlots";
 // import { effect } from "../store";
-import { dom } from "../";
-import { Component, ComponentBase, resolveComponent, notifyDeactivated } from "../";
+import { dom } from "./dom";
+import { ComponentBase, notifyDeactivated } from "../component/componentBase";
+import { resolveComponent } from "../component/resolveComponent";
+import { makeComponent } from "../component/componentSlots";
 import { reportError } from "../common/diagnostics";
 import { pushTight } from "../common/pushTight";
 import { checkReservedMembers, domAnchor, setLeaveContainer } from "../component/componentBase";
@@ -48,7 +50,7 @@ export class ControlCollection {
         if (control == undefined) return control;
 
         if (typeof control == 'string' || typeof control == 'number' || typeof control == 'boolean' || typeof control == 'bigint') {
-            control = new Component(dom.createTextNode(control), null as any);
+            control = makeComponent(dom.createTextNode(control), null as any);
         }
         checkReservedMembers(control);
         if (control.parent) { control.parent.controls.detach(control); }

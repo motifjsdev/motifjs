@@ -1,7 +1,9 @@
 
-import { Component, findAppendableComponent } from '../';
-import { ComponentBase, notifyDeactivated } from '../';
-import { effect, engine, untracked } from '../store';
+import { Component } from '../component/Component';
+import { findAppendableComponent } from '../common/functions';
+import { ComponentBase, notifyDeactivated } from '../component/componentBase';
+import { effect, untracked } from '../store/reactivity-core';
+import { engine } from '../store';
 import { internalState } from '../devtools/devbus';
 import { effectOwner } from '../devtools/reactivity';
 import { reportError, reportWarning } from '../common/diagnostics';

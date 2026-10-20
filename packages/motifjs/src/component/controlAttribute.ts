@@ -1,8 +1,9 @@
-import { IAttribute } from "../";
-import { ComponentBase } from "../";
+import { IAttribute } from "../common/IAttribute";
+import { ComponentBase } from "./componentBase";
 import { effect } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
-import { Binding, IBaseBinding } from "../bindings";
+import { Binding } from "../bindings/Binding";
+import { IBaseBinding } from "../bindings/IBaseBinding";
 import { isComponentLike } from "./componentBase";
 
 export type ElementTypes = Node | Element | HTMLElement | Text | DocumentFragment | Comment | HTMLDivElement;

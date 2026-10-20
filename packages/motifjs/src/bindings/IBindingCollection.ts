@@ -1,5 +1,6 @@
-import { ComponentBase } from "../";
-import { BindingFormatInfo, IBaseBinding, ListBindingOptions } from "./";
+import { ComponentBase } from "../component/componentBase";
+import { BindingFormatInfo, IBaseBinding } from "./IBaseBinding";
+import { ListBindingOptions } from "./ListBinding";
 
 export interface IBindingCollection {
     add(propertyName: string, dataSource: any): IBaseBinding;

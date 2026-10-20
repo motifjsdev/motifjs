@@ -1,4 +1,5 @@
-import { Application, ServiceLifetime } from "..";
+import { Application } from "../application";
+import { ServiceLifetime } from "./ServiceCollection";
 import { autoRegistry } from "./autoRegistry";
 import { reportWarning } from "../common/diagnostics";
 

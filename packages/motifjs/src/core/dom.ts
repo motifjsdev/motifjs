@@ -1,4 +1,4 @@
-import { IDisposable } from "../";
+import { IDisposable } from "../disposable/IDisposable";
 import { errorHandler } from "../common/ErrorHandler";
 import { motifError, reportError } from "../common/diagnostics";
 

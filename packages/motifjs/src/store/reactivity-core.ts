@@ -1,5 +1,5 @@
 
-import { LeakMonitor } from "../common";
+import { LeakMonitor } from "../common/LeakMonitor";
 import { reportError, reportWarning } from "../common/diagnostics";
 import { getRaw, followTracking } from "./common";
 import { pushTight } from "../common/pushTight";

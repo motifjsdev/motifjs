@@ -1,10 +1,12 @@
-import { ComponentBase, motifFragment, resolveComponent } from "../";
-import { effect, untracked } from "../";
+import { ComponentBase } from "../component/componentBase";
+import { resolveComponent } from "../component/resolveComponent";
+import { makeFragment } from "../component/componentSlots";
+import { effect, untracked } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
 import { getRaw } from "../store/common";
 import { motifError, reportWarning } from "../common/diagnostics";
 import { isListAdopted, noteListAdopted } from "../component/componentBase";
-import { IBaseBinding } from "./";
+import { IBaseBinding } from "./IBaseBinding";
 
 
 export interface ListBindingOptions {
@@ -23,7 +25,7 @@ export class ListBinding implements IBaseBinding {
     private _effectCleanup?: () => void;
     private _rendered: ComponentBase[] = [];
     private _identityMap = new WeakMap<object, ComponentBase[]>();
-    private container: ComponentBase = motifFragment();
+    private container: ComponentBase = makeFragment();
     constructor(private component: ComponentBase,
         private itemsFn: () => any[] | Iterable<any>,
         private renderFn: (item: any, index: number) => ComponentBase,

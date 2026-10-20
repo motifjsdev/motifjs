@@ -1,4 +1,4 @@
-import { ComponentBase } from "../";
+import { ComponentBase } from "./componentBase";
 
 
 const cacheDataValues = new WeakMap<any, any>();

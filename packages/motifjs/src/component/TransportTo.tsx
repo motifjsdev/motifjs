@@ -2,7 +2,10 @@
 import { TransportRegistry, SLOT_REGISTERED_EVENT, SLOT_UNREGISTERED_EVENT } from "./TransportRegistry";
 import { Transporter } from "./Transporter";
 import { ComponentBase } from "./componentBase";
-import { Application, EventArgs, Transport, Component } from "../";
+import { Application } from "../application";
+import { EventArgs } from "./types";
+import { Transport } from "./Transport";
+import { Component } from "./Component";
 import { contentBlocks } from "./contentBlockRegistry";
 
 export class TransportTo extends Component<any, { name: string }> {

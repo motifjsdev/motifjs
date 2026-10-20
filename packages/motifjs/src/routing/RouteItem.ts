@@ -1,4 +1,4 @@
-import { ComponentBase } from "../component";
+import { ComponentBase } from "../component/componentBase";
 import { Scanner } from "./scanner";
 import type { NavigationDirection, NavigationOptions } from "./common";
 

@@ -1,5 +1,5 @@
 import type { ComponentBase } from "./componentBase";
-import { IDisposable } from "..";
+import { IDisposable } from "../disposable/IDisposable";
 import { trackedCleanup } from "../disposable/Cleanup";
 import type { ComponentBaseOptions, EventArgs, HtmlElementEvents } from "./types";
 

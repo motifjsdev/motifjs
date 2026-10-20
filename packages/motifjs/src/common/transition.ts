@@ -1,5 +1,5 @@
 
-import { dom } from "../";
+import { dom } from "../core/dom";
 
 type TransitionKind = 'transition' | 'animation'
 

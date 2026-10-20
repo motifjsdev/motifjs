@@ -1,5 +1,5 @@
 import { ComponentBase } from "./componentBase";
-import { Application } from "../";
+import { Application } from "../application";
 
 export const SLOT_REGISTERED_EVENT = Symbol('slotRegistered');
 export const SLOT_UNREGISTERED_EVENT = Symbol('slotUnregistered');

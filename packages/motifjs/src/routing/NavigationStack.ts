@@ -1,4 +1,4 @@
-import { ComponentBase, notifyDeactivated } from "../";
+import { ComponentBase, notifyDeactivated } from "../component/componentBase";
 import { disposeNavigationTarget, hasOwnTransition } from "../component/navigation";
 import { reportError } from "../common/diagnostics";
 import type { NavigationDirection, RouteItem, StackEntryInfo, StackOptions, StackTransitionContext } from "./";

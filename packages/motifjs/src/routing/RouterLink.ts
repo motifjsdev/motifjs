@@ -1,4 +1,9 @@
-import { Application, Component, ComponentBase, dom, EventArgs, isExactMatch, startsWithPath } from "../";
+import { Application } from "../application";
+import { Component } from "../component/Component";
+import { ComponentBase } from "../component/componentBase";
+import { dom } from "../core/dom";
+import { EventArgs } from "../component/types";
+import { isExactMatch, startsWithPath } from "../common/functions";
 import { Router } from "./common";
 
 type RouterLinkOptions = {

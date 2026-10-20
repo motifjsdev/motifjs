@@ -1,5 +1,5 @@
-import { Component } from "..";
-import { ComponentBase, IBaseProp } from "../";
+import { Component } from "../component/Component";
+import { ComponentBase, IBaseProp } from "../component/componentBase";
 import { disposeNavigationTarget, navigateHost } from "../component/navigation";
 import { RouterViewRegistry } from "./RouterViewRegistry";
 

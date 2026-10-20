@@ -1,5 +1,15 @@
-import { ControlCollection, dom, Disposable, IClass, IDisposable, Application, isExactMatch, startsWithPath, reactive, safeCallSilent, safeCallSilentAsync, safeCall, safeCallAsync } from "..";
-import { BindingCollection, IBaseBinding } from "../bindings";
+import { ControlCollection } from "../core/ControlCollection";
+import { dom } from "../core/dom";
+import { Disposable } from "../disposable/Disposable";
+import { IClass } from "../common/IAttribute";
+import { IDisposable } from "../disposable/IDisposable";
+import type { Application } from "../application";
+import { isExactMatch, startsWithPath } from "../common/functions";
+import { reactive } from "../store";
+import { safeCallSilent, safeCallSilentAsync, safeCall, safeCallAsync } from "../common/ErrorHandler";
+import { mainApplication, isApplicationDisposing } from "./componentSlots";
+import { BindingCollection } from "../bindings/BindingCollection";
+import { IBaseBinding } from "../bindings/IBaseBinding";
 import { effect } from "../store/reactivity-core";
 import { ComponentEmiter } from "./ComponentEmiter";
 import { controlAttribute } from "./controlAttribute";
@@ -1039,7 +1049,7 @@ function applicationOf(c: any): Application | undefined {
                 if (parent.__lookupGetter__('context') === baseContextGetter) app = applicationOf(parent);
                 else { const ctx: any = parent.context; app = ctx?.[RAW_APPLICATION] ?? ctx; }
         }
-        return app ?? teardownApplications.get(c) ?? Application.main;
+        return app ?? teardownApplications.get(c) ?? mainApplication();
 }
 
 function contextApplication(c: any): Application | undefined {
@@ -1048,7 +1058,7 @@ function contextApplication(c: any): Application | undefined {
                 const ctx = c.context;
                 return ctx?.[RAW_APPLICATION] ?? ctx;
         }
-        return contextOverridden || teardownSeen ? applicationOf(c) : Application.main;
+        return contextOverridden || teardownSeen ? applicationOf(c) : mainApplication();
 }
 
 function owningApplication(c: any): Application | null {
@@ -1057,12 +1067,12 @@ function owningApplication(c: any): Application | null {
                 const recorded = teardownApplications.get(p);
                 if (recorded) return recorded;
         }
-        return Application.main ?? null;
+        return mainApplication() ?? null;
 }
 
 function disposePrefix(c: any, options: IDisposeOptions, asChild: boolean): void {
         const ctx = asChild ? 'disposeAsync' : 'dispose';
-        if (Application._disposingCount > 0) {
+        if (isApplicationDisposing()) {
                 const app = owningApplication(c);
                 if (app && app.state === 'disposing') { teardownApplications.set(c, app); teardownSeen = true; }
         }
@@ -1677,7 +1687,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         private _scopedContext?: Application;
 
         public get context(): Application {
-                const app: Application = (contextOverridden || teardownSeen ? applicationOf(this) : Application.main) as Application;
+                const app: Application = (contextOverridden || teardownSeen ? applicationOf(this) : mainApplication()) as Application;
                 if (!app) { return app; }
                 if ((this._scopedContext as any)?.[RAW_APPLICATION] !== app) {
                         this._scopedContext = createScopedContext(app, this);
@@ -2339,7 +2349,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         if (recorded) return recorded.state === 'disposed' ? null : recorded.provider;
                         c = c.parent;
                 }
-                try { return Application.main?.provider ?? null; } catch { return null; }
+                try { return mainApplication()?.provider ?? null; } catch { return null; }
         }
 
         public getService<T>(token: (abstract new (...args: any) => T) | { prototype: T }): T | null;
