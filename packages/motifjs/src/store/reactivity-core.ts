@@ -15,6 +15,7 @@ class Effect {
     constructor(public fn: EffectFn, private callback?: (value: unknown) => void) { }
     run() {
         let value: unknown;
+        let ok = false;
         if (!this.active || this.running) return;
         cleanup(this);
         effectStack.push(this);
@@ -22,11 +23,12 @@ class Effect {
         /* @DEV-ONLY */ const devAt = runStarting();
         try {
             value = this.fn();
+            ok = true;
         } finally {
             effectStack.pop();
             this.running = false;
             /* @DEV-ONLY */ runFinished(this, devAt);
-            if (this.callback) {
+            if (ok && this.callback) {
                 this.callback(value);
             }
         }
