@@ -1235,6 +1235,7 @@ const EV_CAPTURE = 16;
 const EV_DOM = 32;
 const EV_REMOVED = 64;
 const EV_ONCE = 128;
+const EV_CONTENT = 256;
 
 const NO_MODS: string[] = [];
 
@@ -1247,6 +1248,7 @@ class EventRecord {
         type: string;
         flags: number;
         next: EventRecord | undefined;
+        options: AddEventListenerOptions | undefined;
 
         constructor(owner: any, key: string, original: (sender: any, e: any) => any, type: string, flags: number) {
                 this.owner = owner;
@@ -1255,13 +1257,19 @@ class EventRecord {
                 this.type = type;
                 this.flags = flags;
                 this.next = undefined;
+                this.options = undefined;
         }
 
         handleEvent(ev: Event): void {
                 const flags = this.flags;
                 if ((flags & EV_REMOVED) !== 0) return;
                 const owner = this.owner;
-                if ((flags & EV_SELF) !== 0 && ev.target !== owner.element) return;
+                const at: any = (ev as any).currentTarget;
+                if ((flags & EV_CONTENT) !== 0 && at && at.nodeType === Node.ELEMENT_NODE && !isContentElement(owner, at)) {
+                        unbindContentFrom(at, this);
+                        return;
+                }
+                if ((flags & EV_SELF) !== 0 && ev.target !== ((flags & EV_CONTENT) !== 0 ? at : owner.element)) return;
                 if ((flags & EV_TRUSTED) !== 0 && !ev.isTrusted) return;
                 const cb: any = this.original;
                 let res: any;
@@ -1286,7 +1294,9 @@ class EventRecord {
                 }
                 if ((flags & EV_ONCE) !== 0) {
                         this.flags |= EV_REMOVED;
-                        if ((flags & EV_DOM) !== 0) {
+                        if ((flags & EV_CONTENT) !== 0) {
+                                unbindContent(owner, this);
+                        } else if ((flags & EV_DOM) !== 0) {
                                 const rec = this;
                                 safeCall(() => { owner.element.removeEventListener(rec.type, rec, (flags & EV_CAPTURE) !== 0); }, 'once.removeEventListener');
                         }
@@ -1331,11 +1341,71 @@ function hasEventKey(c: any, key: string): boolean {
         return false;
 }
 
+function isContentOwner(c: any): boolean {
+        return (c.element as Node | null | undefined)?.nodeType === Node.COMMENT_NODE;
+}
+
+function collectContent(child: any, out: Element[]): Element[] {
+        const node = child.element as Node | null | undefined;
+        if (node && node.nodeType === Node.ELEMENT_NODE) out.push(node as Element);
+        else if (node && node.nodeType === Node.COMMENT_NODE) for (const kid of childrenOf(child)) collectContent(kid, out);
+        return out;
+}
+
+function contentElements(c: any): Element[] {
+        const out: Element[] = [];
+        for (const kid of childrenOf(c)) collectContent(kid, out);
+        return out;
+}
+
+function isContentElement(c: any, el: any): boolean {
+        return contentElements(c).indexOf(el) > -1;
+}
+
+function bindContentTo(el: Element, r: EventRecord): void {
+        safeCall(() => { (el as any).addEventListener(r.type, r, r.options); }, 'content.addEventListener');
+}
+
+function unbindContentFrom(el: Element, r: EventRecord): void {
+        safeCall(() => { (el as any).removeEventListener(r.type, r, (r.flags & EV_CAPTURE) !== 0); }, 'content.removeEventListener');
+}
+
+function bindContent(c: any, r: EventRecord): void {
+        for (const el of contentElements(c)) bindContentTo(el, r);
+}
+
+function unbindContent(c: any, r: EventRecord): void {
+        for (const el of contentElements(c)) unbindContentFrom(el, r);
+}
+
+function attachContent(owner: any, child: ComponentBase): void {
+        for (let c: any = owner; c && isContentOwner(c); c = c.parent) {
+                for (let r: EventRecord | undefined = c._eventHandlers; r !== undefined; r = r.next) {
+                        if ((r.flags & (EV_CONTENT | EV_REMOVED)) !== EV_CONTENT) continue;
+                        for (const el of collectContent(child, [])) bindContentTo(el, r);
+                }
+        }
+}
+
+function releaseContent(owner: any, child: ComponentBase): void {
+        for (let c: any = owner; c && isContentOwner(c); c = c.parent) {
+                for (let r: EventRecord | undefined = c._eventHandlers; r !== undefined; r = r.next) {
+                        if ((r.flags & (EV_CONTENT | EV_REMOVED)) !== EV_CONTENT) continue;
+                        for (const el of collectContent(child, [])) unbindContentFrom(el, r);
+                }
+        }
+}
+
 function offAll(c: any, detached = false): void {
         const head: EventRecord | undefined = c._eventHandlers;
         if (head === undefined) return;
         for (let r: EventRecord | undefined = head; r !== undefined; r = r.next) {
                 if ((r.flags & (EV_DOM | EV_REMOVED)) !== EV_DOM) { continue; }
+                if ((r.flags & EV_CONTENT) !== 0) {
+                        if (!detached) unbindContent(c, r);
+                        r.flags |= EV_REMOVED;
+                        continue;
+                }
                 if (detached) {
                         r.flags |= EV_REMOVED;
                         r.owner = undefined;
@@ -1414,6 +1484,7 @@ function createOwnedControls(c: ComponentBase): ControlCollection {
 
 function ownerControlAdded(this: ControlCollection, c: ComponentBase) {
         const owner = controlsOwner(this);
+        attachContent(owner, c);
         if (hasEventKey(owner, 'controladded')) owner.motif.trigger('controladded', { control: c });
         if (!owner.isVisible && (owner.element as Node)?.nodeType === Node.COMMENT_NODE) return;
         ComponentHelper.internalBuild.call(owner, c);
@@ -1421,11 +1492,13 @@ function ownerControlAdded(this: ControlCollection, c: ComponentBase) {
 
 function ownerControlAddedBeforeBuild(this: ControlCollection, c: ComponentBase) {
         const owner = controlsOwner(this);
+        attachContent(owner, c);
         if (hasEventKey(owner, 'controladded')) owner.motif.trigger('controladded', { control: c });
 }
 
 function ownerControlRemoved(this: ControlCollection, c: ComponentBase) {
         const owner = controlsOwner(this);
+        releaseContent(owner, c);
         if (hasEventKey(owner, 'controlremoved')) owner.motif.trigger('controlremoved', { control: c });
 }
 
@@ -2178,7 +2251,11 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 }
 
                 const record = new EventRecord(this, full.toLowerCase(), cb as any, evt, flags);
-                if (domEvent) {
+                if (domEvent && isContentOwner(this)) {
+                        record.flags |= EV_CONTENT;
+                        record.options = options;
+                        bindContent(this, record);
+                } else if (domEvent) {
                         (this.element as any).addEventListener(evt, record, options);
                 }
                 addEventRecord(this, record);
@@ -2233,7 +2310,9 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 }
                 for (let r = this._eventHandlers; r !== undefined; r = r.next) {
                         if ((r.flags & EV_REMOVED) !== 0 || r.key !== full || r.original !== (cb as any)) continue;
-                        if ((r.flags & EV_DOM) !== 0) {
+                        if ((r.flags & EV_CONTENT) !== 0) {
+                                unbindContent(this, r);
+                        } else if ((r.flags & EV_DOM) !== 0) {
                                 const rec = r;
                                 safeCall(() => { (this.element as any).removeEventListener(rec.type, rec, (rec.flags & EV_CAPTURE) !== 0); }, 'off.removeEventListener');
                         }

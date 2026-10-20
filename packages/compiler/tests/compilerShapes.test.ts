@@ -146,7 +146,7 @@ describe('MJX002: bileşen etiketinde camelCase DOM olay adı', () => {
         const message = diags(`function A(){ return <Comp onClick={() => g()} />; }`).find(x => x.code === 'MJX002')!.message;
         expect(message).toContain('"this.props.onClick" stays undefined');
         expect(message).toContain("component's own element");
-        expect(message).toContain('without an element it never fires');
+        expect(message).toContain('without an element it listens on the content elements');
         expect(message).toContain('"onPress"');
         expect(message).toContain('this.motif.on("click", (_sender, e) => this.props.onPress?.(e))');
     });

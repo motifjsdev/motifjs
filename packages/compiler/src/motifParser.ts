@@ -710,7 +710,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                     if (tagIsComponent() && name !== name.toLowerCase()) {
                         diagWarn(
                             'MJX002',
-                            `"${name}" is a DOM event name; on a component tag it is bound as a DOM listener on the component's own element and never reaches this.props ("this.props.${name}" stays undefined; on a component without an element it never fires). If the component should receive a callback, give it a name that is not a DOM event (e.g. "onPress", "onValueChange", "onConfirm") and call it from inside the component, e.g. this.motif.on("${name.slice(2).toLowerCase()}", (_sender, e) => this.props.onPress?.(e)).`,
+                            `"${name}" is a DOM event name; on a component tag it is bound as a DOM listener on the component's own element and never reaches this.props ("this.props.${name}" stays undefined; on a component without an element it listens on the content elements). If the component should receive a callback, give it a name that is not a DOM event (e.g. "onPress", "onValueChange", "onConfirm") and call it from inside the component, e.g. this.motif.on("${name.slice(2).toLowerCase()}", (_sender, e) => this.props.onPress?.(e)).`,
                             prop, fileName,
                         );
                     }
