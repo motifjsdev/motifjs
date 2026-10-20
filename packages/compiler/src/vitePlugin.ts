@@ -108,6 +108,7 @@ function legacyDecoratorsChecker() {
 export interface MotifVitePluginOptions {
   diagnostics?: boolean;
   explain?: boolean | string | RegExp;
+  exclude?: string | RegExp | ((id: string) => boolean);
   storeNames?: boolean;
   production?: boolean;
 }
@@ -116,6 +117,13 @@ function explainMatches(opt: boolean | string | RegExp | undefined, id: string):
   if (!opt) return false;
   if (opt === true) return true;
   if (typeof opt === 'string') return id.includes(opt);
+  return opt.test(id);
+}
+
+function excludeMatches(opt: string | RegExp | ((id: string) => boolean) | undefined, id: string): boolean {
+  if (!opt) return false;
+  if (typeof opt === 'string') return id.includes(opt);
+  if (typeof opt === 'function') return opt(id);
   return opt.test(id);
 }
 
@@ -214,7 +222,7 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
         return;
       }
       if (shouldTransform(id)) {
-        if (!src.includes("//useReact") && !src.includes("//useVue")) {
+        if (!excludeMatches(options.exclude, id)) {
           try {
             const compiler = new Compiler();
             compiler.storeNames = storeLabel(id, src);

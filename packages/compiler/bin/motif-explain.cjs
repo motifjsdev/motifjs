@@ -2,7 +2,7 @@
 /*
  * motif-explain — "what did this expression compile to?" (the compiler's -S flag)
  *
- *   npx motif-explain src/App.tsx [more.tsx…] [--json] [--site child|attr|prop|…] [--code]
+ *   npx motif-explain src/App.tsx [more.tsx…] [--json] [--site child|element|attr|prop|event|component-event|directive|key] [--code]
  *
  * Compiles the source and prints, for every JSX expression, the actual call it lowers to,
  * its reactivity class and its dependency surface. `--code` also prints the full generated code;
@@ -24,7 +24,7 @@ for (let i = 0; i < args.length; i++) {
     else files.push(a);
 }
 if (files.length === 0) {
-    console.error('usage: motif-explain <file.tsx> [...] [--json] [--site child|attr|prop|event|directive] [--code]');
+    console.error('usage: motif-explain <file.tsx> [...] [--json] [--site child|element|attr|prop|event|component-event|directive|key] [--code]');
     process.exit(2);
 }
 

@@ -70,6 +70,7 @@ Nothing is removed while developing. A production build is `vite build` in Vite,
 compiler({
     diagnostics: true,
     explain: false,
+    exclude: undefined,
     storeNames: undefined,
     production: undefined,
 });
@@ -79,6 +80,7 @@ compiler({
 | --- | --- | --- |
 | `diagnostics` | `true` | Print compiler warnings (`MJX001`–`MJX004`, `MJX007`, `MJX015`) for patterns that compile but do not behave as they read. `MJX015` (a class component override that does not reach `super` on every path) is also checked in `.ts` / `.js` files. |
 | `explain` | `false` | Print what every JSX expression was lowered to. `true` for all files, or a string / `RegExp` matched against the file path. |
+| `exclude` | unset | Files the plugin leaves alone: a string matched with `includes` against the file path, a `RegExp` tested against it, or a function `(id) => boolean`. Their JSX is not compiled by MotifJS; they go through Vite's own transform. |
 | `storeNames` | on while developing | Name module-level stores for DevTools with their variable and file (relative to the Vite root). Unset, it follows Vite: on in `vite dev`, off in a production build; `true` or `false` sets it. |
 | `production` | follows the build | Remove [development-only code](#development-only-code). Unset, it follows Vite: on in a production build, off in `vite dev`. Outside Vite it is on when `NODE_ENV` is `production`. `true` or `false` sets it. |
 
@@ -91,7 +93,7 @@ npx motif-lint [--project tsconfig.json] [--json] [--no-fail] [file.tsx …]
 Type-aware lint: `MJX005` reports a ternary passed to a component prop whose declared type does not accept a getter; `MJX015` reports a class component override that does not reach `super` on every path, with the base class resolved by the type checker. Exits with code 1 when there are findings (`--no-fail` to disable).
 
 ```bash
-npx motif-explain src/App.tsx [more.tsx …] [--json] [--site child|attr|prop|…] [--code]
+npx motif-explain src/App.tsx [more.tsx …] [--json] [--site child|element|attr|prop|event|component-event|directive|key] [--code]
 ```
 
 Shows the call each JSX expression compiles to, whether it is reactive, and what it depends on. `--code` also prints the full generated code.
