@@ -20,7 +20,7 @@ export const dom = {
     get window() {
         if (glblths && glblths.window) {
             return glblths.window;
-        } else if (glblths && glblths) {
+        } else if (glblths && glblths.motifDom) {
             return glblths.motifDom.window;
         } else {
             return glblths;
