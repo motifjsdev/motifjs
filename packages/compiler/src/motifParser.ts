@@ -8,7 +8,7 @@ import svgTags from 'svg-tags';
 import { assertLifecycleValue, cacheGuardCalls, findIfStatements, makeComponentTraps, makeDirectives, makeHtmlAttr, makeHtmlEvents, makePreDirectives, mergeHtmlAttributes, returnIfStatement, SUPPORTED_DIRECTIVES, UNSUPPORTED_DIRECTIVES, supportedDirectivesText } from './propBuilder';
 import { motifComponent, motifFragment, State, motifFunctionComponent } from './constants';
 import { warn as diagWarn, fail } from './diagnostics';
-import { noteOrigin, transferOrigin, explainAt, explainChild, describeTextNode, codeOf, DEPS, type ExplainReactivity } from './explain';
+import { noteOrigin, transferOrigin, explainAt, explainChild, describeTextNode, codeOf, DEPS, isExplaining, type ExplainReactivity } from './explain';
 const FRAGMENT = 'Fragment';
 
 type RefTargetKind = 'call' | 'assign' | 'runtime';
@@ -356,14 +356,25 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
             note: 'passed as a value; if the object is a reactive proxy, the receiver stays live by reading its fields inside a getter' };
     };
 
+    const emitsGetter = (statements: t.ExpressionStatement[]): boolean =>
+        statements.some(s => t.isCallExpression(s.expression) && s.expression.arguments.some(a =>
+            t.isArrowFunctionExpression(a)
+            || (t.isArrayExpression(a) && a.elements.some(e => t.isArrowFunctionExpression(e)))
+            || (t.isObjectExpression(a) && a.properties.some(p => t.isObjectProperty(p) && t.isArrowFunctionExpression(p.value)))));
+
     /** DOM özniteliğine yazılan ifadenin sınıfı (makeHtmlAttr'ın gerçek dalları). */
-    const classifyAttrValue = (raw: NodePath<t.JSXAttribute>, value: t.Node, emitted: t.ObjectProperty | null): { shape: string; reactive: ExplainReactivity; deps: string; note?: string } => {
+    const classifyAttrValue = (raw: NodePath<t.JSXAttribute>, value: t.Node, emitted: t.ObjectProperty | null, lowered: t.ExpressionStatement[]): { shape: string; reactive: ExplainReactivity; deps: string; note?: string } => {
         const v = raw.get('value');
         const inner = v.isJSXExpressionContainer() ? v.node.expression : null;
         if (t.isStringLiteral(value) || t.isBooleanLiteral(value) || t.isNumericLiteral(value) || t.isNullLiteral(value)
             || (t.isUnaryExpression(value) && t.isLiteral(value.argument))
             || (t.isTemplateLiteral(value) && value.expressions.length === 0)) {
             return { shape: 'attr.literal', reactive: 'static', deps: DEPS.none };
+        }
+        if (t.isTemplateLiteral(value)) {
+            return emitsGetter(lowered)
+                ? { shape: 'attr.template', reactive: 'live', deps: DEPS.getter, note: 'template literal wrapped in a getter; re-evaluated when a field read inside it changes' }
+                : { shape: 'attr.template', reactive: 'once', deps: DEPS.once, note: 'template literal passed as a string value; wrap it in an arrow function to keep it live' };
         }
         if (inner && t.isConditionalExpression(inner)) {
             return { shape: 'attr.ternary', reactive: 'live', deps: DEPS.getter, note: 'ternary wrapped lazily (by design); attr.add calls the getter inside an effect' };
@@ -382,6 +393,25 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
             return { shape: 'attr.expr', reactive: 'live', deps: DEPS.getter, note: 'expression wrapped in a guarded getter (nothing is written while an intermediate link is null)' };
         }
         return { shape: 'attr.value', reactive: 'once', deps: DEPS.once };
+    };
+
+    const explainAttr = (prop: NodePath<t.JSXAttribute>, atr: t.ObjectProperty, value: t.Node | null, shape?: string) => {
+        if (!isExplaining()) return;
+        const lowered = mergeHtmlAttributes([atr]);
+        const shown = lowered.map(s => codeOf(s.expression)).join('; ');
+        if (value === null) {
+            explainProp(prop, 'attr', 'attr.flag', shown, 'static', DEPS.none);
+            return;
+        }
+        const lname = t.isStringLiteral(atr.key) ? atr.key.value.toLowerCase() : '';
+        if ((lname === 'class' || lname === 'classname') && (t.isObjectExpression(atr.value) || t.isArrayExpression(atr.value))) {
+            const live = lowered.some(s => t.isCallExpression(s.expression) && t.isArrayExpression(s.expression.arguments[0]));
+            explainProp(prop, 'attr', 'class.object', shown, live ? 'live' : 'static', live ? DEPS.getter : DEPS.none,
+                live ? 'each key toggles its class; values other than literals are wrapped in getters' : undefined);
+            return;
+        }
+        const c = classifyAttrValue(prop, value, atr, lowered);
+        explainProp(prop, 'attr', shape ?? c.shape, shown, c.reactive, c.deps, c.note);
     };
 
     /** Etiket bir BİLEŞEN mi (büyük harfle başlıyor ya da üye ifadesi)? */
@@ -540,8 +570,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                             const styleAttr = makeHtmlAttr(prop, 'style', value, path);
                             if (styleAttr !== null) {
                                 htmlAttrlist.push(styleAttr);
-                                const c = classifyAttrValue(prop, value, styleAttr);
-                                explainProp(prop, 'attr', 'style', `sender.style(${codeOf(styleAttr.value)})`, c.reactive, c.deps, c.note);
+                                explainAttr(prop, styleAttr, value, 'style');
                             }
                         } else if (clearedName === "ref") {
                             pushRef(prop, value);
@@ -663,25 +692,13 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                         var atr = makeHtmlAttr(prop, name, value, path);
                         if (atr !== null) {
                             htmlAttrlist.push(atr);
-                            const lname = name.toLowerCase();
-                            if ((lname === 'class' || lname === 'classname') && (t.isObjectExpression(atr.value) || t.isArrayExpression(atr.value))) {
-                                const lowered = mergeHtmlAttributes([atr]);
-                                const live = lowered.some(s => t.isCallExpression(s.expression) && t.isArrayExpression(s.expression.arguments[0]));
-                                explainProp(prop, 'attr', 'class.object', lowered.map(s => codeOf(s.expression)).join('; '),
-                                    live ? 'live' : 'static', live ? DEPS.getter : DEPS.none,
-                                    live ? 'each key toggles its class; values other than literals are wrapped in getters' : undefined);
-                            } else {
-                                const c = classifyAttrValue(prop, value, atr);
-                                const call = lname === 'class' || lname === 'classname' ? 'sender.class.add' : lname === 'style' ? 'sender.style' : 'sender.attr.add';
-                                const shown = call === 'sender.attr.add' ? `${call}({ "${name}": ${codeOf(atr.value)} })` : `${call}(${codeOf(atr.value)})`;
-                                explainProp(prop, 'attr', c.shape, shown, c.reactive, c.deps, c.note);
-                            }
+                            explainAttr(prop, atr, value);
                         }
                     } else {
                         var atr = makeHtmlAttr(prop, name, t.booleanLiteral(true), path);
                         if (atr !== null) {
                             htmlAttrlist.push(atr);
-                            explainProp(prop, 'attr', 'attr.flag', `sender.attr.add({ "${name}": true })`, 'static', DEPS.none);
+                            explainAttr(prop, atr, null);
                         }
                     }
 

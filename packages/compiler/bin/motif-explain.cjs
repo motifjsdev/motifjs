@@ -5,7 +5,8 @@
  *   npx motif-explain src/App.tsx [more.tsx…] [--json] [--site child|attr|prop|…] [--code]
  *
  * Compiles the source and prints, for every JSX expression, the actual call it lowers to,
- * its reactivity class and its dependency surface. `--code` also prints the full generated code.
+ * its reactivity class and its dependency surface. `--code` also prints the full generated code;
+ * with `--json` the output becomes { explanations, code: { file: generated } }.
  */
 const fs = require('fs');
 const path = require('path');
@@ -29,6 +30,7 @@ if (files.length === 0) {
 
 const Compiler = compiler.Compiler;
 const all = [];
+const codes = {};
 for (const f of files) {
     const abs = path.resolve(f);
     const src = fs.readFileSync(abs, 'utf8');
@@ -38,10 +40,11 @@ for (const f of files) {
     let list = c.explanations;
     if (site) list = list.filter(e => e.site === site);
     all.push(...list);
+    if (code && result && result.code) codes[shown] = result.code;
     if (!json) {
         process.stdout.write(compiler.formatExplanations(list) + '\n');
         if (c.diagnostics.length) compiler.printDiagnostics(c.diagnostics);
         if (code && result && result.code) process.stdout.write('\n--- generated code ---\n' + result.code + '\n');
     }
 }
-if (json) process.stdout.write(JSON.stringify(all, null, 2) + '\n');
+if (json) process.stdout.write(JSON.stringify(code ? { explanations: all, code: codes } : all, null, 2) + '\n');
