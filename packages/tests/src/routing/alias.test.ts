@@ -242,4 +242,19 @@ describe('route linter alias warnings', () => {
         });
         expect(codes().filter(c => c.includes('ALIAS'))).toEqual([]);
     });
+
+    test("a ':' outside braces in a path warns MJX319", () => {
+        app.useRouter({ routes: [{ path: '/user/:id', control: () => new Component('div') }] });
+        expect(codes().some(c => c.includes('MJX319'))).toBe(true);
+    });
+
+    test("a ':' outside braces in an alias warns MJX319", () => {
+        app.useRouter({ routes: [{ path: '/user/{id}', control: () => new Component('div'), alias: '/u/:id' }] });
+        expect(codes().some(c => c.includes('MJX319'))).toBe(true);
+    });
+
+    test("a ':' inside braces is a default and does not warn", () => {
+        app.useRouter({ routes: [{ path: '/settings/{tab?:general}', control: () => new Component('div'), alias: '/ayarlar/{tab?:genel}' }] });
+        expect(codes().some(c => c.includes('MJX319'))).toBe(false);
+    });
 });

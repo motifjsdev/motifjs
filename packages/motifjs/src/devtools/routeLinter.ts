@@ -17,6 +17,21 @@ function joinPaths(parent: string, child: string): string {
   return base + seg;
 }
 
+function hasBareColon(path: string): boolean {
+  let depth = 0;
+  for (let i = 0; i < path.length; i++) {
+    const ch = path[i];
+    if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      if (depth > 0) depth--;
+    } else if (ch === ':' && depth === 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function lintRoutes(routes: RouteNode[]): void {
   const seenFull: Map<string, number> = new Map();
   const seenAlias: Map<string, number> = new Map();
@@ -34,6 +49,10 @@ export function lintRoutes(routes: RouteNode[]): void {
 
     if (depth > 0 && path.length > 0 && path !== '/' && !path.startsWith('/') && !path.startsWith('*')) {
       reportWarning('MJX311', [path, parentPath || '/'], { parentPath, path });
+    }
+
+    if (hasBareColon(path)) {
+      reportWarning('MJX319', [path], { parentPath, path });
     }
 
     if (parentPath && full === parentPath) {
@@ -55,6 +74,9 @@ export function lintRoutes(routes: RouteNode[]): void {
       const alias = String(rawAlias ?? '');
       if (depth > 0 && alias.length > 0 && alias !== '/' && !alias.startsWith('/') && !alias.startsWith('*')) {
         reportWarning('MJX314', [alias, parentPath || '/'], { parentPath, alias });
+      }
+      if (hasBareColon(alias)) {
+        reportWarning('MJX319', [alias], { parentPath, alias });
       }
       const aliasFull = parentPath === '' ? alias : joinPaths(parentPath, alias);
       if (aliasFull === full) {
