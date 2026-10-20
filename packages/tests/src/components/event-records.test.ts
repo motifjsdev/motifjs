@@ -77,7 +77,7 @@ describe('component DOM events', () => {
         log.length = 0;
         click(inner.element);
         expect(log).toEqual(['capture', 'inner']);
-        expect(inner.motif.options.hasEvent('click:once')).toBe(true);
+        expect(inner.motif.options.hasEvent('click:once')).toBe(false);
         log.length = 0;
         click(outer.element);
         expect(log).toEqual(['capture', 'self']);

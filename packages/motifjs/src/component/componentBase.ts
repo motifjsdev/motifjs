@@ -1234,6 +1234,7 @@ const EV_STOP = 8;
 const EV_CAPTURE = 16;
 const EV_DOM = 32;
 const EV_REMOVED = 64;
+const EV_ONCE = 128;
 
 const NO_MODS: string[] = [];
 
@@ -1282,6 +1283,13 @@ class EventRecord {
                 if (res && (res as any).cancel === true) {
                         preventEvent(ev);
                         stopEvent(ev);
+                }
+                if ((flags & EV_ONCE) !== 0) {
+                        this.flags |= EV_REMOVED;
+                        if ((flags & EV_DOM) !== 0) {
+                                const rec = this;
+                                safeCall(() => { owner.element.removeEventListener(rec.type, rec, (flags & EV_CAPTURE) !== 0); }, 'once.removeEventListener');
+                        }
                 }
         }
 }
@@ -2160,7 +2168,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 let options: AddEventListenerOptions | undefined;
                 if (mods.length) {
                         options = {};
-                        if (mods.includes("once")) options.once = true;
+                        if (mods.includes("once")) { options.once = true; flags |= EV_ONCE; }
                         if (mods.includes("passive")) options.passive = true;
                         if (mods.includes("capture")) { options.capture = true; flags |= EV_CAPTURE; }
                         if (mods.includes("self")) flags |= EV_SELF;
@@ -2197,6 +2205,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 eventDispatchDepth--;
                         }
                 }, 'trigger');
+                if (eventDispatchDepth === 0) compactEventRecords(this);
                 return this;
         }
         private async _off<K extends keyof HtmlElementEvents>(event: K, cb: (sender: ComponentBase | this, ev: HtmlElementEvents[K]) => any): Promise<this> {
