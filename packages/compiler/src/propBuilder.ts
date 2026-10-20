@@ -253,28 +253,25 @@ export const makeHtmlEvents = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttrib
     return null;
 }
 
+const neverCallable = (value: t.Node): boolean => {
+    if (t.isTSAsExpression(value) || t.isTSSatisfiesExpression(value) || t.isTSNonNullExpression(value) || t.isTSTypeAssertion(value) || t.isParenthesizedExpression(value)) return neverCallable(value.expression);
+    if (t.isArrayExpression(value)) return value.elements.some(e => e !== null && !t.isSpreadElement(e) && neverCallable(e));
+    if (t.isCallExpression(value)) return t.isIdentifier(value.callee) && value.callee.name === motifComponent();
+    return t.isLiteral(value) || t.isObjectExpression(value) || t.isJSXElement(value) || t.isJSXFragment(value)
+        || t.isUnaryExpression(value) || t.isUpdateExpression(value) || t.isBinaryExpression(value);
+};
+
+export function assertLifecycleValue(prop: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>, name: string, value: t.Node): void {
+    if (neverCallable(value)) fail('MJX010', `Lifecycle hook "${name}" must be a function, a list of functions, or a reference to one; this value can never be called.`, prop);
+}
+
 export const makeComponentTraps = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>,
     name: string,
     value: t.Expression | t.ObjectMethod,
     path: NodePath<t.JSXElement>
 ): t.ObjectProperty | null => {
-    if (t.isFunctionExpression(value) ||
-        t.isArrowFunctionExpression(value) && value !== null ||
-        t.isObjectExpression(value) ||
-        t.isMemberExpression(value) ||
-        t.isObjectMethod(value) ||
-        t.isIdentifier(value)) {
-
-        if (t.isExpression(value)) {
-            return t.objectProperty(t.identifier(name), value);
-        } else {
-            return null;
-        }
-
-    } else {
-        fail('MJX010', `Lifecycle hook "${name}" must be a function, an object, or a reference to one.`, prop);
-        return null;
-    }
+    assertLifecycleValue(prop, name, value);
+    return t.isExpression(value) ? t.objectProperty(t.identifier(name), value) : null;
 }
 
 

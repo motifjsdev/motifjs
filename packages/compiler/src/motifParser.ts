@@ -5,7 +5,7 @@ import htmlTags from 'html-tags';
 import { htmlAttributes, htmlEvents } from './htmlAtributes';
 import svgTags from 'svg-tags';
 
-import { cacheGuardCalls, findIfStatements, makeComponentTraps, makeDirectives, makeHtmlAttr, makeHtmlEvents, makePreDirectives, mergeHtmlAttributes, returnIfStatement, SUPPORTED_DIRECTIVES, UNSUPPORTED_DIRECTIVES, supportedDirectivesText } from './propBuilder';
+import { assertLifecycleValue, cacheGuardCalls, findIfStatements, makeComponentTraps, makeDirectives, makeHtmlAttr, makeHtmlEvents, makePreDirectives, mergeHtmlAttributes, returnIfStatement, SUPPORTED_DIRECTIVES, UNSUPPORTED_DIRECTIVES, supportedDirectivesText } from './propBuilder';
 import { motifComponent, motifFragment, State, motifFunctionComponent } from './constants';
 import { warn as diagWarn, fail } from './diagnostics';
 import { noteOrigin, transferOrigin, explainAt, explainChild, describeTextNode, codeOf, DEPS, type ExplainReactivity } from './explain';
@@ -83,7 +83,7 @@ function refTargetKind(prop: NodePath<t.JSXAttribute>, value: t.Expression): Ref
 }
 
 
-const componentEvents = new Set(['oncreating', 'onconfig', 'oncreated', 'onbuilding', 'onbuilt', 'ondisposing', 'ondisposed', "oninitializecomponent"]);
+const componentEvents = new Set(['oncreating', 'onconfig', 'onconfigured', 'oncreated', 'onbuilding', 'onbuilt', 'onmounted', 'oninitializing', 'oninitialized', 'onactivated', 'ondeactivated', 'onvisibilitychanged', 'ondisposing', 'ondisposed', 'oninitializecomponent']);
 function isComponentEvent(name: string): boolean {
     return componentEvents.has(name);
 }
@@ -456,12 +456,14 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                 const mergedHook = lifecycleHookOf(name);
                 if (mergedHook !== null && mergedHooks.has(mergedHook) && value != null) {
                     if (t.isExpression(value)) {
+                        assertLifecycleValue(prop, name, value);
                         mergedHooks.get(mergedHook)!.push({ prop, value });
                     } else {
                         objectProps.push(value);
                     }
                 } else if (name === 'initializeComponent' && value != null) {
                     if (t.isExpression(value)) {
+                        assertLifecycleValue(prop, name, value);
                         userInit = value;
                         explainProp(prop, 'component-event', 'lifecycle', `initializeComponent: ${codeOf(value)}`, 'n/a', DEPS.none, plainTag
                             ? 'called once during setup with the tag\'s component as sender (same as initializeComponent on a component tag)'
@@ -481,6 +483,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                         }
                     }
                 } else if (!plainTag && mergedHook !== null && value != null && t.isExpression(value)) {
+                    assertLifecycleValue(prop, name, value);
                     const lifecycleProp = t.objectProperty(id(HOOK_KEYS[mergedHook]), value);
                     componentEvents.push(lifecycleProp);
                     explainProp(prop, 'component-event', 'lifecycle', lifecycleProp, 'n/a', DEPS.none, 'lifecycle hook; on a component tag it is applied via runover to the tag\'s component (the returned root for a function component)');
@@ -601,6 +604,8 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                                     `Unknown directive "${name}": it is passed on as the prop "on${clearedName}". Supported: ${supportedDirectivesText()}.`,
                                     prop, fileName,
                                 );
+                            } else {
+                                assertLifecycleValue(prop, name, value);
                             }
                             if (t.isExpression(value)) {
                                 objectExpression.push(t.objectProperty(id(hookKey("on" + clearedName)), value))
