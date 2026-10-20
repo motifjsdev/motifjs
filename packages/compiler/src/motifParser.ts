@@ -250,7 +250,7 @@ const isMotifCall = (e: t.Node): boolean =>
 const hasMarkupBranch = (node: t.Node): boolean =>
     t.isConditionalExpression(node) ? hasMarkupBranch(node.consequent) || hasMarkupBranch(node.alternate) : isMotifCall(node);
 
-function lowerTernary(expression: t.ConditionalExpression, state: State): t.CallExpression {
+function lowerTernary(expression: t.ConditionalExpression, state: State, scope: any = null): t.CallExpression {
     const frameId = t.identifier('frame');
 
     const normalize = (e: t.Expression): t.Expression => {
@@ -282,11 +282,14 @@ function lowerTernary(expression: t.ConditionalExpression, state: State): t.Call
 
     const trueFn = t.arrowFunctionExpression([frameId], t.blockStatement(buildBranch(expression.consequent)));
     const falseFn = t.arrowFunctionExpression([frameId], t.blockStatement(buildBranch(expression.alternate)));
-    const condFn = t.arrowFunctionExpression([], expression.test);
+    var condFn = scope
+        ? t.arrowFunctionExpression([], t.blockStatement([...scope.statements, t.returnStatement(expression.test)]))
+        : t.arrowFunctionExpression([], expression.test);
     if (!state.get(motifFragment())) {
         state.set(motifFragment(), motifFragment());
     }
 
+    if (scope) return makeSharedScopeCall('sender.bindings.ternary', scope, [condFn, trueFn, falseFn]);
     return t.callExpression(id('sender.bindings.ternary'), [condFn, trueFn, falseFn]);
 }
 
@@ -794,7 +797,16 @@ export const getChildren = (
             ) {
 
                 const switchStmt = expression.callee.body.body.find((s: any) => t.isSwitchStatement(s)) as t.SwitchStatement | undefined;
-                if (switchStmt) { 
+                var switchBody = expression.callee.body.body;
+                var switchBlocker = switchStmt ? findSwitchBlocker(switchBody, switchStmt, expression.callee.params, expression.arguments) : null;
+                if (switchBlocker) {
+                    diagWarn(
+                        'MJX016',
+                        `A "switch" getter in JSX child position is not lowered to bindings.switchCase because of ${switchBlocker}; it runs as bindings.method, so its content is rebuilt on every change instead of being kept per branch.`,
+                        path, String(state.get('filename') ?? ''),
+                    );
+                }
+                if (switchStmt && !switchBlocker) { 
                     const discriminant = switchStmt.discriminant;
  
                     const callee = expression.callee as t.ArrowFunctionExpression | t.FunctionExpression;
@@ -816,11 +828,12 @@ export const getChildren = (
                                     t.memberExpression(t.identifier('frame'), t.identifier('navigate')),
                                     [t.callExpression(t.identifier(motifFragment()), [])]
                                 ))];
+                        var caseBody = makeCaseBody(switchBody, switchStmt, caseNode, handlerBody);
                         if (!state.get(motifFragment())) {
                             state.set(motifFragment(), motifFragment());
                         }
 
-                        const handlerFn = t.arrowFunctionExpression([t.identifier('frame')], t.blockStatement(handlerBody));
+                        const handlerFn = t.arrowFunctionExpression([t.identifier('frame')], t.blockStatement(caseBody));
                         if (caseNode.test) {
                             if (t.isStringLiteral(caseNode.test) || t.isNumericLiteral(caseNode.test)) {
                                 casesObjProps.push(
@@ -860,6 +873,8 @@ export const getChildren = (
                     }
 
                     if (!defaultFn) defaultFn = trailingReturnHandler(expression.callee.body.body, switchStmt);
+                    var switchScope = makeSwitchScope(switchBody, switchStmt, expression.callee.params, expression.arguments);
+                    if (switchScope) return makeSharedSwitchCall(switchScope, discriminant, casesObjProps, defaultFn);
                     const args = [discriminatorFn, t.objectExpression(casesObjProps)];
 
                     if (defaultFn) args.push(defaultFn);
@@ -875,7 +890,16 @@ export const getChildren = (
             if ((t.isArrowFunctionExpression(expression) || t.isFunctionExpression(expression)) && expression.body && t.isBlockStatement(expression.body)
             ) {
                 const switchStmt = expression.body.body.find((s: any) => t.isSwitchStatement(s)) as t.SwitchStatement | undefined;
-                if (switchStmt) { 
+                var switchBody = expression.body.body;
+                var switchBlocker = switchStmt ? findSwitchBlocker(switchBody, switchStmt, expression.params, null) : null;
+                if (switchBlocker) {
+                    diagWarn(
+                        'MJX016',
+                        `A "switch" getter in JSX child position is not lowered to bindings.switchCase because of ${switchBlocker}; it runs as bindings.method, so its content is rebuilt on every change instead of being kept per branch.`,
+                        path, String(state.get('filename') ?? ''),
+                    );
+                }
+                if (switchStmt && !switchBlocker) { 
                     const discriminant = switchStmt.discriminant; 
                     const casesObjProps: t.ObjectProperty[] = [];
                     let defaultFn: t.ArrowFunctionExpression | undefined = undefined;
@@ -890,11 +914,12 @@ export const getChildren = (
                                     t.memberExpression(t.identifier('frame'), t.identifier('navigate')),
                                     [t.callExpression(t.identifier(motifFragment()), [])]
                                 ))];
+                        var caseBody = makeCaseBody(switchBody, switchStmt, caseNode, handlerBody);
                         if (!state.get(motifFragment())) {
                             state.set(motifFragment(), motifFragment());
                         }
 
-                        const handlerFn = t.arrowFunctionExpression([t.identifier('frame')], t.blockStatement(handlerBody));
+                        const handlerFn = t.arrowFunctionExpression([t.identifier('frame')], t.blockStatement(caseBody));
                         if (caseNode.test) {
                             if (t.isStringLiteral(caseNode.test) || t.isNumericLiteral(caseNode.test)) {
                                 casesObjProps.push(
@@ -912,6 +937,8 @@ export const getChildren = (
                         }
                     }
                     if (!defaultFn) defaultFn = trailingReturnHandler(expression.body.body, switchStmt);
+                    var switchScope = makeSwitchScope(switchBody, switchStmt, expression.params, null);
+                    if (switchScope) return makeSharedSwitchCall(switchScope, discriminant, casesObjProps, defaultFn);
                     const discriminatorFn = t.arrowFunctionExpression([], discriminant);
                     const args = [discriminatorFn, t.objectExpression(casesObjProps)];
                     if (defaultFn) args.push(defaultFn);
@@ -933,6 +960,18 @@ export const getChildren = (
                     if ((t.isArrowFunctionExpression(current) || t.isFunctionExpression(current)) && t.isBlockStatement(current.body)) {
                         const ret = current.body.body.find(s => t.isReturnStatement(s) && (s as t.ReturnStatement).argument && t.isConditionalExpression((s as t.ReturnStatement).argument as t.Expression)) as t.Statement | undefined;
                         if (ret && t.isReturnStatement(ret) && ret.argument && t.isConditionalExpression(ret.argument)) {
+                            var before = current.body.body.slice(0, current.body.body.indexOf(ret));
+                            if (before.length > 0 && current.params.length === 0) {
+                                var ternaryBlocker = findEscapeIn(before, false, false, false);
+                                if (!ternaryBlocker && before.some(s => t.isClassDeclaration(s))) ternaryBlocker = 'a class declaration written outside the branches';
+                                if (!ternaryBlocker) return lowerTernary(ret.argument, state, makeGetterScope(before, [], null));
+                                diagWarn(
+                                    'MJX016',
+                                    `A block-bodied getter returning a ternary is not lowered to bindings.ternary because of ${ternaryBlocker}; it runs as bindings.method, so its content is rebuilt on every change instead of being kept per branch.`,
+                                    path, String(state.get('filename') ?? ''),
+                                );
+                                break;
+                            }
                             const locals = current.body.body
                                 .filter(s => t.isVariableDeclaration(s))
                                 .flatMap(s => (s as t.VariableDeclaration).declarations
@@ -1055,10 +1094,211 @@ export const getChildren = (
 const trailingReturnHandler = (body: t.Statement[], switchStmt: t.SwitchStatement): t.ArrowFunctionExpression | undefined => {
     const after = body.slice(body.indexOf(switchStmt) + 1);
     const ret = after.find((st): st is t.ReturnStatement => t.isReturnStatement(st));
+    var before = after.slice(0, ret ? after.indexOf(ret) : after.length).map(s => t.cloneNode(s, true));
+    if (before.length > 0 && (!ret || !ret.argument || t.isNullLiteral(ret.argument) || (t.isIdentifier(ret.argument) && ret.argument.name === 'undefined'))) {
+        return t.arrowFunctionExpression([t.identifier('frame')], t.blockStatement([...before, makeNavigate(null)]));
+    }
     if (!ret || !ret.argument || t.isNullLiteral(ret.argument) || (t.isIdentifier(ret.argument) && ret.argument.name === 'undefined')) return undefined;
-    return t.arrowFunctionExpression([t.identifier('frame')], t.blockStatement([t.expressionStatement(
+    return t.arrowFunctionExpression([t.identifier('frame')], t.blockStatement([...before, t.expressionStatement(
         t.callExpression(t.memberExpression(t.identifier('frame'), t.identifier('navigate')), [switchBranchContent(ret.argument)])
     )]));
+};
+
+const LOOP_STATEMENTS = new Set(['ForStatement', 'WhileStatement', 'DoWhileStatement', 'ForInStatement', 'ForOfStatement']);
+
+const childNodes = (node: any): any[] => {
+    var result: any[] = [];
+    var keys = t.VISITOR_KEYS[node.type] || [];
+    for (const key of keys) {
+        var child = node[key];
+        if (Array.isArray(child)) {
+            child.forEach((c: any) => { if (c && typeof c.type === 'string') result.push(c); });
+        } else if (child && typeof child.type === 'string') {
+            result.push(child);
+        }
+    }
+    return result;
+};
+
+const findEscape = (node: any, loops: number, allowReturn: boolean, allowJsx: boolean): string | null => {
+    if (t.isFunction(node) || t.isClass(node)) return null;
+    if (t.isReturnStatement(node) && !allowReturn) return 'a return written outside the branches';
+    if (t.isLabeledStatement(node)) return 'a labeled statement';
+    if (t.isBreakStatement(node) && (node.label || loops === 0)) return 'a break that leaves the switch';
+    if (t.isContinueStatement(node) && (node.label || loops === 0)) return 'a continue that leaves the switch';
+    if (!allowJsx && (t.isJSXElement(node) || t.isJSXFragment(node) || isMotifCall(node))) return 'JSX created outside the branches';
+    var inner = loops;
+    if (LOOP_STATEMENTS.has(node.type) || t.isSwitchStatement(node)) inner++;
+    for (const child of childNodes(node)) {
+        var found = findEscape(child, inner, allowReturn, allowJsx);
+        if (found) return found;
+    }
+    return null;
+};
+
+const findEscapeIn = (statements: any[], allowReturn: boolean, allowJsx: boolean, allowTrailingBreak: boolean): string | null => {
+    for (var i = 0; i < statements.length; i++) {
+        if (allowTrailingBreak && i === statements.length - 1 && t.isBreakStatement(statements[i]) && !statements[i].label) continue;
+        var found = findEscape(statements[i], 0, allowReturn, allowJsx);
+        if (found) return found;
+    }
+    return null;
+};
+
+const findIdentifier = (node: any, name: string): boolean => {
+    if (t.isIdentifier(node) && node.name === name) return true;
+    for (const child of childNodes(node)) {
+        if (findIdentifier(child, name)) return true;
+    }
+    return false;
+};
+
+const isLiteralCase = (test: any): boolean => t.isStringLiteral(test) || t.isNumericLiteral(test) || t.isBooleanLiteral(test);
+
+const caseStatements = (caseNode: t.SwitchCase): t.Statement[] =>
+    caseNode.consequent.length === 1 && t.isBlockStatement(caseNode.consequent[0]) ? caseNode.consequent[0].body : caseNode.consequent;
+
+const paramNames = (params: any[]): string[] => {
+    var names: string[] = [];
+    params.forEach((p: any) => { names.push(...Object.keys(t.getBindingIdentifiers(p))); });
+    return names;
+};
+
+const isScopeNeeded = (body: t.Statement[], switchStmt: t.SwitchStatement, params: any[]): boolean => {
+    if (body.indexOf(switchStmt) > 0) return true;
+    var names = paramNames(params);
+    return switchStmt.cases.some(caseNode => names.some(name => caseStatements(caseNode).some(s => findIdentifier(s, name))));
+};
+
+const findSwitchBlocker = (body: t.Statement[], switchStmt: t.SwitchStatement, params: any[], callArgs: any[] | null): string | null => {
+    if (body.filter(s => t.isSwitchStatement(s)).length > 1) return 'more than one switch at the top level';
+    if (isScopeNeeded(body, switchStmt, params)) {
+        if (params.some(p => !t.isIdentifier(p))) return 'a parameter that is not a plain name';
+        if (callArgs === null && params.length > 0) return 'a getter with parameters';
+    }
+    var at = body.indexOf(switchStmt);
+    var before = body.slice(0, at);
+    var after = body.slice(at + 1).filter(s => !t.isReturnStatement(s));
+    var blocker = findEscapeIn(before, false, false, false);
+    if (blocker) return blocker;
+    blocker = findEscapeIn(after, false, true, false);
+    if (blocker) return blocker;
+    if (before.some(s => t.isClassDeclaration(s))) return 'a class declaration written outside the branches';
+    var seen = new Set<string>();
+    var defaults = 0;
+    for (const caseNode of switchStmt.cases) {
+        if (caseNode.test) {
+            if (!isLiteralCase(caseNode.test)) return 'a case label that is not a literal';
+            var key = String((caseNode.test as any).value);
+            if (seen.has(key)) return 'the case label ' + JSON.stringify(key) + ' written twice';
+            seen.add(key);
+        } else {
+            defaults++;
+            if (defaults > 1) return 'two default labels';
+        }
+        blocker = findEscapeIn(caseStatements(caseNode), true, true, true);
+        if (blocker) return blocker;
+    }
+    return null;
+};
+
+const makeGetterScope = (before: t.Statement[], params: any[], callArgs: any[] | null): any => {
+    var names: string[] = [];
+    var functions: t.FunctionDeclaration[] = [];
+    var statements: t.Statement[] = [];
+    params.forEach((p: any, i: number) => {
+        names.push(p.name);
+        statements.push(t.expressionStatement(t.assignmentExpression('=', t.identifier(p.name), (callArgs && callArgs[i]) || t.identifier('undefined'))));
+    });
+    for (const s of before) {
+        if (t.isVariableDeclaration(s)) {
+            for (const d of s.declarations) {
+                names.push(...Object.keys(t.getBindingIdentifiers(d.id)));
+                if (d.init) statements.push(t.expressionStatement(t.assignmentExpression('=', d.id as any, d.init)));
+            }
+        } else if (t.isFunctionDeclaration(s)) {
+            functions.push(s);
+        } else {
+            statements.push(s);
+        }
+    }
+    return { names, functions, statements };
+};
+
+const makeSwitchScope = (body: t.Statement[], switchStmt: t.SwitchStatement, params: any[], callArgs: any[] | null): any => {
+    if (!isScopeNeeded(body, switchStmt, params)) return null;
+    return makeGetterScope(body.slice(0, body.indexOf(switchStmt)), params, callArgs);
+};
+
+const makeSharedScopeCall = (callee: string, scope: any, args: t.Expression[]): t.CallExpression => {
+    var decls: t.Statement[] = [];
+    if (scope.names.length > 0) decls.push(t.variableDeclaration('let', scope.names.map((n: string) => t.variableDeclarator(t.identifier(n)))));
+    var wrapper = t.arrowFunctionExpression([], t.blockStatement([...decls, ...scope.functions, t.returnStatement(t.arrayExpression(args))]));
+    return t.callExpression(t.identifier(callee), [t.spreadElement(t.callExpression(wrapper, []))]);
+};
+
+const makeSharedSwitchCall = (scope: any, discriminant: t.Expression, casesObjProps: t.ObjectProperty[], defaultFn?: t.ArrowFunctionExpression): t.CallExpression => {
+    var discriminatorFn = t.arrowFunctionExpression([], t.blockStatement([...scope.statements, t.returnStatement(discriminant)]));
+    var args: t.Expression[] = [discriminatorFn, t.objectExpression(casesObjProps)];
+    if (defaultFn) args.push(defaultFn);
+    return makeSharedScopeCall('sender.bindings.switchCase', scope, args);
+};
+
+const makeNavigate = (argument: any): t.Statement =>
+    t.expressionStatement(t.callExpression(t.memberExpression(t.identifier('frame'), t.identifier('navigate')),
+        [argument ? switchBranchContent(argument) : t.callExpression(t.identifier(motifFragment()), [])]));
+
+const rewriteReturns = (node: any): any => {
+    if (t.isReturnStatement(node)) return t.blockStatement([makeNavigate(node.argument), t.returnStatement()]);
+    if (t.isFunction(node) || t.isClass(node)) return node;
+    var keys = t.VISITOR_KEYS[node.type] || [];
+    for (const key of keys) {
+        var child = node[key];
+        if (Array.isArray(child)) {
+            node[key] = child.map((c: any) => (c && typeof c.type === 'string' ? rewriteReturns(c) : c));
+        } else if (child && typeof child.type === 'string') {
+            node[key] = rewriteReturns(child);
+        }
+    }
+    return node;
+};
+
+const isTerminal = (s: any): boolean =>
+    !!s && (t.isReturnStatement(s) || t.isThrowStatement(s) || (t.isBlockStatement(s) && isTerminal(s.body[s.body.length - 1])));
+
+const cloneRewritten = (statements: t.Statement[]): t.Statement[] => statements.map(s => rewriteReturns(t.cloneNode(s, true)));
+
+const makeExitStatements = (body: t.Statement[], switchStmt: t.SwitchStatement): t.Statement[] => {
+    var after = body.slice(body.indexOf(switchStmt) + 1);
+    var ret = after.find((s): s is t.ReturnStatement => t.isReturnStatement(s));
+    var before = after.slice(0, ret ? after.indexOf(ret) : after.length);
+    return [...before.map(s => t.cloneNode(s, true)), makeNavigate(ret ? ret.argument : null), t.returnStatement()];
+};
+
+const makeCaseStatements = (body: t.Statement[], switchStmt: t.SwitchStatement, index: number): t.Statement[] => {
+    var cases = switchStmt.cases;
+    var own = caseStatements(cases[index]);
+    var endsWithBreak = own.length > 0 && t.isBreakStatement(own[own.length - 1]);
+    var statements = cloneRewritten(endsWithBreak ? own.slice(0, -1) : own);
+    if (endsWithBreak) return [...statements, ...makeExitStatements(body, switchStmt)];
+    if (isTerminal(statements[statements.length - 1])) return statements;
+    if (index + 1 < cases.length) return [...statements, ...makeCaseStatements(body, switchStmt, index + 1)];
+    return [...statements, ...makeExitStatements(body, switchStmt)];
+};
+
+const makeCaseBody = (body: t.Statement[], switchStmt: t.SwitchStatement, caseNode: t.SwitchCase, plainBody: t.Statement[]): t.Statement[] => {
+    var own = caseStatements(caseNode);
+    var isPlainReturn = own === caseNode.consequent && t.isReturnStatement(own[0]) && (own.length === 1 || (own.length === 2 && t.isBreakStatement(own[1])));
+    if (isPlainReturn) return plainBody;
+    var statements = makeCaseStatements(body, switchStmt, switchStmt.cases.indexOf(caseNode));
+    if (!isTerminal(statements[statements.length - 1])) statements.push(makeNavigate(null), t.returnStatement());
+    var last: any = statements[statements.length - 1];
+    if (t.isReturnStatement(last) && !last.argument) {
+        statements.pop();
+    } else if (t.isBlockStatement(last) && last.body.length === 2 && t.isReturnStatement(last.body[1]) && !last.body[1].argument) {
+        statements.splice(statements.length - 1, 1, last.body[0]);
+    }
+    return statements;
 };
 
 function id(name: string): t.Identifier {

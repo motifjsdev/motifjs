@@ -30,9 +30,12 @@ describe('switch: boolean case etiketleri', () => {
         expect(out).toMatch(/\{\s*1:\s*frame\s*=>[\s\S]*"a":\s*frame\s*=>/);
     });
 
-    test('değişken etiket belgelendiği gibi atlanır', () => {
-        const out = compile(inElement('case MODE.on: return <b>a</b>; default: return <i>d</i>;'));
-        expect(out).toMatch(/switchCase\(\(\)\s*=>\s*s\.on,\s*\{\s*\},\s*frame\s*=>/);
+    test('değişken etiket: switch method olarak çalışır ve MJX016 uyarır', () => {
+        const c = new Compiler();
+        const out = c.start(inElement('case MODE.on: return <b>a</b>; default: return <i>d</i>;'), 'Switch.tsx')!.code!;
+        expect(out).not.toContain('switchCase');
+        expect(out).toMatch(/sender\.bindings\.method\(\(\)\s*=>\s*\{/);
+        expect(c.diagnostics.map(d => d.code)).toEqual(['MJX016']);
     });
 });
 

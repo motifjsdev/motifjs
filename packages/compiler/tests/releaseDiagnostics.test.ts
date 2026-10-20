@@ -113,15 +113,16 @@ describe('coded compile errors', () => {
 });
 
 describe('warning messages are English', () => {
-    test('MJX001-MJX004 and MJX007 contain no Turkish text', () => {
+    test('MJX001-MJX004, MJX007 and MJX016 contain no Turkish text', () => {
         const all = [
-            ...warningsOf(`function A(p){ return <div>{() => { const etiket = 1; return p.ok ? <A t={etiket}/> : <B/>; }}</div>; }`),
+            ...warningsOf(`function A(p){ return <div>{(q) => { const etiket = 1; return p.ok ? <A t={etiket}/> : <B/>; }}</div>; }`),
+            ...warningsOf(`function A(p){ return <div>{() => { switch (p.k) { case MODE: return <A/>; default: return <B/>; } }}</div>; }`),
             ...warningsOf(`function A(){ return <Comp onChange={(v) => g(v)} />; }`),
             ...warningsOf(`function A(p){ return <ul>{p.a.map(x => <li>{x.t}</li>)}</ul>; }`),
             ...warningsOf(`class A { view(){ return <div>{() => this.state.rows.some(x => x.on)}</div>; } }`),
             ...warningsOf(view('<span x-foo={this.x} />')),
         ];
-        expect(all.map(d => d.code).sort()).toEqual(['MJX001', 'MJX002', 'MJX003', 'MJX004', 'MJX007']);
+        expect(all.map(d => d.code).sort()).toEqual(['MJX001', 'MJX002', 'MJX003', 'MJX004', 'MJX007', 'MJX016']);
         for (const d of all) expect(d.message).not.toMatch(/[çğışöüÇĞİŞÖÜ]/);
     });
 });

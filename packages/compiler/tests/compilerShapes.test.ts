@@ -98,13 +98,13 @@ describe('D2: değersiz öznitelik bileşende `true` olur', () => {
 /* ═══════════════════════════════════════════════════════ Uyarılar (MJX001…MJX004) */
 
 describe('MJX001: blok gövdeli okta yerel değişken + koşul', () => {
-    test('yerel değişken varsa uyarır', () => {
+    test('yerel değişken korunur, uyarı YOK', () => {
         expect(codesOf(`function A(p){ return <div>{() => { const l = f(p.x); return p.ok ? <A t={l}/> : <B/>; }}</div>; }`))
-            .toContain('MJX001');
+            .not.toContain('MJX001');
     });
 
-    test('uyarı, kaybolan değişkenin ADINI söyler', () => {
-        const d = diags(`function A(p){ return <div>{() => { const etiket = f(p.x); return p.ok ? <A t={etiket}/> : <B/>; }}</div>; }`);
+    test('parametreli getter bugünkü yolda kalır; uyarı değişkenin ADINI söyler', () => {
+        const d = diags(`function A(p){ return <div>{(q) => { const etiket = f(p.x); return p.ok ? <A t={etiket}/> : <B/>; }}</div>; }`);
         expect(d.find(x => x.code === 'MJX001')!.message).toContain('"etiket"');
     });
 
