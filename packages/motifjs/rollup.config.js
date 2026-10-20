@@ -175,7 +175,7 @@ export default [
             nodeOutput("cjs", "cjs")
         ],
         plugins: plugins('bundle-stats.html'),
-        onwarn: onwarn
+        //onwarn: onwarn
     },
     {
         input: "src/public.ts",
@@ -185,7 +185,7 @@ export default [
             browserOutput("index.esm.min.js", "esm", true)
         ],
         plugins: plugins('bundle-stats-browser.html'),
-        onwarn: onwarn
+        //onwarn: onwarn
     },
     {
         input: 'src/jsx-runtime.ts',
@@ -204,7 +204,7 @@ export default [
             }
         ],
         plugins: plugins('bundle-stats-runtime.html'),
-        onwarn: onwarn
+        //onwarn: onwarn
     },
     {
         input: './dist/src/entries/devtools.d.ts',

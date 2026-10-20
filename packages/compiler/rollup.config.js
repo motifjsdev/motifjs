@@ -4,6 +4,8 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import dts from "rollup-plugin-dts";
 import fs from "node:fs";
 import path from "node:path";
+import process from "node:process";
+import { builtinModules } from "node:module";
 
 var finalizeTypes = function () {
     return {
@@ -25,6 +27,11 @@ var finalizeTypes = function () {
 };
 var name = 'motif';
 var dist = function (p) { return './dist/index.' + p; }
+var dependencies = Object.keys(JSON.parse(fs.readFileSync('./package.json', 'utf8')).dependencies);
+var isExternal = function (id) {
+    if (id.startsWith('node:') || builtinModules.indexOf(id) > -1) return true;
+    return dependencies.some(function (dep) { return id === dep || id.startsWith(dep + '/'); });
+};
 
 export default [
     {
@@ -45,7 +52,7 @@ export default [
                 sourcemapExcludeSources: false,
             }
         ],
-        experimentalCodeSplitting: true,
+        external: isExternal,
         plugins: [
             commonJS(),
             typescript({
@@ -63,11 +70,11 @@ export default [
             ),
             (process.env.ANALYZE && visualizer({ filename: 'bundle-stats.html', gzipSize: true, brotliSize: true }))
         ],
-        onwarn: function (warning) {
-            if (warning.code === 'THIS_IS_UNDEFINED') {
-                return;
-            }
-        },
+        // onwarn: function (warning) {
+        //     if (warning.code === 'THIS_IS_UNDEFINED') {
+        //         return;
+        //     }
+        // },
     },
     {
         input: './dist/src/index.d.ts',
