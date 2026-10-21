@@ -1,5 +1,6 @@
 import type { RouteItem } from "../routing/RouteItem";
 import { reportWarning } from "../common/diagnostics";
+import { Scanner } from "../routing/scanner";
 
 type RouteNode = RouteItem & { childs?: RouteItem[] };
 
@@ -15,6 +16,21 @@ function joinPaths(parent: string, child: string): string {
     return seg || '/';
   }
   return base + seg;
+}
+
+function findPatternFault(path: string): string {
+  const s = new Scanner(path);
+  try {
+    s.parse();
+  } catch (e: any) {
+    return String(e && e.message ? e.message : e);
+  }
+  for (const t of s.tokens) {
+    if (t.type !== 'parameter') continue;
+    if (t.parameterName.indexOf('(') >= 0) return "its '(' is never closed";
+    if (t.pattern !== undefined && t.pattern.indexOf('/') >= 0) return "a pattern applies to one segment, so '/' is not allowed";
+  }
+  return '';
 }
 
 function hasBareColon(path: string): boolean {
@@ -55,6 +71,11 @@ export function lintRoutes(routes: RouteNode[]): void {
       reportWarning('MJX319', [path], { parentPath, path });
     }
 
+    const fault = findPatternFault(path);
+    if (fault) {
+      reportWarning('MJX320', [path, fault], { parentPath, path });
+    }
+
     if (parentPath && full === parentPath) {
       if (!isDefaultSlash && !isEmptyPath) {
         reportWarning('MJX312', [full], { parentPath, childPath: path });
@@ -77,6 +98,10 @@ export function lintRoutes(routes: RouteNode[]): void {
       }
       if (hasBareColon(alias)) {
         reportWarning('MJX319', [alias], { parentPath, alias });
+      }
+      const aliasFault = findPatternFault(alias);
+      if (aliasFault) {
+        reportWarning('MJX320', [alias, aliasFault], { parentPath, alias });
       }
       const aliasFull = parentPath === '' ? alias : joinPaths(parentPath, alias);
       if (aliasFull === full) {

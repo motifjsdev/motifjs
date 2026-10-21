@@ -311,3 +311,78 @@ describe('Scanner - Route Pattern Matching', () => {
     });
 });
 
+describe('Scanner - Parameter patterns and rest segments', () => {
+    it('{id(\d+)} matches only what the pattern allows', () => {
+        const scanner = new Scanner('/u/{id(\\d+)}');
+        expect(scanner.exist('/u/5')).toBe(true);
+        expect(scanner.parameters.id).toBe('5');
+        expect(scanner.exist('/u/abc')).toBe(false);
+    });
+
+    it('a brace quantifier inside the pattern does not close the parameter', () => {
+        const scanner = new Scanner('/u/{id(\\d{2})}');
+        expect(scanner.exist('/u/55')).toBe(true);
+        expect(scanner.parameters.id).toBe('55');
+        expect(scanner.exist('/u/5')).toBe(false);
+    });
+
+    it("a '?' or ':' inside the pattern belongs to the pattern", () => {
+        const scanner = new Scanner('/u/{id(a?b:c)}');
+        expect(scanner.exist('/u/b:c')).toBe(true);
+        expect(scanner.exist('/u/ab:c')).toBe(true);
+        expect(scanner.exist('/u')).toBe(false);
+    });
+
+    it('a pattern combines with optional and default', () => {
+        const scanner = new Scanner('/u/{id([a-z]+)?:x}');
+        expect(scanner.exist('/u')).toBe(true);
+        expect(scanner.parameters.id).toBe('x');
+        expect(scanner.exist('/u/ab')).toBe(true);
+        expect(scanner.parameters.id).toBe('ab');
+        expect(scanner.exist('/u/12')).toBe(false);
+    });
+
+    it('capturing and named groups inside a pattern do not shift the parameters after it', () => {
+        const scanner = new Scanner('/d/{range((\\d+)-(?<to>\\d+))}/{name}');
+        expect(scanner.exist('/d/1-2/z')).toBe(true);
+        expect(scanner.parameters.range).toBe('1-2');
+        expect(scanner.parameters.name).toBe('z');
+    });
+
+    it('{path+} takes one or more segments as plain text, each segment decoded on its own', () => {
+        const scanner = new Scanner('/f/{path+}');
+        expect(scanner.exist('/f')).toBe(false);
+        expect(scanner.exist('/f/a')).toBe(true);
+        expect(scanner.parameters.path).toBe('a');
+        expect(scanner.exist('/f/a%2Fb/c%20d')).toBe(true);
+        expect(scanner.parameters.path).toBe('a/b/c d');
+    });
+
+    it('{path*} also matches no segment at all and takes a default', () => {
+        const scanner = new Scanner('/f/{path*:index}');
+        expect(scanner.exist('/f')).toBe(true);
+        expect(scanner.parameters.path).toBe('index');
+        expect(scanner.exist('/f/a/b')).toBe(true);
+        expect(scanner.parameters.path).toBe('a/b');
+    });
+
+    it('a static segment after a rest parameter still has to match', () => {
+        const scanner = new Scanner('/f/{path+}/edit');
+        expect(scanner.exist('/f/a/b/edit')).toBe(true);
+        expect(scanner.parameters.path).toBe('a/b');
+        expect(scanner.exist('/f/a/b')).toBe(false);
+    });
+
+    it('a pattern on a rest parameter applies to every segment', () => {
+        const scanner = new Scanner('/n/{ids(\\d+)+}');
+        expect(scanner.exist('/n/1/2/3')).toBe(true);
+        expect(scanner.parameters.ids).toBe('1/2/3');
+        expect(scanner.exist('/n/1/x')).toBe(false);
+    });
+
+    it("an unclosed '(' does not throw: the '(' stays in the name so the linter can report it", () => {
+        const scanner = new Scanner('/u/{id(\\d+}');
+        expect(() => scanner.parse()).not.toThrow();
+        expect(scanner.exist('/u/5')).toBe(true);
+        expect(Object.keys(scanner.parameters)[0]).toContain('(');
+    });});

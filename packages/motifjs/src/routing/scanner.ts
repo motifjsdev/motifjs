@@ -16,6 +16,91 @@ const decodeSegment = (value: string): string => {
     try { return decodeURIComponent(value); } catch { return value; }
 };
 
+const decodeRest = (value: string): string => value.split('/').map(decodeSegment).join('/');
+
+export const encodeRest = (value: any): string => {
+    const parts: any[] = Array.isArray(value) ? value : String(value).split('/');
+    return parts.filter(p => p !== undefined && p !== null && p !== '').map(p => encodeURIComponent(String(p))).join('/');
+};
+
+export const readPattern = (source: string, start: number): { pattern: string; end: number } => {
+    let depth = 0;
+    let inClass = false;
+    let pattern = '';
+    for (let i = start; i < source.length; i++) {
+        const ch = source[i];
+        if (ch === '\\' && i + 1 < source.length) {
+            pattern += ch + source[i + 1];
+            i++;
+            continue;
+        }
+        if (inClass) {
+            if (ch === ']') inClass = false;
+            pattern += ch;
+            continue;
+        }
+        if (ch === '[') {
+            inClass = true;
+        } else if (ch === '(') {
+            depth++;
+            if (depth === 1) continue;
+        } else if (ch === ')') {
+            depth--;
+            if (depth === 0) return { pattern, end: i };
+        }
+        pattern += ch;
+    }
+    return { pattern: '', end: -1 };
+};
+
+export const stripPattern = (definition: string): string => {
+    const open = definition.indexOf('(');
+    if (open < 0) return definition;
+    const read = readPattern(definition, open);
+    if (read.end < 0) return definition;
+    return definition.slice(0, open) + definition.slice(read.end + 1);
+};
+
+const plainGroups = (pattern: string): string => {
+    let out = '';
+    let inClass = false;
+    for (let i = 0; i < pattern.length; i++) {
+        const ch = pattern[i];
+        if (ch === '\\' && i + 1 < pattern.length) {
+            out += ch + pattern[i + 1];
+            i++;
+            continue;
+        }
+        if (inClass) {
+            if (ch === ']') inClass = false;
+            out += ch;
+            continue;
+        }
+        if (ch === '[') {
+            inClass = true;
+        } else if (ch === '(') {
+            if (pattern[i + 1] !== '?') {
+                out += '(?:';
+                continue;
+            }
+            const close = pattern.indexOf('>', i);
+            if (pattern[i + 2] === '<' && pattern[i + 3] !== '=' && pattern[i + 3] !== '!' && close > 0) {
+                out += '(?:';
+                i = close;
+                continue;
+            }
+        }
+        out += ch;
+    }
+    return out;
+};
+
+const buildPatternCapture = (t: IToken): string => {
+    const segment = t.pattern !== undefined ? `(?:${plainGroups(t.pattern)})` : '[^/]{1,255}';
+    if (t.isRest) return `(${segment}(?:/${segment})*)`;
+    return `(${segment})`;
+};
+
 const PLAIN_STATIC = /^[\w\-.~!$&'()*+,;=:@%/]*$/;
 const staticForms = new Map<string, string>();
 const canonicalStatic = (value: string): string => {
@@ -46,6 +131,8 @@ export interface IToken {
     hasLeadingStatic?: boolean;
     leadingStaticTokenIndex?: number;
     consumed?: boolean;
+    pattern?: string;
+    isRest?: boolean;
 }
 export class Scanner {
 
@@ -123,7 +210,22 @@ export class Scanner {
                     const ch = this.source[this.currentColumn];
                     if (currentToken) {
                         if (currentType === 'parameter') {
-                            currentToken.parameterName = `${currentToken.parameterName + ch}`;
+                            if (ch === '(') {
+                                const read = readPattern(this.source, this.currentColumn);
+                                if (read.end >= 0) {
+                                    currentToken.pattern = read.pattern;
+                                    this.currentColumn = read.end;
+                                } else {
+                                    currentToken.parameterName = `${currentToken.parameterName + ch}`;
+                                }
+                            } else if (ch === '*') {
+                                currentToken.isRest = true;
+                                currentToken.isOptinal = true;
+                            } else if (ch === '+') {
+                                currentToken.isRest = true;
+                            } else {
+                                currentToken.parameterName = `${currentToken.parameterName + ch}`;
+                            }
                         } else if (currentType === 'defaultValue') {
                             currentToken.default = `${(currentToken.default ?? '') + ch}`;
                         } else {
@@ -177,6 +279,8 @@ export class Scanner {
             return undefined;
         };
         const buildCapture = (idx: number, isOptional: boolean) => {
+            const t = this.tokens[idx];
+            if (t.pattern !== undefined || t.isRest) return buildPatternCapture(t);
             const delim = getNextDelimChar(idx);
             const innerClass = delim ? `[^${escapeClassChar(escapeRegex(delim))}]` : charClass;
             const quant = isOptional ? '{0,255}' : '{1,255}';
@@ -340,7 +444,7 @@ export class Scanner {
                     if (indx !== 0) {
                         var all = this.tokens.find(t => t.parameterIndex == indx);
                         if (all) {
-                            let val: any = typeof t === 'string' ? decodeSegment(t) : t;
+                            let val: any = typeof t === 'string' ? (all.isRest ? decodeRest(t) : decodeSegment(t)) : t;
                             if ((val === undefined || val === '') && all.isOptinal) {
                                 const def = (all.default === undefined || all.default === '') ? undefined : all.default;
                                 val = def;

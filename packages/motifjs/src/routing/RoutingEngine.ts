@@ -8,6 +8,7 @@ import { RouterView, RouterViewBuilt } from "./RouterView";
 import { UrlRoutingModule } from "./UrlRoutingModule";
 import { RouterViewRegistry } from "./RouterViewRegistry";
 import { RouteItem } from "./RouteItem";
+import { encodeRest, stripPattern } from "./scanner";
 import { Application } from "../application";
 import { pinServiceOwner, runInConstructionScope } from "../dependencyInjection/ServiceProvider";
 import type { ServiceProvider } from "../dependencyInjection/ServiceProvider";
@@ -78,7 +79,7 @@ export class RoutingEngine {
         const parts = routeDefinition.split('/');
         const result = parts.map(part => {
             if (part.startsWith('{') && part.endsWith('}')) {
-                const paramDefinition = part.slice(1, -1);
+                const paramDefinition = stripPattern(part.slice(1, -1));
 
                 let [paramName, defaultValue] = paramDefinition.split(':');
 
@@ -86,9 +87,13 @@ export class RoutingEngine {
                 if (isOptional) {
                     paramName = paramName.slice(0, -1);
                 }
+                const isRest = paramName.endsWith('*') || paramName.endsWith('+');
+                if (isRest) {
+                    paramName = paramName.slice(0, -1);
+                }
                 const value = params[paramName];
                 if (value !== undefined && value !== null && value !== '') {
-                    return encodeURIComponent(String(value));
+                    return isRest ? encodeRest(value) : encodeURIComponent(String(value));
                 }
                 return defaultValue ?? '';
 

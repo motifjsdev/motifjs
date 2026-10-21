@@ -1,15 +1,20 @@
 import { RouteItem, RouteRecord } from "./RouteItem";
-import { Scanner } from "./scanner";
+import { Scanner, stripPattern } from "./scanner";
 
 
 /** Bir fullPath'in statik (parametresiz) ve parametreli segment sayıları. */
-export function routeSpecificity(fullPath: string): { statics: number; params: number } {
-    let statics = 0, params = 0;
+export function routeSpecificity(fullPath: string): { statics: number; params: number; rests: number } {
+    let statics = 0, params = 0, rests = 0;
     for (const seg of (fullPath || '').split('/')) {
         if (!seg) continue;
-        if (seg.startsWith('{') && seg.endsWith('}')) params++; else statics++;
+        if (seg.startsWith('{') && seg.endsWith('}')) { params++; if (isRestSegment(seg)) rests++; } else statics++;
     }
-    return { statics, params };
+    return { statics, params, rests };
+}
+
+function isRestSegment(seg: string): boolean {
+    const name = stripPattern(seg.slice(1, -1)).split(':')[0];
+    return name.endsWith('*') || name.endsWith('+');
 }
 
 export function compareRouteRecords(a: RouteRecord, b: RouteRecord): number {
@@ -17,6 +22,7 @@ export function compareRouteRecords(a: RouteRecord, b: RouteRecord): number {
     if (d !== 0) return d;
     const sa = routeSpecificity(a.fullPath), sb = routeSpecificity(b.fullPath);
     if (sa.statics !== sb.statics) return sb.statics - sa.statics;
+    if (sa.rests !== sb.rests) return sa.rests - sb.rests;
     if (sa.params !== sb.params) return sa.params - sb.params;
     return b.fullPath.length - a.fullPath.length;
 }
