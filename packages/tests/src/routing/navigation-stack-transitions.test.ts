@@ -188,7 +188,7 @@ describe('stack navigation plays the pages\' own transitions', () => {
         await settle();
         log = [];
         await back();
-        await settle();
+        await waitFor(() => log.some(l => l.startsWith('page-a pg-enter')) && pgClasses(el(a)).length === 0 && !el(a).hasAttribute('data-nav-direction'));
 
         expect(at('page-b dir back')).toBeLessThan(at('page-b pg-leave'));
         expect(at('page-b pg-leave')).toBeLessThan(at('page-b remove'));
@@ -207,7 +207,7 @@ describe('stack navigation plays the pages\' own transitions', () => {
         await settle();
         log = [];
         await back();
-        await settle();
+        await waitFor(() => log.some(l => l.startsWith('page-a pg-enter')) && pgClasses(el(a)).length === 0);
 
         expect(at('page-b pg-leave')).toBeLessThan(at('page-b remove'));
         expect(at('page-b remove')).toBeLessThan(at('page-a add'));
