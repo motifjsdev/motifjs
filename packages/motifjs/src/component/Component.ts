@@ -326,6 +326,12 @@ export function motifFragment(props?: any) {
     return new FragmentNode(props);
 }
 
+export type MotifOptions<T> = T & ThisType<ComponentBase & T>;
+
+export function motifOptions<T extends { el: string | Node | null | undefined }>(spec: MotifOptions<T>): T {
+    return spec;
+}
+
 function CreateFragment() {
     const fragment = dom.createComment("");
     return fragment;
