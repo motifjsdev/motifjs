@@ -20,8 +20,8 @@ export function Injectable(options?: {
 
 
 
-export function FromService<T>(token: (abstract new (...args: any) => T) | { prototype: T }): T;
-export function FromService<T = any>(token: string | symbol | object): T;
+export function FromService<T>(token: (abstract new (...args: any) => T) | { prototype: T }): T | null;
+export function FromService<T = any>(token: string | symbol | object): T | null;
 export function FromService(token: any): any {
     try {
         return Application.main.provider.get(token);

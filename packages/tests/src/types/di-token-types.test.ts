@@ -24,8 +24,8 @@ export const s: Store | null = page.store;
 export const c: { url: string } | null = page.cfg;
 export const n: number = page.named;
 export const e: AuthService | null = page.explicit;
-export const f1: AuthService = FromService(AuthService);
-export const f2: { url: string } = FromService<{ url: string }>(TOKEN);
+export const f1: AuthService | null = FromService(AuthService);
+export const f2: { url: string } | null = FromService<{ url: string }>(TOKEN);
 export const g1: AuthService = provider.get(AuthService);
 export const g2: Store = provider.get(Store);
 export const g3: Promise<AuthService> = provider.getAsync(AuthService);
@@ -34,6 +34,10 @@ export const g4: Promise<{ url: string }> = provider.getAsync<{ url: string }>('
 export const w1: string | null = page.auth;
 // expect TS2322
 export const w2: number = FromService(AuthService);
+// expect TS2322
+export const w4: AuthService = FromService(AuthService);
+// expect TS2531
+export const w5 = FromService(AuthService).user;
 // expect TS2322
 export const w3: Promise<string> = provider.getAsync(Store);
 `;
@@ -103,15 +107,15 @@ const g2t = provider.getAsync<WithParams>(WithParams);
 const i1 = inject(WithParams);
 const i1t = inject<WithParams>(WithParams);
 const n1 = FromService(NoParams);
-check<Same<typeof f1, WithParams>>();
+check<Same<typeof f1, WithParams | null>>();
 check<Same<typeof f1, typeof f1t>>();
-check<Same<typeof f2, Repo>>();
+check<Same<typeof f2, Repo | null>>();
 check<Same<typeof f2, typeof f2t>>();
-check<Same<typeof f3, Guarded>>();
-check<Same<typeof f4, Box<any>>>();
-check<Same<typeof f4t, Box<string>>>();
-check<Same<typeof f5, ILogger>>();
-check<Same<typeof f6, Logger>>();
+check<Same<typeof f3, Guarded | null>>();
+check<Same<typeof f4, Box<any> | null>>();
+check<Same<typeof f4t, Box<string> | null>>();
+check<Same<typeof f5, ILogger | null>>();
+check<Same<typeof f6, Logger | null>>();
 check<Same<typeof s1, WithParams | null>>();
 check<Same<typeof s1, typeof s1t>>();
 check<Same<typeof s2, Optional | null>>();
@@ -121,7 +125,7 @@ check<Same<typeof g2, Promise<WithParams>>>();
 check<Same<typeof g2, typeof g2t>>();
 check<Same<typeof i1, WithParams>>();
 check<Same<typeof i1, typeof i1t>>();
-check<Same<typeof n1, NoParams>>();
+check<Same<typeof n1, NoParams | null>>();
 `;
 
 describe('DI token types under strict', () => {
