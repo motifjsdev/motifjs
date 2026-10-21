@@ -1,6 +1,6 @@
 // import { dom } from "../browser";
 import { TRANSITION_SLOT } from "../component/optionsSlots";
-// import { effect } from "../store";
+// import { effect } from "../store/reactivity-core";
 import { dom } from "./dom";
 import { ComponentBase, notifyDeactivated } from "../component/componentBase";
 import { resolveComponent } from "../component/resolveComponent";
