@@ -9,7 +9,7 @@ import proposal_decorators from "@babel/plugin-proposal-decorators";
 import transform_class_properties from "@babel/plugin-transform-class-properties";
 import transform_class_static_block from "@babel/plugin-transform-class-static-block";
 import { ParseComponent, ParseFrament, recordClassMembers } from './motifParser';
-import { COMPILER_CONTRACT, motifCompiled, motifComponent, motifFragment, motifFunctionComponent, State } from "./constants";
+import { COMPILER_CONTRACT, motifCompiled, motifComponent, motifFragment, motifFunctionComponent, motifReport, State } from "./constants";
 import { ASYNC_TRACKING_LOCAL, isVirtualizationDataRequest, wrapAwaitsForTracking } from "./asyncTracking";
 import { DECLARED_ELEMENT_PATTERN, resolveElementType } from "./elementTags";
 import { beginCollect, endCollect, type MotifDiagnostic } from "./diagnostics";
@@ -414,6 +414,9 @@ export default class Compiler {
                                     coreImports.set('motifCompiled', t.importSpecifier(t.identifier(motifCompiled()), t.identifier('motifCompiled')));
                                     if (state.get(ASYNC_TRACKING_LOCAL)) {
                                         coreImports.set('asyncTracking', t.importSpecifier(t.identifier(ASYNC_TRACKING_LOCAL), t.identifier('asyncTracking')));
+                                    }
+                                    if (state.get(motifReport())) {
+                                        coreImports.set('motifReport', t.importSpecifier(t.identifier(motifReport()), t.identifier('motifReport')));
                                     }
 
 

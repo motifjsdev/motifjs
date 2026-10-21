@@ -6,7 +6,7 @@ import { htmlAttributes, htmlEvents } from './htmlAtributes';
 import svgTags from 'svg-tags';
 
 import { assertLifecycleValue, cacheGuardCalls, findIfStatements, makeComponentTraps, makeDirectives, makeHtmlAttr, makeHtmlEvents, makePreDirectives, mergeHtmlAttributes, returnIfStatement, SUPPORTED_DIRECTIVES, UNSUPPORTED_DIRECTIVES, supportedDirectivesText } from './propBuilder';
-import { motifComponent, motifFragment, State, motifFunctionComponent } from './constants';
+import { motifComponent, motifFragment, State, motifFunctionComponent, motifReport } from './constants';
 import { warn as diagWarn, fail } from './diagnostics';
 import { noteOrigin, transferOrigin, explainAt, explainChild, describeTextNode, codeOf, DEPS, isExplaining, type ExplainReactivity } from './explain';
 const FRAGMENT = 'Fragment';
@@ -255,7 +255,7 @@ function lowerTernary(expression: t.ConditionalExpression, state: State, scope: 
 
     const normalize = (e: t.Expression): t.Expression => {
         if (isMotifCall(e)) return e;
-        return mkText(e);
+        return mkText(e, state);
     };
 
     const buildBranch = (node: t.Expression): t.Statement[] => {
@@ -783,7 +783,7 @@ export const getChildren = (
     const transformOne = (path: NodePath<t.JSXText | t.JSXExpressionContainer | t.JSXSpreadChild | t.JSXElement | t.JSXFragment>): any => {
         if (path.isJSXText()) {
             const literal = transformJSXText(path);
-            return literal === null ? null : mkText(literal);
+            return literal === null ? null : mkText(literal, state);
         }
 
         if (path.isJSXExpressionContainer()) { 
@@ -1015,11 +1015,11 @@ export const getChildren = (
             }
 
             if (t.isIdentifier(expression)) {
-                return mkText(expression)
+                return mkText(expression, state)
             }
 
             if (t.isBinaryExpression(expression)) {
-                return mkText(expression)
+                return mkText(expression, state)
             }
 
             if (t.isConditionalExpression(expression)) {
@@ -1027,7 +1027,7 @@ export const getChildren = (
             }
 
             if (t.isMemberExpression(expression)) {
-                return mkText(expression)
+                return mkText(expression, state)
             }
             if (t.isFunctionExpression(expression)) {
                 return expression;
@@ -1055,12 +1055,12 @@ export const getChildren = (
                 }
 
                 if (t.isMemberExpression(expression.callee)) {
-                    return makeMemberCallChild(expression);
+                    return makeMemberCallChild(expression, state);
                 }
             }
 
             if (t.isStringLiteral(expression)) {
-                return mkText(expression)
+                return mkText(expression, state)
             }
  
             if (t.isTemplateLiteral(expression) && expression.expressions.length > 0) { 
@@ -1310,29 +1310,37 @@ const isChildsSlot = (e: t.Expression): boolean =>
     || (t.isIdentifier(e) && e.name === 'childs');
 
 /** `??` / `||` mi? (C1: bunlar `&&` gibi `when`'e çevrilmemeli) */
-const isCoalesceLogical = (e: t.Expression): boolean =>
+const isFallbackLogical = (e: t.Expression): boolean =>
     t.isLogicalExpression(e) && (e.operator === '??' || e.operator === '||');
 
-const coalesceFn = (cx: t.LogicalExpression): t.ArrowFunctionExpression => {
+const makeReportedCatch = (state: State, ...fallback: t.Statement[]): t.CatchClause => {
+    state.set(motifReport(), motifReport());
+    return t.catchClause(t.identifier('__e'), t.blockStatement([
+        t.expressionStatement(t.callExpression(t.identifier(motifReport()), [t.identifier('__e')])),
+        ...fallback
+    ]));
+};
+
+const fallbackFn = (cx: t.LogicalExpression, state: State): t.ArrowFunctionExpression => {
     const l = t.identifier('__l');
     return t.arrowFunctionExpression([], t.blockStatement([
         t.variableDeclaration('let', [t.variableDeclarator(t.identifier('__l'))]),
         t.tryStatement(
             t.blockStatement([t.expressionStatement(t.assignmentExpression('=', l, cx.left as t.Expression))]),
-            t.catchClause(null, t.blockStatement([t.expressionStatement(t.assignmentExpression('=', t.identifier('__l'), t.identifier('undefined')))]))
+            makeReportedCatch(state, t.expressionStatement(t.assignmentExpression('=', t.identifier('__l'), t.identifier('undefined'))))
         ),
         t.returnStatement(t.logicalExpression(cx.operator, t.identifier('__l'), cx.right))
     ]));
 };
 
-const makeCoalesceChild = (cx: t.LogicalExpression): t.CallExpression =>
-    t.callExpression(id('sender.bindings.method'), [coalesceFn(cx)]);
+const makeFallbackChild = (cx: t.LogicalExpression, state: State): t.CallExpression =>
+    t.callExpression(id('sender.bindings.method'), [fallbackFn(cx, state)]);
 
-const makeMemberCallChild = (call: t.CallExpression): t.CallExpression =>
+const makeMemberCallChild = (call: t.CallExpression, state: State): t.CallExpression =>
     t.callExpression(id('sender.bindings.method'), [t.arrowFunctionExpression([], t.blockStatement([
         t.tryStatement(
             t.blockStatement([t.returnStatement(call)]),
-            t.catchClause(null, t.blockStatement([t.returnStatement(t.identifier('undefined'))]))
+            makeReportedCatch(state, t.returnStatement(t.identifier('undefined')))
         )
     ]))]);
 
@@ -1393,7 +1401,7 @@ const splitMemberExpression = (exp: t.MemberExpression): { object: t.Expression,
     return null;
 };
 
-const mkText = (exp: t.Expression) => {
+const mkText = (exp: t.Expression, state: State) => {
     var a1: t.CallExpression;
  
     const childProbe: t.Expression | null =
@@ -1451,8 +1459,8 @@ const mkText = (exp: t.Expression) => {
             a1 = t.callExpression(id('sender.bindings.add'), [t.stringLiteral("textContent"), kx]);
         }
 
-    } else if (isCoalesceLogical(exp)) { 
-        a1 = t.callExpression(id('sender.bindings.add'), [t.stringLiteral("textContent"), coalesceFn(exp as t.LogicalExpression)]);
+    } else if (isFallbackLogical(exp)) { 
+        a1 = t.callExpression(id('sender.bindings.add'), [t.stringLiteral("textContent"), fallbackFn(exp as t.LogicalExpression, state)]);
     } else if (t.isLogicalExpression(exp)) {
         var ifStatement = findIfStatements(exp.left);
         if (t.isFunction(exp.left) || t.isArrowFunctionExpression(exp.left) || t.isFunctionExpression(exp.left) || t.isFunctionDeclaration(exp.left)) {
@@ -1481,7 +1489,7 @@ const mkText = (exp: t.Expression) => {
             // var a1 = t.callExpression(id('sender.bind.logic'), [kx, exp.right]);
 
             var rtrns = t.ifStatement(ifStatement!, t.blockStatement([t.returnStatement(exp.left)]));
-            var tryStatement = t.tryStatement(t.blockStatement([rtrns]), t.catchClause(null, t.blockStatement([t.returnStatement(t.nullLiteral())])), null);
+            var tryStatement = t.tryStatement(t.blockStatement([rtrns]), makeReportedCatch(state, t.returnStatement(t.nullLiteral())), null);
             var kx = cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([tryStatement])), [exp.left]);
 
             if (!t.isFunctionDeclaration(exp.right) && !t.isArrowFunctionExpression(exp.right)) {
@@ -1696,11 +1704,11 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
                 // else if (t.isArrowFunctionExpression(cx)) {
                 else if (t.isAssignmentExpression(cx)) {
                     statements.push(t.expressionStatement(cx))
-                } else if (isCoalesceLogical(cx)) {
+                } else if (isFallbackLogical(cx)) {
                     // C1: `{a ?? b}` / `{a || b}` — `when` DEĞİL
-                    const coalesce = makeCoalesceChild(cx as t.LogicalExpression);
-                    const emitted = emitBound(cx, coalesce);
-                    explainChild(cx, fileName, { site: 'child', shape: 'coalesce', lowered: loweredOf(emitted, coalesce), reactive: 'live', deps: DEPS.getter, note: 'reactive text if the result is text, a Frame if it is a component' });
+                    const fallback = makeFallbackChild(cx as t.LogicalExpression, state);
+                    const emitted = emitBound(cx, fallback);
+                    explainChild(cx, fileName, { site: 'child', shape: 'fallback', lowered: loweredOf(emitted, fallback), reactive: 'live', deps: DEPS.getter, note: 'reactive text if the result is text, a Frame if it is a component' });
                 } else if (t.isLogicalExpression(cx)) {
 
 
@@ -1727,7 +1735,7 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
                         // var mx = t.binaryExpression('===', t.unaryExpression('typeof', cx.left), t.stringLiteral('function'));
                         // var rtrn = t.returnStatement(t.conditionalExpression(mx, t.callExpression(cx.left, []), t.arrowFunctionExpression([], cx.left)));
                         var rtrns = t.ifStatement(ifStatement!, t.blockStatement([t.returnStatement(cx.left)]));
-                        var tryStatement = t.tryStatement(t.blockStatement([rtrns]), t.catchClause(null, t.blockStatement([t.returnStatement(t.nullLiteral())])), null);
+                        var tryStatement = t.tryStatement(t.blockStatement([rtrns]), makeReportedCatch(state, t.returnStatement(t.nullLiteral())), null);
                         var kx = cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([tryStatement])), [cx.left]);
 
                         if (!t.isFunctionDeclaration(cx.right) && !t.isArrowFunctionExpression(cx.right)) {
@@ -1874,9 +1882,9 @@ export function ParseFrament(path: NodePath<t.JSXElement>, state: State): t.Call
                 if (t.isCallExpression(exp) && t.isIdentifier(exp.callee) && exp.callee.name === 'sender.repeater') {
                     initBody.body.push(t.expressionStatement(t.callExpression(id('sender.bindings.list'), [listSource(exp.arguments[0] as t.Expression), listRender(exp.arguments)])));
                     explainChild(exp, fileName, { site: 'child', shape: 'list', lowered: initBody.body[initBody.body.length - 1], reactive: 'live', deps: DEPS.list });
-                } else if (isCoalesceLogical(exp)) { 
-                    initBody.body.push(t.expressionStatement(makeCoalesceChild(exp as t.LogicalExpression)));
-                    explainChild(exp, fileName, { site: 'child', shape: 'coalesce', lowered: initBody.body[initBody.body.length - 1], reactive: 'live', deps: DEPS.getter });
+                } else if (isFallbackLogical(exp)) { 
+                    initBody.body.push(t.expressionStatement(makeFallbackChild(exp as t.LogicalExpression, state)));
+                    explainChild(exp, fileName, { site: 'child', shape: 'fallback', lowered: initBody.body[initBody.body.length - 1], reactive: 'live', deps: DEPS.getter });
                 } else if (t.isLogicalExpression(exp)) { 
                     var ifStatement = findIfStatements(exp.left);
                     var condFn: t.ArrowFunctionExpression;
@@ -1887,7 +1895,7 @@ export function ParseFrament(path: NodePath<t.JSXElement>, state: State): t.Call
                         condFn = t.arrowFunctionExpression([], t.blockStatement([rtrns]));
                     } else {
                         var rtrnsPlain = t.ifStatement(ifStatement!, t.blockStatement([t.returnStatement(exp.left)]));
-                        var tryStatement = t.tryStatement(t.blockStatement([rtrnsPlain]), t.catchClause(null, t.blockStatement([t.returnStatement(t.nullLiteral())])), null);
+                        var tryStatement = t.tryStatement(t.blockStatement([rtrnsPlain]), makeReportedCatch(state, t.returnStatement(t.nullLiteral())), null);
                         condFn = cacheGuardCalls(t.arrowFunctionExpression([], t.blockStatement([tryStatement])), [exp.left]);
                     }
                     if (!t.isFunctionDeclaration(exp.right) && !t.isArrowFunctionExpression(exp.right)) {

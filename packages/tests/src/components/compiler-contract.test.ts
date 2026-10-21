@@ -3,7 +3,7 @@ import { Component, ComponentBase, reactive } from '@motifx/core';
 
 const compiler = require('../../../compiler/dist/index.cjs');
 
-const RUNTIME_IMPORTS = ['FNComponent', 'asyncTracking', 'motifCompiled', 'motifComponent', 'motifFragment'];
+const RUNTIME_IMPORTS = ['FNComponent', 'asyncTracking', 'motifCompiled', 'motifComponent', 'motifFragment', 'motifReport'];
 
 const SENDER_MEMBERS = [
     'attr.add',
@@ -24,7 +24,7 @@ const SENDER_MEMBERS = [
     'style',
 ];
 
-const HIDDEN_KEYS = ['__childExpr', '__isSvgElement', 'childs', 'elementTag', 'initializeComponent', 'onRefCreated', 'runover'];
+const HIDDEN_KEYS = ['__childExpr', '__e', '__isSvgElement', 'childs', 'elementTag', 'initializeComponent', 'onRefCreated', 'runover'];
 
 const ASYNC_TRACKING_METHODS = ['capture', 'end', 'resume', 'suspend'];
 
@@ -71,8 +71,8 @@ const compile = (source: string, file: string): string => new compiler.Compiler(
 
 function evaluate(code: string, name: string): any {
     const body = code.replace(/^\s*import\s*\{[^}]*\}\s*from\s*["']@motifx\/core["'];?/gm, '').replace(/^export /gm, '');
-    const fn = new Function('_mc', '_mf', '_mfc', '_mv', 'Component', 'reactive', `"use strict";\n${body}\nreturn ${name};`);
-    return fn(motif.motifComponent, motif.motifFragment, motif.FNComponent, motif.motifCompiled, Component, reactive);
+    const fn = new Function('_mc', '_mf', '_mfc', '_mv', '_mr', 'Component', 'reactive', `"use strict";\n${body}\nreturn ${name};`);
+    return fn(motif.motifComponent, motif.motifFragment, motif.FNComponent, motif.motifCompiled, motif.motifReport, Component, reactive);
 }
 
 function mount(child: ComponentBase): Component {

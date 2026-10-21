@@ -292,7 +292,7 @@ describe('üretilen getter içindeki çağrı bir kez değerlendirilir', () => {
     test('&& çocuğunun koşulu tek çağrı üretir', () => {
         const out = compile(`function A(){ return <div>{ok() && <b />}</div>; }`);
         expect(count(out, /ok\(\)/g)).toBe(1);
-        expect(out).toMatch(/catch \{\s*return null;/);
+        expect(out).toMatch(/catch \(__e\) \{\s*_mr\(__e\);\s*return null;/);
     });
 
     test('kullanıcının iki kez yazdığı çağrı birleştirilmez', () => {

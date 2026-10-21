@@ -35,7 +35,7 @@ const helper = new Fn();
 const make = {
   ternary: () => <main><Panel><p>once</p>{s.flag ? <b>EVET</b> : <i>HAYIR</i>}<q>sonra</q></Panel></main>,
   and: () => <main><Panel>{s.flag && <b>EVET</b>}</Panel></main>,
-  coalesce: () => <main><Panel>{s.title ?? <i>Adsiz</i>}</Panel></main>,
+  fallback: () => <main><Panel>{s.title ?? <i>Adsiz</i>}</Panel></main>,
   call: () => <main><Panel>{helper.badge()}</Panel></main>,
   arrow: () => <main><Panel>{() => s.title ?? "bos"}</Panel></main>,
   template: () => <main><Panel>{\`baslik: \${s.title ?? "bos"}\`}</Panel></main>,
@@ -125,7 +125,7 @@ describe('bileşen etiketinin çocuğu olan bağ ifadeleri childs yuvasında, bi
     });
 
     test('??: yuvada tek kopya ve canlı', async () => {
-        const { main, slot } = await mount('coalesce');
+        const { main, slot } = await mount('fallback');
         expect(main.querySelectorAll('i').length).toBe(1);
         expect(slot.querySelector('i')?.textContent).toBe('Adsiz');
         expect(outside(main).text).toBe('');

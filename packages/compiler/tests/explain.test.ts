@@ -119,9 +119,9 @@ describe('çocuk ifadeleri', () => {
         expect(e.lowered).toContain('sender.bindings.method(() => { try { return this.f(); }');
     });
 
-    test('{a ?? b} → coalesce (when DEĞİL)', () => {
+    test('{a ?? b} → fallback (when DEĞİL)', () => {
         const e = find(ex(`<p>{this.state.a ?? 'yok'}</p>`), "{this.state.a ?? 'yok'}");
-        expect(e.shape).toBe('coalesce');
+        expect(e.shape).toBe('fallback');
         expect(e.lowered).toMatch(/^sender\.bindings\.method\(/);
     });
 

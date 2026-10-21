@@ -40,6 +40,7 @@ export {
     motifComponent,
     motifFragment,
     motifOptions,
+    motifReport,
     MotifError,
     NameValuePair,
     NodeTypes,

@@ -30,7 +30,7 @@ class Page extends Component<HTMLDivElement> {
       <p id="getter">{() => d.save}</p>
       <p id="tpl">{\`\${d.save}!\`}</p>
       <p id="call">{dict.t('save')}</p>
-      <p id="coalesce">{d.missing ?? d.save}</p>
+      <p id="fallback">{d.missing ?? d.save}</p>
       <p id="xtext" x-text={() => d.save}></p>
       <p id="tern">{d.on ? <b class="yes">acik</b> : <i class="no">kapali</i>}</p>
       <p id="and">{d.on && <b class="and">var</b>}</p>
@@ -77,7 +77,7 @@ describe.each(['setState', 'reState'])('%s re-evaluates every effect binding', (
         expect(q('#getter').textContent).toBe('Save');
         expect(q('#tpl').textContent).toBe('Save!');
         expect(q('#call').textContent).toBe('Save');
-        expect(q('#coalesce').textContent).toBe('Save');
+        expect(q('#fallback').textContent).toBe('Save');
         expect(q('#xtext').textContent).toBe('Save');
         expect(reported).toEqual([]);
     });

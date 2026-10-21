@@ -12,7 +12,7 @@ export type { TransitionMode } from "./transitionRegistry";
 export * from "./bind";
 export * from "./Query";
 export { MotifError } from "./diagnostics";
-export { motifCompiled } from "./compilerContract";
+export { motifCompiled, motifReport } from "./compilerContract";
 export type { MotifErrorCode } from "./diagnostics";
 
 
