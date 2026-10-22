@@ -58,6 +58,9 @@ export class ApplicationBuilder {
         if (_globalApplication) {
             _globalApplication.provider.dispose();
             _globalApplication.provider = this.services.buildServiceProvider();
+            this.services.addSingleton(ServiceProvider, _globalApplication.provider);
+            keepOnDispose(_globalApplication.provider);
+            _globalApplication._restartServices();
             return _globalApplication;
         }
         return this.build();
@@ -131,7 +134,7 @@ export class Application {
         }
         let rootInstance: any = appRoot;
 
-
+        this._startServices();
         this._state = 'running';
         const AppShell = new Component(target);
         this.appShell = AppShell;
@@ -159,6 +162,16 @@ export class Application {
         } 
         try {
         } catch { }
+    }
+
+    public _startServices(): void {
+        for (const desc of this.provider.getAllServices().getStartupServices()) this.provider.get(desc.token);
+    }
+
+    public _restartServices(): void {
+        if (this._state !== 'running') return;
+        (this.appShell as any).provider = this.provider;
+        this._startServices();
     }
 
     public insert(component: Component): void {

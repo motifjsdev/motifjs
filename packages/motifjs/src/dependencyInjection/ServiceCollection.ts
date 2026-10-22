@@ -26,6 +26,7 @@ export interface ServiceDescriptor<T = any> {
     useFactory?: (...args: any[]) => T | Promise<T>;
     useValue?: T;
     deps?: any[];
+    startup?: boolean;
 }
 
 export class ServiceCollection {
@@ -51,6 +52,7 @@ export class ServiceCollection {
             desc.useFactory = impl.useFactory;
             desc.useValue = impl.useValue;
             desc.deps = Array.isArray(impl.deps) ? impl.deps : undefined;
+            desc.startup = impl.startup === true;
             try {
                 const sources = [
                     desc.useClass ? 'useClass' : null,
@@ -98,6 +100,7 @@ export class ServiceCollection {
             this._add(token, {
                 useClass: token,
                 deps: meta.deps,
+                startup: meta.startup,
                 useValue: undefined,
                 useFactory: undefined
             }, meta.lifetime || 'transient');
@@ -134,6 +137,9 @@ export class ServiceCollection {
         const existing = this.descriptors.get(token);
         const lt: ServiceLifetime = lifetime ?? (existing?.lifetime ?? 'transient');
         this._add(token, impl, lt);
+        if (existing?.startup && !(impl && typeof impl === 'object' && Object.prototype.hasOwnProperty.call(impl, 'startup'))) {
+            this.descriptors.get(token)!.startup = true;
+        }
     }
 
 
@@ -159,9 +165,26 @@ export class ServiceCollection {
             this._add(target, {
                 useClass: target,
                 deps: meta.deps,
+                startup: meta.startup,
                 useValue: undefined,
                 useFactory: undefined
             }, meta.lifetime || "transient");
         }
+    }
+
+    public getStartupServices(): ServiceDescriptor[] {
+        for (const [target, meta] of autoRegistry.entries()) {
+            if (meta.startup && !this.descriptors.has(target)) this.getDescriptor(target);
+        }
+        const list: ServiceDescriptor[] = [];
+        for (const desc of this.descriptors.values()) {
+            if (!desc.startup) continue;
+            if (desc.lifetime !== 'singleton') {
+                reportWarning('MJX415', [this._tokenName(desc.token), desc.lifetime], { token: desc.token });
+                continue;
+            }
+            list.push(desc);
+        }
+        return list;
     }
 }

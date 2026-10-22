@@ -80,6 +80,7 @@ export const motifMessages = {
     MJX411: (token: string) => `'deps' must be an array for token '${token}'; the invalid deps are ignored.`,
     MJX413: (token: string) => `Service '${token}' is registered with a function that cannot be constructed. Use { useValue: fn } to provide the function itself or { useFactory: fn } to create the service.`,
     MJX414: (token: string, reason: string) => `FromService failed for token '${token}': ${reason}`,
+    MJX415: (token: string, lifetime: string) => `'startup' only applies to singleton services; '${token}' is registered as ${lifetime} and is created when it is first resolved.`,
 
     MJX501: () => `Disposable already disposed.`,
     MJX502: () => `Cannot register a disposable on itself.`,

@@ -7,13 +7,15 @@ import { reportWarning } from "../common/diagnostics";
 
 export function Injectable(options?: {
     lifetime?: ServiceLifetime,
-    deps?: any[]
+    deps?: any[],
+    startup?: boolean
 }): (target: any, context?: ClassDecoratorContext) => void {
 
     return (target: any) => {
         autoRegistry.set(target, {
             lifetime: options?.lifetime ?? "transient",
-            deps: options?.deps
+            deps: options?.deps,
+            startup: options?.startup
         });
     };
 }
