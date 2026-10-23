@@ -538,7 +538,7 @@ const ComponentHelper = {
                 component._base._mountedScheduled = true;
                 const el = component.element as Element | null;
                 if (!el || typeof (el as any).nodeType !== 'number') { return; }
-                const stop = onElementAttached(el, () => {
+                const stop = onElementAttachedLater(el, () => {
                         if (component.isDisposed) { return; }
                         ComponentHelper.callMounted(component);
                 });
@@ -2209,7 +2209,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         const xName = full.slice(2).toLowerCase();
                         if (xName === "mounted") {
                                 let sub: IDisposable | undefined;
-                                const stop = onElementAttached(this.element as Element, () => {
+                                const stop = onElementAttachedLater(this.element as Element, () => {
                                         if (sub) {
                                                 this._base._mountedSubs?.get(cb)?.delete(sub);
                                                 this._disposables.detach(sub);
@@ -2962,6 +2962,51 @@ function onElementAttached(element: Element, callback: () => any): (() => void) 
 
         return () => {
                 if (attachWaiters.delete(waiter)) { releaseAttachObserver(); }
+        };
+}
+
+let mountedQueue: any[] = [];
+let mountedTimer: any = null;
+
+function runMountedQueue() {
+        var start = Date.now();
+        var list = mountedQueue;
+        mountedQueue = [];
+        for (var i = 0; i < list.length; i++) {
+                var entry = list[i];
+                if (!entry.stopped) {
+                        try {
+                                entry.callback();
+                        } catch (error) {
+                                queueMicrotask(() => { throw error; });
+                        }
+                }
+                if (i + 1 < list.length && Date.now() - start >= 8) {
+                        mountedQueue = list.slice(i + 1).concat(mountedQueue);
+                        mountedTimer = setTimeout(runMountedQueue, 0);
+                        return;
+                }
+        }
+        if (mountedQueue.length) {
+                mountedTimer = setTimeout(runMountedQueue, 0);
+        } else {
+                mountedTimer = null;
+        }
+}
+
+function queueMounted(entry: any) {
+        mountedQueue.push(entry);
+        if (!mountedTimer) {
+                mountedTimer = setTimeout(runMountedQueue, 0);
+        }
+}
+
+function onElementAttachedLater(element: Element, callback: () => any): () => void {
+        var entry = { callback: callback, stopped: false };
+        var stop = onElementAttached(element, () => queueMounted(entry));
+        return () => {
+                entry.stopped = true;
+                if (stop) { stop(); }
         };
 }
 

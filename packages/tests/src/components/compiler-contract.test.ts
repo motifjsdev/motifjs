@@ -187,6 +187,7 @@ describe('compiler contract: framework props', () => {
         const instance = new Hooks();
         const root = mount(instance);
         await new Promise(r => setTimeout(r, 0));
+        await new Promise(r => setTimeout(r, 0));
         const el = instance.element as HTMLElement;
 
         expect(instance.x.element.tagName).toBe('EM');

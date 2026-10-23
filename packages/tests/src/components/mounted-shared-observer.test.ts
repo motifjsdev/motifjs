@@ -21,6 +21,10 @@ class CountingObserver extends NativeObserver {
 }
 
 const settle = () => new Promise(r => setTimeout(r, 0));
+const until = async (done: () => boolean, ms = 3000) => {
+    const end = Date.now() + ms;
+    while (!done() && Date.now() < end) await settle();
+};
 
 let host: HTMLElement;
 let root: Component;
@@ -59,15 +63,17 @@ describe('onMounted bekleyişi', () => {
     test('çok sayıda bileşen tek bir gözlemciyle, kayıt sırasıyla ve birer kez bağlanır', async () => {
         for (let i = 0; i < 300; i++) root.controls.add(new Row('r' + i));
         expect(created).toBe(1);
-        await settle();
+        await until(() => log.length === 300);
         expect(log).toEqual(Array.from({ length: 300 }, (_, i) => 'r' + i));
         expect(active).toBe(0);
     });
 
-    test('kanca eklemeyle aynı anda değil, aynı görevin microtask aşamasında çalışır', async () => {
+    test('kanca eklemeyle aynı görevde ve onun microtask aşamasında değil, sonraki görevde çalışır', async () => {
         root.controls.add(new Row('a'));
         expect(log).toEqual([]);
         await Promise.resolve();
+        expect(log).toEqual([]);
+        await until(() => log.length === 1);
         expect(log).toEqual(['a']);
     });
 
@@ -78,7 +84,7 @@ describe('onMounted bekleyişi', () => {
             onMounted() { log.push('outer'); }
         }
         root.controls.add(new Outer());
-        await settle();
+        await until(() => log.length === 2);
         expect(log).toEqual(['inner', 'outer']);
     });
 
@@ -100,15 +106,17 @@ describe('onMounted bekleyişi', () => {
         await settle();
         expect(log).toEqual([]);
         host.appendChild(row.element as Node);
-        await settle();
+        await until(() => log.length === 1);
         expect(log).toEqual(['manual']);
         await row.dispose();
     });
 
-    test('kurulum sonunda zaten bağlı olan bileşen hemen bağlanır, gözlemci açılmaz', () => {
+    test('kurulum sonunda zaten bağlı olan bileşen sonraki görevde bağlanır, gözlemci açılmaz', async () => {
         const row = new Row('direct');
         host.appendChild(row.element as Node);
         row.build();
+        expect(log).toEqual([]);
+        await settle();
         expect(log).toEqual(['direct']);
         expect(created).toBe(0);
     });
@@ -122,7 +130,7 @@ describe('onMounted bekleyişi', () => {
         b.motif.on('x:mounted' as any, removed);
         await b.motif.off('x:mounted' as any, removed);
         root.controls.add(a, b);
-        await settle();
+        await until(() => kept.mock.calls.length === 1);
         expect(created).toBe(1);
         expect(kept).toHaveBeenCalledTimes(1);
         expect(removed).not.toHaveBeenCalled();
@@ -136,7 +144,7 @@ describe('onMounted bekleyişi', () => {
             onMounted() { throw new Error('boom'); }
         }
         root.controls.add(new Row('before'), new Bad(), new Row('after'));
-        await settle();
+        await until(() => log.length === 2);
         expect(log).toEqual(['before', 'after']);
         error.mockRestore();
     });
@@ -150,7 +158,7 @@ describe('onMounted bekleyişi', () => {
             }
         }
         root.controls.add(new Spawner());
-        await settle();
+        await until(() => log.length === 2);
         expect(log).toEqual(['spawner', 'spawned']);
         expect(active).toBe(0);
     });

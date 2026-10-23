@@ -7,6 +7,10 @@
 import { Component } from '@motifx/core';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
+const until = async (done: () => boolean, ms = 3000) => {
+    const end = Date.now() + ms;
+    while (!done() && Date.now() < end) await tick();
+};
 
 describe('onMounted (A2)', () => {
     it('fires once, only after the element is attached to document', async () => {
@@ -22,7 +26,7 @@ describe('onMounted (A2)', () => {
         expect(calls).toEqual(['built:false']);
 
         document.body.appendChild(x.element as any);
-        await tick();
+        await until(() => calls.length === 2);
         expect(calls).toEqual(['built:false', 'mounted:true']);
 
         // yeniden bağlanma ikinci kez tetiklemez
@@ -34,13 +38,14 @@ describe('onMounted (A2)', () => {
         (x.element as HTMLElement | null)?.remove?.();
     });
 
-    it('supports the onMounted prop and fires immediately when already attached', async () => {
+    it('supports the onMounted prop and fires once the component is placed in an attached parent', async () => {
         const host = document.createElement('div');
         document.body.appendChild(host);
         const parent = new Component(host);
         parent.build();
         let mounted = 0;
         parent.controls.add(new Component('span', { onMounted: () => mounted++ }));
+        await until(() => mounted === 1);
         await tick();
         expect(mounted).toBe(1);
         parent.dispose();

@@ -43,6 +43,7 @@ describe('component hook errors', () => {
         (C.prototype as any)[hook] = boom;
         const root = mount(new C());
         await tick();
+        await tick();
         await root.dispose();
         await tick();
         expectReported('MJX122', `The component ${hook} hook threw.`);
