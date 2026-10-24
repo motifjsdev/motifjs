@@ -132,3 +132,75 @@ describe('new Component(fn, props) gives the returned root what new Component(Cl
         await root.dispose();
     });
 });
+
+describe('hooks given in the props object reach a function root as they reach a class', () => {
+    class Card extends Component {
+        constructor(p: any) { super('article', p); }
+    }
+    const card = () => new Component('article');
+
+    const hookProps = (log: string[], shown: { value: boolean }) => ({
+        preconfig: (c: ComponentBase) => { log.push('preconfig'); c.bindings.display(() => shown.value); },
+        initializeComponent: () => log.push('initializeComponent'),
+        onBuilt: () => log.push('onBuilt'),
+        onMounted: () => log.push('onMounted'),
+    });
+
+    const make = {
+        motifComponent: (element: any, props: any) => motif.motifComponent(element, props),
+        'new Component': (element: any, props: any) => new Component(element, props),
+    };
+
+    for (const [how, create] of Object.entries(make)) {
+        test(`${how}: the function root runs the same hooks in the same order as the class`, async () => {
+            const runs: Record<string, string[]> = {};
+            for (const [name, element] of [['class', Card], ['function', card]] as const) {
+                const log: string[] = [];
+                const shown = reactive({ value: false });
+                const { host, root } = mount(create(element, hookProps(log, shown)));
+                await tick(20);
+                expect([name, host.querySelector('article')]).toEqual([name, null]);
+                shown.value = true;
+                await tick(20);
+                expect([name, host.querySelector('article') !== null]).toEqual([name, true]);
+                runs[name] = log;
+                await root.dispose();
+            }
+            expect(runs.class).toEqual(['preconfig', 'initializeComponent', 'onBuilt', 'onMounted']);
+            expect(runs.function).toEqual(runs.class);
+        });
+    }
+
+    test('hooks and x- keys leave the props the function receives, callback props stay', async () => {
+        let seen: any;
+        const row = (p: any) => { seen = { ...p }; return new Component('li'); };
+        const onSave = () => 0;
+        const shown = reactive({ value: false });
+        const { host, root } = mount(motif.motifComponent(row, { note: 1, onSave, onBuilt: () => 0, 'x-display': () => shown.value }));
+        expect(seen).toEqual({ note: 1, onSave });
+        await tick();
+        expect(host.querySelector('li')).toBeNull();
+        shown.value = true;
+        await tick();
+        expect(host.querySelector('li')).not.toBeNull();
+        await root.dispose();
+    });
+
+    test('a function that passes its props on to its root runs each hook once', async () => {
+        for (const pass of [(p: any) => new Component('section', p), (p: any) => new Component('section', { ...p })]) {
+            const log: string[] = [];
+            const { root } = mount(motif.motifComponent(pass, { initializeComponent: () => log.push('init'), onBuilt: () => log.push('built') }));
+            expect(log).toEqual(['init', 'built']);
+            await root.dispose();
+        }
+    });
+
+    test('a function that returns an Options object or a tag name keeps the hooks', async () => {
+        const log: string[] = [];
+        const options = () => motif.motifOptions({ el: 'section' });
+        const { root } = mount(motif.motifComponent(options, { onBuilt: () => log.push('options') }));
+        root.controls.add(new Component((() => 'section') as any, { onBuilt: () => log.push('tag') } as any));
+        expect(log).toEqual(['options', 'tag']);
+        await root.dispose();
+    });
+});

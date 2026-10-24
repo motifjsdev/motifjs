@@ -1,5 +1,5 @@
 import { dom } from "../core/dom";
-import { ComponentBase, IBaseProp, ParseProps, applyComponentOptions, applyFallthroughProps, applyTransitionProp, extractRefs, takePendingRefs } from "./componentBase";
+import { ComponentBase, IBaseProp, ParseProps, applyComponentOptions, applyFallthroughProps, applyTransitionProp, extractRefs, takeLifecycleProps, takePendingRefs } from "./componentBase";
 import { safeCallSilent } from "../common/ErrorHandler";
 import { untracked } from "../store/reactivity-core";
 import { componentSlots } from "./componentSlots";
@@ -57,14 +57,17 @@ export class Component<TElement extends ElementType = any, TProps extends object
         if (elementOrParams instanceof Function) {
             const isFactory = !(elementOrParams.prototype instanceof ComponentBase);
             const refs = isFactory ? extractRefs(options) : [];
+            const hooks = isFactory ? takeLifecycleProps(options) : undefined;
             elementOrParams = resolveComponent(elementOrParams, options);
             if (isOptionsObject(elementOrParams)) {
+                if (hooks) Object.assign(options as any, hooks);
                 return applyRefs(materializeOptionsObject(elementOrParams, options), refs);
             }
             if (isFactory && elementOrParams instanceof ComponentBase) {
-                return applyJsxFrameworkProps(elementOrParams, options, refs);
+                return applyJsxFrameworkProps(elementOrParams, options, refs, hooks);
             }
             if (refs.length && options) (options as any).ref = refs;
+            if (hooks) Object.assign(options as any, hooks);
         }
         if (Array.isArray(elementOrParams)) {
             const letter = CreateFragment();
@@ -153,7 +156,7 @@ export function FNComponent<P extends object>(view: viewFn<P>) {
     };
 }
 
-function applyJsxFrameworkProps(target: any, props: any, refs: any[]): any {
+function applyJsxFrameworkProps(target: any, props: any, refs: any[], hooks?: any): any {
     if (!props || typeof props !== 'object') return target;
     if (!(target instanceof ComponentBase)) return target;
 
@@ -168,9 +171,13 @@ function applyJsxFrameworkProps(target: any, props: any, refs: any[]): any {
         applyTransitionProp((props as any).transition, target as ComponentBase);
     }
     applyIndexKey((props as any).indexkey, target as ComponentBase);
+    applyRunover(target, (props as any).runover);
+    applyRunover(target, hooks);
+    return target;
+}
 
-    const runover = (props as any).runover;
-    if (!runover || typeof runover !== 'object') return target;
+function applyRunover(target: any, runover: any): void {
+    if (!runover || typeof runover !== 'object') return;
 
     const configuredBefore = handlerCount(target, '_onConfigHandlers');
     const initializingBefore = handlerCount(target, '_onInitializingHandlers');
@@ -194,7 +201,6 @@ function applyJsxFrameworkProps(target: any, props: any, refs: any[]): any {
             callReported(() => fn(target, { cancel: false } as EventArgs), 'MJX122', 'onConfig');
         }
     }
-    return target;
 }
 
 function applyIndexKey(key: any, target: ComponentBase): void {
@@ -269,13 +275,15 @@ export function motifComponent(element: unknown, props?: any, lone?: number) {
     // Class component → new, function component/factory → çağır (try/catch tespiti yok)
     if (typeof element === "function") {
         const refs = element.prototype instanceof ComponentBase ? [] : extractRefs(props);
+        const hooks = element.prototype instanceof ComponentBase ? undefined : takeLifecycleProps(props);
         const el = resolveComponent(element, props);
         if (typeof el == "object" && el !== null && 'el' in el) {
+            if (hooks) Object.assign(props, hooks);
             return applyRefs(materializeOptionsObject(el, props), refs);
         }
         // Sınıf bileşeninde props yapıcıda işlendi; fonksiyon bileşeninde ise dış etiketin
         // çerçeve prop'ları (direktifler, initializeComponent, yaşam döngüsü) hiçbir yere uygulanmamıştı.
-        return applyJsxFrameworkProps(el, props, refs);
+        return applyJsxFrameworkProps(el, props, refs, hooks);
     }
 
     if (typeof element == "object" && element !== null && 'el' in element) {

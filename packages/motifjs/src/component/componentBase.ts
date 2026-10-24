@@ -2657,6 +2657,23 @@ function collectLifecycleHandlers(component: ComponentBase, lowerKey: string, va
         return true;
 }
 
+export function takeLifecycleProps(props: any): any {
+        if (!props || typeof props !== 'object') return undefined;
+        let taken: any;
+        for (const key of Object.keys(props)) {
+                const value = props[key];
+                const lowerKey = key.toLowerCase();
+                const hook = (key == 'initializeComponent' || key.startsWith('on'))
+                        && Object.prototype.hasOwnProperty.call(LIFECYCLE_HANDLER_LISTS, lowerKey)
+                        && (Array.isArray(value) ? value.length > 0 && value.every(fn => typeof fn === 'function') : typeof value === 'function');
+                if (hook || key.startsWith('x-') || key.startsWith('preconfig')) {
+                        (taken ??= {})[key] = value;
+                        delete props[key];
+                }
+        }
+        return taken;
+}
+
 export function ParseProps(props: any, component: ComponentBase): boolean {
         if (props) {
                 var keys = Object.keys(props);
