@@ -309,7 +309,8 @@ export class Application {
             stack = options.stack;
         }
 
-        if (this.urlRoutingModule) {
+        const running = this._startedRouter !== null && this.urlRoutingModule === this._startedRouter;
+        if (this.urlRoutingModule && !running) {
             this.urlRoutingModule.dispose();
         }
 
@@ -322,9 +323,10 @@ export class Application {
             scrollMemory,
             stack,
         };
-        this.urlRoutingModule = new UrlRoutingModule(this._routerConfig, this);
-
-        this._routerState.reset();
+        if (!running) {
+            this.urlRoutingModule = new UrlRoutingModule(this._routerConfig, this);
+            this._routerState.reset();
+        }
 
 
 

@@ -99,6 +99,28 @@ describe('restartRouter', () => {
         expect(guardRuns).toBe(1);
     });
 
+    test('a new useRouter configuration waits for restartRouter: the running router keeps the page and navigates with the old table', async () => {
+        await start([{ path: '/', control: page('old-home') }, { path: '/a', control: page('old-a') }, { path: '/b', control: page('old-b') }], 'history');
+        await app.navigate('/a');
+
+        app.useRouter({ routes: [{ path: '/', control: page('new-home') }, { path: '/a', control: page('new-a') }, { path: '/b', control: page('new-b') }], mode: 'history' });
+        await new Promise(r => setTimeout(r, 0));
+
+        expect(shown()).toBe('p-old-a');
+        expect(app.router.uri).toBe('/a');
+        const result: any = await app.navigate('/b');
+        expect(result.ok).toBe(true);
+        expect(shown()).toBe('p-old-b');
+        expect(app.router.uri).toBe('/b');
+
+        await restart();
+        expect(shown()).toBe('p-new-b');
+        expect(app.router.uri).toBe('/b');
+        const after: any = await app.navigate('/a');
+        expect(after.ok).toBe(true);
+        expect(shown()).toBe('p-new-a');
+    });
+
     test('hash mode restarts at the address', async () => {
         await start([{ path: '/', control: page('home') }, { path: '/a', control: page('a') }], 'hash');
         await app.navigate('/a');
