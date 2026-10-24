@@ -74,7 +74,11 @@ export class ErrorHandler {
 
 	private emit(error: any): void {
 		for (const listener of this.listeners.slice()) {
-			listener(error);
+			try {
+				listener(error);
+			} catch (listenerError) {
+				rethrowLater(listenerError);
+			}
 		}
 	}
 
