@@ -695,7 +695,7 @@ const ComponentHelper = {
                 const ownerHidden = inHiddenFragment(this) && (c.element as Node).nodeType !== Node.COMMENT_NODE;
 
                 if (!c.isVisible || ownerHidden) {
-                        if (keepsTrace(c)) {
+                        if ((ownerHidden && c.isVisible) || keepsTrace(c)) {
                                 if (!(c as any).motif.options.placeholder) {
                                         (c as any).motif.options.placeholder = dom.createComment("h");
                                 }
@@ -816,6 +816,13 @@ function inHiddenFragment(owner: ComponentBase | null | undefined): boolean {
                 c = c.parent;
         }
         return false;
+}
+
+function placedIn(owner: ComponentBase, c: ComponentBase): boolean {
+        const host = findAppendableComponent(owner)?.element as Node | undefined;
+        if (!host) return true;
+        const trace = optionsOf(c)?.placeholder as Node | undefined;
+        return (c.element as Node | null)?.parentNode === host || trace?.parentNode === host;
 }
 
 export function domAnchor(c: ComponentBase, host: Node): Node | null {
@@ -2070,7 +2077,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         ComponentHelper.callVisibilityChanged(this, true);
                         if (this.isDisposed) { return; }
                         if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
-                                this.controls.items.filter(c => !c.isBuilt).forEach(c => ComponentHelper.internalBuild.call(this, c));
+                                this.controls.items.filter(c => !c.isBuilt || !placedIn(this, c)).forEach(c => ComponentHelper.internalBuild.call(this, c));
                                 this._attachChildrenFromTraces();
                                 this.isVisible = true;
                                 ComponentHelper.activateTree(this);
