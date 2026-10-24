@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<title>motifjs — tarayıcı benchmark düzeneği (js-framework-benchmark senaryoları)</title>
+<title>MotifJS — tarayıcı benchmark düzeneği (js-framework-benchmark senaryoları)</title>
 <style>
     body { font-family: system-ui, sans-serif; margin: 16px; }
     h1 { font-size: 18px; }
@@ -16,12 +16,13 @@
 </style>
 </head>
 <body>
-<h1>motifjs tarayıcı benchmark düzeneği</h1>
+<h1>MotifJS tarayıcı benchmark düzeneği</h1>
 <p id="note">
-    js-framework-benchmark senaryoları: 1k/10k satır oluştur, her 10. satırı güncelle,
-    satır değiştir (swap), satır sil, temizle. Ölçüm: işlem başlangıcından çift
-    requestAnimationFrame (boyama) sonrasına kadar. dist/index.umd.js'e karşı çalışır —
-    önce <code>npm run build --workspace=@motifx/core</code>.
+    js-framework-benchmark senaryoları: 1k/10k satır oluştur, 1.000 satır ekle, her 10. satırı güncelle,
+    satır değiştir (swap), satır seç, satır sil, temizle. Ölçüm: işlem başlangıcından çift
+    requestAnimationFrame (boyama) sonrasına kadar. Production <code>dist/index.umd.min.js</code>'e karşı çalışır;
+    önce <code>npm run build --workspace=@motifx/core</code>. Tablo, satırlar, hücreler, bağlantılar ve
+    metinlerin hepsi MotifJS bileşenidir; kod derleyicinin JSX'ten ürettiği biçimdedir.
 </p>
 <div id="toolbar">
     <button id="run">1.000 satır oluştur</button>
@@ -32,7 +33,7 @@
     <button id="select">Satır seç (satır 5)</button>
     <button id="remove">Satır sil (satır 5)</button>
     <button id="clear">Temizle</button>
-    <button id="runall"><b>TÜMÜNÜ KOŞ (5 tekrar, medyan)</b></button>
+    <button id="runall"><b>TÜMÜNÜ KOŞ (1k: 50 tekrar, 10k: 5 tekrar, medyan)</b></button>
 </div>
 <table id="results">
     <thead><tr><th>Senaryo</th><th>Son (ms)</th><th>Medyan (ms)</th><th>Örnekler</th></tr></thead>
@@ -40,13 +41,13 @@
 </table>
 <div id="app"></div>
 
-<script src="../../motifjs/dist/index.umd.js"></script>
+<script src="../../motifjs/dist/index.umd.min.js"></script>
 <script>
 (function () {
     'use strict';
-    const { Component, reactive } = window.motif;
+    const { Component, reactive, motifComponent: _mc, motifCompiled: _mv } = window.motif;
+    _mv(1);
 
-    // ------------------------------------------------ veri üretimi (js-framework-benchmark ile aynı)
     const adjectives = ["pretty", "large", "big", "small", "tall", "short", "long", "handsome", "plain", "quaint", "clean", "elegant", "easy", "angry", "crazy", "helpful", "mushy", "odd", "unsightly", "adorable", "important", "inexpensive", "cheap", "expensive", "fancy"];
     const colours = ["red", "yellow", "blue", "green", "pink", "brown", "purple", "brown", "white", "black", "orange"];
     const nouns = ["table", "chair", "house", "bbq", "desk", "car", "pony", "cookie", "sandwich", "burger", "pizza", "mouse", "keyboard"];
@@ -63,40 +64,111 @@
         return data;
     }
 
-    // ------------------------------------------------ uygulama
     const state = reactive({ rows: [], selected: 0 });
 
-    function renderRow(item) {
-        const tr = new Component('tr');
-        const tdId = new Component('td');
-        tdId.element.textContent = String(item.id);
-        const tdLabel = new Component('td', {
-            initializeComponent: (s) => { s.bindings.text(() => item.label); }
-        });
-        const a = new Component('a');
-        a.element.textContent = 'sil';
-        a.element.href = '#';
-        a.motif.on('click', (_sender, ev) => {
-            ev.preventDefault();
-            const idx = state.rows.indexOf(item);
-            if (idx > -1) state.rows.splice(idx, 1);
-        });
-        const tdAction = new Component('td');
-        tdAction.controls.add(a);
-        tr.controls.add(tdId, tdLabel, tdAction);
-        return tr;
+    function select(item) {
+        state.selected = item.id;
+    }
+
+    function remove(item) {
+        const idx = state.rows.indexOf(item);
+        if (idx > -1) state.rows.splice(idx, 1);
+    }
+
+    function Row(item) {
+        return _mc("tr", {
+            initializeComponent: sender => {
+                sender.class.add([{
+                    danger: () => state.selected === item.id
+                }]);
+                const _comp6 = _mc("td", {
+                    initializeComponent: sender => {
+                        const _comp = _mc("text", {
+                            initializeComponent: sender => {
+                                sender.bindings.add("textContent", item, "id");
+                            },
+                            __childExpr: () => item.id
+                        });
+                        sender.controls.add(_comp);
+                    }
+                }, 1);
+                sender.controls.add(_comp6);
+                const _comp7 = _mc("td", {
+                    initializeComponent: sender => {
+                        const _comp3 = _mc("a", {
+                            initializeComponent: sender => {
+                                sender.attr.add({
+                                    "href": "#"
+                                });
+                                sender.motif.on("click", (s, e) => {
+                                    e.preventDefault();
+                                    select(item);
+                                });
+                                const _comp2 = _mc("text", {
+                                    initializeComponent: sender => {
+                                        sender.bindings.add("textContent", item, "label");
+                                    },
+                                    __childExpr: () => item.label
+                                });
+                                sender.controls.add(_comp2);
+                            }
+                        }, 1);
+                        sender.controls.add(_comp3);
+                    }
+                }, 1);
+                sender.controls.add(_comp7);
+                const _comp8 = _mc("td", {
+                    initializeComponent: sender => {
+                        const _comp5 = _mc("a", {
+                            initializeComponent: sender => {
+                                sender.attr.add({
+                                    "href": "#"
+                                });
+                                sender.motif.on("click", (s, e) => {
+                                    e.preventDefault();
+                                    remove(item);
+                                });
+                                const _comp4 = _mc("text", {
+                                    initializeComponent: sender => {
+                                        sender.setText("sil");
+                                    }
+                                }, 1);
+                                sender.controls.add(_comp4);
+                            }
+                        }, 1);
+                        sender.controls.add(_comp5);
+                    }
+                }, 1);
+                sender.controls.add(_comp8);
+            }
+        }, 1);
+    }
+
+    function App() {
+        return _mc("table", {
+            initializeComponent: sender => {
+                sender.class.add("rows");
+                const _comp9 = _mc({
+                    initializeComponent: sender => {
+                        sender.bindings.list(() => {
+                            if (state && state.rows !== null && state.rows !== undefined) {
+                                return state.rows;
+                            }
+                            return [];
+                        }, item => Row(item));
+                    }
+                });
+                sender.controls.add(_comp9);
+            }
+        }, 1);
     }
 
     const appHost = document.getElementById('app');
-    const table = new Component('table', {
-        initializeComponent: (s) => { s.bindings.list(() => state.rows, renderRow); }
-    });
-    table.element.className = 'rows';
-    table.build();
-    appHost.appendChild(table.element);
+    const root = new Component(appHost);
+    root.build();
+    root.controls.add(App());
 
-    // ------------------------------------------------ ölçüm altyapısı
-    const samples = {}; // name -> number[]
+    const samples = {};
     const tbody = document.querySelector('#results tbody');
 
     function paintDone() {
@@ -104,8 +176,6 @@
             let done = false;
             const finish = () => { if (!done) { done = true; res(); } };
             requestAnimationFrame(() => requestAnimationFrame(finish));
-            // Headless/virtual-time ortamlarında rAF zinciri ilerlemeyebilir; güvence.
-            // Etkileşimli kullanımda rAF neredeyse her zaman önce biter.
             setTimeout(finish, 150);
         });
     }
@@ -140,7 +210,6 @@
         row.children[3].textContent = String(arr.length);
     }
 
-    // ------------------------------------------------ senaryolar
     const scenarios = {
         'create-1k': () => { state.rows = buildData(1000); },
         'create-10k': () => { state.rows = buildData(10000); },
@@ -152,55 +221,60 @@
         },
         'swap-rows': () => {
             if (state.rows.length > 998) {
-                const a = state.rows[1], b = state.rows[998];
                 const next = state.rows.slice();
-                next[1] = b; next[998] = a;
+                const a = next[1];
+                next[1] = next[998];
+                next[998] = a;
                 state.rows = next;
             }
         },
-        'remove-row': () => { if (state.rows.length > 5) state.rows.splice(4, 1); },
+        'select-row': () => { if (state.rows.length > 4) state.selected = state.rows[4].id; },
+        'remove-row': () => { if (state.rows.length > 4) state.rows.splice(4, 1); },
         'clear': () => { state.rows = []; }
     };
 
-    document.getElementById('run').onclick = () => measure('create-1k', scenarios['create-1k']);
-    document.getElementById('runlots').onclick = () => measure('create-10k', scenarios['create-10k']);
-    document.getElementById('add').onclick = () => measure('append-1k', scenarios['append-1k']);
-    document.getElementById('update').onclick = () => measure('update-every-10th', scenarios['update-every-10th']);
-    document.getElementById('swaprows').onclick = () => measure('swap-rows', scenarios['swap-rows']);
-    document.getElementById('remove').onclick = () => measure('remove-row', scenarios['remove-row']);
-    document.getElementById('select').onclick = () => measure('select-row', () => { state.selected = state.rows[4] && state.rows[4].id; });
-    document.getElementById('clear').onclick = () => measure('clear', scenarios['clear']);
+    const buttons = { run: 'create-1k', runlots: 'create-10k', add: 'append-1k', update: 'update-every-10th', swaprows: 'swap-rows', select: 'select-row', remove: 'remove-row', clear: 'clear' };
+    for (const id in buttons) {
+        document.getElementById(id).onclick = () => measure(buttons[id], scenarios[buttons[id]]);
+    }
 
     document.getElementById('runall').onclick = async () => {
-        for (let rep = 0; rep < 5; rep++) {
+        for (let rep = 0; rep < 50; rep++) {
             await measure('create-1k', scenarios['create-1k']);
             await measure('update-every-10th', scenarios['update-every-10th']);
             await measure('swap-rows', scenarios['swap-rows']);
+            await measure('select-row', scenarios['select-row']);
             await measure('remove-row', scenarios['remove-row']);
             await measure('append-1k', scenarios['append-1k']);
             await measure('clear', scenarios['clear']);
         }
-        await measure('create-10k', scenarios['create-10k']);
-        await measure('clear', scenarios['clear']);
+        for (let rep = 0; rep < 5; rep++) {
+            await measure('create-10k', scenarios['create-10k']);
+            await measure('clear-10k', scenarios['clear']);
+        }
         console.log('bench tamam', samples);
+        document.body.setAttribute('data-done', '1');
     };
 
-    // Smoke modu (?smoke): CI/headless doğrulama — create/update/swap/remove/clear
-    // koşar ve sonucu body[data-smoke] içine yazar.
     if (location.search.indexOf('smoke') > -1) {
         (async () => {
+            const rows = () => appHost.querySelectorAll('tr');
             try {
                 await measure('create-1k', scenarios['create-1k']);
-                const countAfterCreate = table.element.querySelectorAll('tr').length;
+                const countAfterCreate = rows().length;
                 await measure('update-every-10th', scenarios['update-every-10th']);
-                const updatedOk = table.element.querySelector('td + td') && table.element.textContent.indexOf('!!!') > -1;
+                const updatedOk = rows()[0].children[1].textContent.endsWith(' !!!') && !rows()[1].children[1].textContent.endsWith(' !!!');
+                const before = [rows()[1].children[0].textContent, rows()[998].children[0].textContent];
                 await measure('swap-rows', scenarios['swap-rows']);
+                const swappedOk = rows()[1].children[0].textContent === before[1] && rows()[998].children[0].textContent === before[0];
+                await measure('select-row', scenarios['select-row']);
+                const selectedOk = appHost.querySelectorAll('tr.danger').length === 1 && rows()[4].className === 'danger';
                 await measure('remove-row', scenarios['remove-row']);
-                const countAfterRemove = table.element.querySelectorAll('tr').length;
+                const countAfterRemove = rows().length;
                 await measure('clear', scenarios['clear']);
-                const countAfterClear = table.element.querySelectorAll('tr').length;
-                const ok = countAfterCreate === 1000 && !!updatedOk && countAfterRemove === 999 && countAfterClear === 0;
-                document.body.setAttribute('data-smoke', ok ? 'ok' : 'fail:' + [countAfterCreate, updatedOk, countAfterRemove, countAfterClear].join(','));
+                const countAfterClear = rows().length;
+                const ok = countAfterCreate === 1000 && updatedOk && swappedOk && selectedOk && countAfterRemove === 999 && countAfterClear === 0;
+                document.body.setAttribute('data-smoke', ok ? 'ok' : 'fail:' + [countAfterCreate, updatedOk, swappedOk, selectedOk, countAfterRemove, countAfterClear].join(','));
             } catch (e) {
                 document.body.setAttribute('data-smoke', 'error:' + (e && e.message));
             }
