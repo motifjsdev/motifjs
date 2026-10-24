@@ -36,6 +36,7 @@ export const motifMessages = {
         : how === 'field'
             ? `${cls} defines '${member}' as an instance field, which hides the ComponentBase member MotifJS relies on. Rename your field.`
             : `${cls} replaces '${member}', which MotifJS created for the component (a class field or an assignment with that name). Rename your member.`,
+    MJX129: (callback: 'onfulfilled' | 'onrejected') => `The ${callback} callback given to using threw.`,
 
     MJX201: () => `ListBinding: renderFn must return a component instance, a component class, or a factory function.`,
     MJX202: (key: unknown, index: number) => `ListBinding: duplicate key "${String(key)}" at index ${index}. Rows are matched by the item object, not by key, so rendering is not affected; keep keys unique so they identify items.`,

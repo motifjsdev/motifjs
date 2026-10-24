@@ -17,7 +17,7 @@ import { controlClass } from "./controlClass";
 import { ComponentBaseOptions, ElementType, EventArgs, HtmlElementEvents, OptionalParams, RouterClassingSettings, shimAnimation, VisibilityChangedEventArgs } from "./types";
 import { Flags, UnwrapValueRefs } from "../store/common";
 import { getTransitionInfo, runCssTransition, TransitionProps } from "../common/transition";
-import { callReported, motifError, reportError, reportWarning } from "../common/diagnostics";
+import { callReported, formatMotifMessage, motifError, MotifError, reportError, reportWarning } from "../common/diagnostics";
 import { ComponentMotif } from "./ComponentMotif";
 import { ServiceProvider, pinServiceOwner, recordServiceOwner, retireServiceOwner, unpinServiceOwner } from "../dependencyInjection/ServiceProvider";
 import { contentBlocks as liveContentBlocks } from "./contentBlockRegistry";
@@ -2380,19 +2380,25 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 //                 await control.dispose();
         }
 
-        using<T>(waitable: Promise<any>, onfulfilled?: ((value: T) => T | PromiseLike<T>) | undefined | null, onrejected?: ((reason: any) => never | PromiseLike<never>) | undefined | null) {
+        using<T>(waitable: PromiseLike<T>, onfulfilled?: ((value: T) => unknown) | undefined | null, onrejected?: ((reason: any) => unknown) | undefined | null): void {
                 waitable.then(
-                        (value: T) => { this && !this.isDisposed && onfulfilled ? onfulfilled(value) : ''; },
-                        (reason: any) => { this && !this.isDisposed && onrejected ? onrejected(reason) : '' });
+                        (value: T) => { this && !this.isDisposed && onfulfilled ? callReported(() => onfulfilled(value), 'MJX129', 'onfulfilled') : ''; },
+                        (reason: any) => { this && !this.isDisposed && onrejected ? callReported(() => onrejected(reason), 'MJX129', 'onrejected') : '' });
         }
-        doWork<T>(waitable: Promise<T> | PromiseLike<T>): Promise<T> {
+        doWork<T>(waitable: Promise<T> | PromiseLike<T>): Promise<T | MotifError> {
                 return Promise.resolve(waitable).then((value: T) => {
                         if (this && !this.isDisposed) {
                                 return value
                         } else {
                                 return motifError('MJX108');
                         };
-                }) as Promise<T>;
+                }, (reason: any) => {
+                        if (this && !this.isDisposed) {
+                                throw reason;
+                        } else {
+                                return new MotifError('MJX108', formatMotifMessage('MJX108'), { cause: reason });
+                        };
+                });
         }
 
         private _siblingsApi?: SiblingsApi;
