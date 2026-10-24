@@ -55,10 +55,16 @@ export class Component<TElement extends ElementType = any, TProps extends object
         }
 
         if (elementOrParams instanceof Function) {
+            const isFactory = !(elementOrParams.prototype instanceof ComponentBase);
+            const refs = isFactory ? extractRefs(options) : [];
             elementOrParams = resolveComponent(elementOrParams, options);
             if (isOptionsObject(elementOrParams)) {
-                return materializeOptionsObject(elementOrParams, options);
+                return applyRefs(materializeOptionsObject(elementOrParams, options), refs);
             }
+            if (isFactory && elementOrParams instanceof ComponentBase) {
+                return applyJsxFrameworkProps(elementOrParams, options, refs);
+            }
+            if (refs.length && options) (options as any).ref = refs;
         }
         if (Array.isArray(elementOrParams)) {
             const letter = CreateFragment();
@@ -161,6 +167,7 @@ function applyJsxFrameworkProps(target: any, props: any, refs: any[]): any {
     if (Object.prototype.hasOwnProperty.call(props, 'transition')) {
         applyTransitionProp((props as any).transition, target as ComponentBase);
     }
+    applyIndexKey((props as any).indexkey, target as ComponentBase);
 
     const runover = (props as any).runover;
     if (!runover || typeof runover !== 'object') return target;
@@ -188,6 +195,12 @@ function applyJsxFrameworkProps(target: any, props: any, refs: any[]): any {
         }
     }
     return target;
+}
+
+function applyIndexKey(key: any, target: ComponentBase): void {
+    if (typeof key === 'undefined' || key === null) return;
+    if (!target.props || typeof target.props !== 'object') target.props = {} as any;
+    (target.props as any).indexkey = key;
 }
 
 function applyRefs(target: any, refs: any[]): any {
