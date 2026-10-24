@@ -28,16 +28,18 @@ const state = {
     exposed: null as MotifDevtools | null,
 };
 
-/** Dev modu: devtools açık ya da `globalThis.__MOTIF_DEV__ === true`. */
-export function isDevLike(): boolean {
-    return state.enabled || (globalThis as any).__MOTIF_DEV__ === true;
+let devMode = false;
+
+export function setDevMode(on: boolean): void {
+    devMode = on;
 }
 
-let earlyStores = (() => { try { return (globalThis as any).__MOTIF_DEV__ === true; } catch { return false; } })();
-recordScopes(earlyStores);
+/** Dev modu: `useDevelopment(true)` açar; global bayrak okunmaz. */
+export function isDevLike(): boolean {
+    return state.enabled || devMode;
+}
 
 export function setDevtoolsEnabled(enabled: boolean) {
-    earlyStores = enabled;
     recordScopes(enabled);
     if (enabled && !state.enabled) resetCounters();
     state.enabled = enabled;
@@ -158,7 +160,7 @@ export function errorCaught(context: string, error: any, serialize: () => any): 
 export function getErrors(): DevError[] { return Array.from(state.errors.values(), e => ({ ...e })); }
 
 export function registerStore(value: object, type: StoreEntry['type'], fallback: string, model?: unknown): void {
-    if (!state.enabled && !earlyStores) return;
+    if (!state.enabled) return;
     addStore(value, type, classNameOf(model) ?? fallback);
 }
 

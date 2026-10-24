@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { Component, ComponentBase, VisibilityChangedEventArgs } from '@motifx/core';
+import { Component, ComponentBase, VisibilityChangedEventArgs, errorHandler } from '@motifx/core';
 
 type Seen = { via: string; visible: boolean; before: boolean };
 
@@ -72,7 +72,7 @@ describe('onVisibilityChanged olay argümanı', () => {
 
     test('yer tutucu başka bir üste taşınmışken gösterme de kancayı çağırır', async () => {
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
-        (globalThis as any).__MOTIF_DEV__ = true;
+        errorHandler.setDevelopmentMode(true);
         const elsewhere = document.body.appendChild(document.createElement('div'));
         try {
             const box = new Box();
@@ -87,7 +87,7 @@ describe('onVisibilityChanged olay argümanı', () => {
                 { via: 'method', visible: true, before: false },
             ]);
         } finally {
-            delete (globalThis as any).__MOTIF_DEV__;
+            errorHandler.setDevelopmentMode(false);
             elsewhere.remove();
             warn.mockRestore();
         }

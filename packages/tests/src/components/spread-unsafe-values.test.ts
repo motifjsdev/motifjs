@@ -38,13 +38,13 @@ describe('spread on a DOM tag: innerHTML, srcdoc and javascript: URLs', () => {
     let warn: jest.SpyInstance;
 
     beforeEach(() => {
-        (globalThis as any).__MOTIF_DEV__ = true;
+        motif.errorHandler.setDevelopmentMode(true);
         warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
     });
 
     afterEach(() => {
         warn.mockRestore();
-        delete (globalThis as any).__MOTIF_DEV__;
+        motif.errorHandler.setDevelopmentMode(false);
         document.body.innerHTML = '';
     });
 
@@ -175,7 +175,7 @@ describe('spread on a DOM tag: innerHTML, srcdoc and javascript: URLs', () => {
     });
 
     test('no warning outside dev mode, the value is still dropped', async () => {
-        delete (globalThis as any).__MOTIF_DEV__;
+        motif.errorHandler.setDevelopmentMode(false);
         const { host, root } = mount(Anchor()({ href: 'javascript:alert(1)', innerHTML: '<b>x</b>' }));
         const el = host.firstElementChild as HTMLAnchorElement;
         expect(el.hasAttribute('href')).toBe(false);

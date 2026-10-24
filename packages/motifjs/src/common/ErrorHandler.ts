@@ -1,4 +1,4 @@
-import { errorCaught } from "../devtools/devbus";
+import { errorCaught, setDevMode } from "../devtools/devbus";
 
 function rethrowLater(error: any): void {
 	setTimeout(() => { throw error; }, 0);
@@ -12,6 +12,7 @@ export class ErrorHandler {
 
 	public setDevelopmentMode(isDev: boolean): void {
 		this._isDevelopment = isDev;
+		setDevMode(isDev);
 	}
 
 	public setConsoleLogging(enabled: boolean): void {
@@ -19,7 +20,7 @@ export class ErrorHandler {
 	}
 
 	public isDevelopment(): boolean {
-		return this._isDevelopment || (globalThis as any).__MOTIF_DEV__ === true;
+		return this._isDevelopment;
 	}
 
 	public reportSuppressed(context: string, error: any): void {

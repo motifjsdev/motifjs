@@ -8,7 +8,7 @@ let unbind: () => void;
 let reported: any[];
 
 beforeEach(() => {
-    (globalThis as any).__MOTIF_DEV__ = true;
+    errorHandler.setDevelopmentMode(true);
     reported = [];
     unbind = errorHandler.addListener(e => reported.push(e));
     warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
@@ -17,7 +17,7 @@ beforeEach(() => {
 afterEach(() => {
     unbind();
     warn.mockRestore();
-    delete (globalThis as any).__MOTIF_DEV__;
+    errorHandler.setDevelopmentMode(false);
     document.body.innerHTML = '';
 });
 
@@ -133,7 +133,7 @@ describe('MJX128 stays silent', () => {
     });
 
     test('outside development mode', () => {
-        delete (globalThis as any).__MOTIF_DEV__;
+        errorHandler.setDevelopmentMode(false);
         class Quiet extends Component { constructor() { super('div'); } build() { } }
         mount(() => new Quiet());
         expect(warnings()).toEqual([]);

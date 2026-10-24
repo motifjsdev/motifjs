@@ -1,4 +1,4 @@
-import { Component, Disposable, disposableCore } from '@motifx/core';
+import { Component, Disposable, disposableCore, errorHandler } from '@motifx/core';
 
 const settle = () => new Promise(r => setTimeout(r, 0));
 
@@ -19,7 +19,7 @@ beforeEach(() => {
 afterEach(() => {
     disposableCore.disposableTracker = null;
     warn.mockRestore();
-    delete (globalThis as any).__MOTIF_DEV__;
+    errorHandler.setDevelopmentMode(false);
     document.body.innerHTML = '';
 });
 
@@ -73,7 +73,7 @@ describe('Disposable.dispose runs once', () => {
     });
 
     test('calling the base dispose on a cleaned component warns MJX501', async () => {
-        (globalThis as any).__MOTIF_DEV__ = true;
+        errorHandler.setDevelopmentMode(true);
         const host = document.createElement('div');
         document.body.appendChild(host);
         const c = new Component(host);

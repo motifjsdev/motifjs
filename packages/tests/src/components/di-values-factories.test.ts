@@ -54,7 +54,7 @@ describe('registration warnings', () => {
 
     test('coded warnings in development', () => {
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
-        (globalThis as any).__MOTIF_DEV__ = true;
+        errorHandler.setDevelopmentMode(true);
         try {
             register();
             expect(warn.mock.calls.map(c => String(c[0]))).toEqual([
@@ -62,7 +62,7 @@ describe('registration warnings', () => {
                 "[motifjs] MJX411: 'deps' must be an array for token 'badDeps'; the invalid deps are ignored.",
             ]);
         } finally {
-            delete (globalThis as any).__MOTIF_DEV__;
+            errorHandler.setDevelopmentMode(false);
             warn.mockRestore();
         }
     });
@@ -188,13 +188,13 @@ describe('FromService', () => {
     test('returns null and warns with MJX414 in development when resolution fails', () => {
         class NotRegistered { }
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
-        (globalThis as any).__MOTIF_DEV__ = true;
+        errorHandler.setDevelopmentMode(true);
         const app = Application.CreateBuilder().build();
         try {
             expect(FromService(NotRegistered)).toBeNull();
             expect(String(warn.mock.calls[0]?.[0])).toBe("[motifjs] MJX414: FromService failed for token 'NotRegistered': [motifjs] MJX401: Service not registered for token: NotRegistered");
         } finally {
-            delete (globalThis as any).__MOTIF_DEV__;
+            errorHandler.setDevelopmentMode(false);
             warn.mockRestore();
             app.dispose();
         }

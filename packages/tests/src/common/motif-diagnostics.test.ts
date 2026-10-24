@@ -119,12 +119,12 @@ describe('warnings are coded and only shown in development', () => {
 
     test('a coded warning in development', () => {
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
-        (globalThis as any).__MOTIF_DEV__ = true;
+        errorHandler.setDevelopmentMode(true);
         try {
             addAfterDispose();
             expect(String(warn.mock.calls[0]?.[0])).toBe('[motifjs] MJX504: A disposable was added to a DisposableStore that is already disposed; the added object will leak.');
         } finally {
-            delete (globalThis as any).__MOTIF_DEV__;
+            errorHandler.setDevelopmentMode(false);
             warn.mockRestore();
         }
     });

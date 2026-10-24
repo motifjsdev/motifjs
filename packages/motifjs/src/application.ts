@@ -332,7 +332,7 @@ export class Application {
 
         safeCallSilent(() => {
             setRoutes(routes as any);
-            if (this._isDevelopment || (globalThis as any).__MOTIF_DEV__ === true) {
+            if (this._isDevelopment) {
                 lintRoutes(routes as any);
             }
         }, 'Application.useRouter.devtools');

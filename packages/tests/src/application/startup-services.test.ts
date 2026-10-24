@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { Application, Component, Injectable, MotifError, ServiceProvider } from '@motifx/core';
+import { Application, Component, Injectable, MotifError, ServiceProvider, errorHandler } from '@motifx/core';
 
 const tick = (ms = 0) => new Promise(r => setTimeout(r, ms));
 
@@ -122,7 +122,7 @@ describe('startup singletons', () => {
         class Draft { constructor() { made++; } }
         class Wizard { constructor() { made++; } }
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
-        (globalThis as any).__MOTIF_DEV__ = true;
+        errorHandler.setDevelopmentMode(true);
         try {
             const builder = Application.CreateBuilder();
             builder.services.addTransient(Draft, { useClass: Draft, startup: true });
@@ -134,7 +134,7 @@ describe('startup singletons', () => {
             expect(messages).toContain("[motifjs] MJX415: 'startup' only applies to singleton services; 'Draft' is registered as transient and is created when it is first resolved.");
             expect(messages).toContain("[motifjs] MJX415: 'startup' only applies to singleton services; 'Wizard' is registered as scoped and is created when it is first resolved.");
         } finally {
-            delete (globalThis as any).__MOTIF_DEV__;
+            errorHandler.setDevelopmentMode(false);
             warn.mockRestore();
         }
     });

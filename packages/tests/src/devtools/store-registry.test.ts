@@ -82,7 +82,7 @@ describe('devtools store registry', () => {
         expect(g.__MOTIF_STORE_REGISTRY__).toBeUndefined();
     });
 
-    test('with devtools off and no __MOTIF_DEV__ flag nothing is recorded', () => {
+    test('with devtools off nothing is recorded', () => {
         app.useDevelopment(true);
         const before = hook().getStores().length;
         app.useDevelopment(false);
@@ -92,7 +92,7 @@ describe('devtools store registry', () => {
         expect(kept).toHaveLength(2);
     });
 
-    test('with __MOTIF_DEV__ set before the core loads, stores are recorded before devtools is enabled', () => {
+    test('a __MOTIF_DEV__ flag set by hand before the core loads records nothing early', () => {
         g.__MOTIF_DEV__ = true;
         jest.isolateModules(() => {
             const core = require('@motifx/core');
@@ -101,8 +101,8 @@ describe('devtools store registry', () => {
             const isolated = core.Application.CreateBuilder().build();
             isolated.useDevelopment(true);
             const values = g.__MOTIF_DEVTOOLS__.getStores().map((s: any) => s.value);
-            expect(values).toContain(early);
-            expect(values).toContain('on');
+            expect(values).not.toContain(early);
+            expect(values).not.toContain('on');
             expect(flag.peek()).toBe('on');
             isolated.useDevelopment(false);
             isolated.dispose();

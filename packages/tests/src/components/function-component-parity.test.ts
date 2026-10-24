@@ -28,13 +28,13 @@ function mount(child: any): { host: HTMLElement; root: Component } {
 let warn: jest.SpyInstance;
 
 beforeEach(() => {
-    (globalThis as any).__MOTIF_DEV__ = true;
+    motif.errorHandler.setDevelopmentMode(true);
     warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
 });
 
 afterEach(() => {
     warn.mockRestore();
-    delete (globalThis as any).__MOTIF_DEV__;
+    motif.errorHandler.setDevelopmentMode(false);
     document.body.innerHTML = '';
 });
 

@@ -235,20 +235,20 @@ return runtimeClass;`)(
 describe('motifCompiled', () => {
     test('a matching contract is silent', () => {
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
-        (globalThis as any).__MOTIF_DEV__ = true;
+        motif.errorHandler.setDevelopmentMode(true);
         try {
             motif.motifCompiled(1);
             motif.motifCompiled(2);
             expect(warn).not.toHaveBeenCalled();
         } finally {
-            delete (globalThis as any).__MOTIF_DEV__;
+            motif.errorHandler.setDevelopmentMode(false);
             warn.mockRestore();
         }
     });
 
     test('a different contract warns once with MJX121 in development', () => {
         const warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
-        (globalThis as any).__MOTIF_DEV__ = true;
+        motif.errorHandler.setDevelopmentMode(true);
         try {
             motif.motifCompiled(99);
             motif.motifCompiled(99);
@@ -256,7 +256,7 @@ describe('motifCompiled', () => {
                 '[motifjs] MJX121: This code was compiled for compiler contract 99, but the @motifx/core runtime implements contract 1. Install matching versions of @motifx/compiler and @motifx/core, and rebuild packages that ship compiled JSX.',
             ]);
         } finally {
-            delete (globalThis as any).__MOTIF_DEV__;
+            motif.errorHandler.setDevelopmentMode(false);
             warn.mockRestore();
         }
     });
