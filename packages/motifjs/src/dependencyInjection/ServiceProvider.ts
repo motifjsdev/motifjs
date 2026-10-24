@@ -98,6 +98,10 @@ export function keepOnDispose(...values: object[]): void {
     for (const value of values) keptOnDispose.add(value);
 }
 
+export function getInScope<T = any>(provider: ServiceProvider, token: any): T {
+    return runWith(activeSlot, provider, () => provider.get<T>(token));
+}
+
 export function pinServiceOwner(owner: object): void {
     const root = navigatingRoot;
     if (!root) return;

@@ -10,7 +10,7 @@ import { RouterViewRegistry } from "./RouterViewRegistry";
 import { RouteItem } from "./RouteItem";
 import { encodeRest, stripPattern } from "./scanner";
 import { Application } from "../application";
-import { pinServiceOwner, runInConstructionScope } from "../dependencyInjection/ServiceProvider";
+import { getInScope, keepOnDispose, pinServiceOwner, runInConstructionScope } from "../dependencyInjection/ServiceProvider";
 import type { ServiceProvider } from "../dependencyInjection/ServiceProvider";
 import { hasOwnTransition, markDirection, playLeave, unmarkDirection } from "./NavigationStack";
 import type { NavigationStack, RetainedEntry, StackNavigation } from "./NavigationStack";
@@ -492,7 +492,7 @@ export class RoutingEngine {
     }
 
     private async parseControl(control: RouteItem['control'], scope?: ServiceProvider, route?: RouteSnapshot, item?: RouteItem): Promise<any> {
-        var instance = this._construct(scope, route, () => this._resolveFrom(scope, control));
+        var instance = this._construct(scope, route, () => this._resolveFrom(scope, control, item));
         if (instance) {
             return instance;
         }
@@ -502,7 +502,7 @@ export class RoutingEngine {
             if (item && val instanceof ComponentBase) this._given.add(item);
         }
 
-        instance = this._construct(scope, route, () => this._resolveFrom(scope, val));
+        instance = this._construct(scope, route, () => this._resolveFrom(scope, val, item));
         if (instance) {
             return instance;
         }
@@ -513,9 +513,19 @@ export class RoutingEngine {
         return resolveToComponent(val);
     }
 
-    private _resolveFrom(scope: ServiceProvider | undefined, token: any): any {
+    private _resolveFrom(scope: ServiceProvider | undefined, token: any, item?: RouteItem): any {
         const provider = scope ?? this._rootProvider();
-        if (!provider || !provider.getAllServices().getDescriptor(token)) return null;
+        const desc = provider?.getAllServices().getDescriptor(token);
+        if (!provider || !desc) return null;
+        if (desc.lifetime === 'singleton') {
+            if (item) this._given.add(item);
+            return provider.get(token);
+        }
+        if (desc.lifetime === 'scoped') {
+            const page = getInScope(provider, token);
+            if (page && typeof page === 'object') keepOnDispose(page);
+            return page;
+        }
         return provider.get(token);
     }
 
