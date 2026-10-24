@@ -73,7 +73,6 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
         super('div', props as any);
 
         if (props.className) this.class.add(props.className);
-        if (props.style) Object.assign(this.element.style, props.style);
 
         this._state = engine.reactive({
             isLoading: false,
@@ -93,6 +92,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
         this._loadInitial = this._loadInitial.bind(this);
         this.renderViewport = this.renderViewport.bind(this);
         this._makeView();
+        if (props.style) Object.assign(this.element.style, props.style);
     }
 
     contentWrapper = new Component();
