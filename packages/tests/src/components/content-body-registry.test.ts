@@ -87,4 +87,35 @@ describe('ContentBody registry', () => {
         expect(added).toContain(child);
         expect(host.querySelectorAll('.slot i.z').length).toBe(1);
     });
+
+    test('the four constructors pass childs, ref and lifecycle hooks on like Component', async () => {
+        const refs = new Map<string, unknown>();
+        const built: string[] = [];
+        const common = (name: string) => ({
+            ref: (c: unknown) => { refs.set(name, c); },
+            onBuilt: () => { built.push(name); },
+        });
+        const slotHost = new Component('div', { class: 'slot' } as any);
+        const slot = new Transport({ name: 'common', ...common('Transport') });
+        slotHost.controls.add(slot);
+        const bodyHost = new Component('div', { class: 'body' } as any);
+        const body = new ContentBody({ name: 'common', ...common('ContentBody'), childs: [item('own')] });
+        bodyHost.controls.add(body);
+        root.controls.add(slotHost, bodyHost);
+        await tick();
+
+        const to = new TransportTo({ name: 'common', ...common('TransportTo'), childs: [item('sent')] });
+        const block = new ContentBlock({ target: 'common', ...common('ContentBlock'), childs: [item('blocked')] });
+        root.controls.add(to, block);
+        await tick();
+
+        expect(refs.get('Transport')).toBe(slot);
+        expect(refs.get('ContentBody')).toBe(body);
+        expect(refs.get('TransportTo')).toBe(to);
+        expect(refs.get('ContentBlock')).toBe(block);
+        expect([...built].sort()).toEqual(['ContentBlock', 'ContentBody', 'Transport', 'TransportTo']);
+        expect(host.querySelectorAll('.slot i.sent').length).toBe(1);
+        expect(host.querySelectorAll('.body i.own').length).toBe(1);
+        expect(host.querySelectorAll('.body i.blocked').length).toBe(1);
+    });
 });

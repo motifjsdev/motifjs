@@ -1,6 +1,6 @@
 
 import { Component } from "./Component";
-import { ComponentBase } from "./componentBase";
+import { ComponentBase, IBaseProp } from "./componentBase";
 import { EventArgs } from "./types";
 import { reportWarning } from "../common/diagnostics";
 
@@ -14,7 +14,7 @@ interface ContentBlockProps {
     target: string
 }
 export class ContentBlock extends Component<any, ContentBlockProps> {
-    constructor(props: ContentBlockProps) {
+    constructor(props: IBaseProp<ContentBlockProps>) {
         super(props);
 
 
@@ -73,7 +73,7 @@ interface ContentBodyProps {
     onConfig?: any
 }
 export class ContentBody extends Component<any, ContentBodyProps> {
-    constructor(props: ContentBodyProps) {
+    constructor(props: IBaseProp<ContentBodyProps>) {
         super(props);
         ContentBodyCollectionHandable.set(this.props.name, this);
         this.context.fire(changeBodyCollectionHandler);

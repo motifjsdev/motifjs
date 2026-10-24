@@ -1,10 +1,10 @@
 import { Component } from "./Component";
-import { ComponentBase } from "./componentBase";
+import { ComponentBase, IBaseProp } from "./componentBase";
 import { TransportRegistry } from "./TransportRegistry";
 
 export class Transport extends Component<any, { name: string, mode?: 'replace' | 'merge' }> {
     public mode: 'replace' | 'merge';
-    constructor(props: { name: string, mode?: 'replace' | 'merge' }) {
+    constructor(props: IBaseProp<{ name: string, mode?: 'replace' | 'merge' }>) {
         super(props);
         this.mode = props.mode || 'replace';
     }

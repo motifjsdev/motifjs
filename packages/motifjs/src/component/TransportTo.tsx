@@ -1,7 +1,7 @@
 
 import { TransportRegistry, SLOT_REGISTERED_EVENT, SLOT_UNREGISTERED_EVENT } from "./TransportRegistry";
 import { Transporter } from "./Transporter";
-import { ComponentBase } from "./componentBase";
+import { ComponentBase, IBaseProp } from "./componentBase";
 import { Application } from "../application";
 import { EventArgs } from "./types";
 import { Transport } from "./Transport";
@@ -15,7 +15,7 @@ export class TransportTo extends Component<any, { name: string }> {
     private _slotUnregisteredListener?: () => void;
     private _transported: ComponentBase[] = [];
     private _countedLive = false;
-    constructor(props: { name: string }) {
+    constructor(props: IBaseProp<{ name: string }>) {
         super('div', props);
         contentBlocks.live++;
         this._countedLive = true;
