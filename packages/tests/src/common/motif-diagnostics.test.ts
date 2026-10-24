@@ -188,4 +188,37 @@ describe('ContentBlock disposal', () => {
             host.remove();
         }
     });
+
+    test('warns MJX109 once for each child it removes in development', async () => {
+        const { Body, Block } = evalJsx(`
+            function Body(){ return <div class="body"><ContentBody name="warned" /></div>; }
+            function Block(){ return <ContentBlock target="warned"><i>1</i><i>2</i></ContentBlock>; }
+        `, '{ Body, Block }', { ContentBody, ContentBlock });
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
+        errorHandler.setDevelopmentMode(true);
+        const app = Application.CreateBuilder().build();
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const root = new Component('div');
+        app.run(host, root);
+        try {
+            root.controls.add(Body());
+            const block = Block();
+            root.controls.add(block);
+            await tick();
+            warn.mockClear();
+            await block.dispose();
+            await tick();
+            const messages = warn.mock.calls.map(call => String(call[0])).filter(text => text.includes('MJX109'));
+            expect(messages).toEqual([
+                '[motifjs] MJX109: Content block is disposed; its child was removed from the content body.',
+                '[motifjs] MJX109: Content block is disposed; its child was removed from the content body.',
+            ]);
+        } finally {
+            app.dispose();
+            host.remove();
+            errorHandler.setDevelopmentMode(false);
+            warn.mockRestore();
+        }
+    });
 });
