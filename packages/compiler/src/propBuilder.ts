@@ -18,12 +18,29 @@ export const lowerAttrValue = (value: t.Expression | t.ObjectMethod | null | und
     return null;
 };
 
+export const FORM_ACTION_ATTRS = new Set(['action', 'formaction']);
+
+const unwrapTs = (value: t.Node): t.Node =>
+    (t.isTSAsExpression(value) || t.isTSSatisfiesExpression(value) || t.isTSNonNullExpression(value) || t.isTSTypeAssertion(value) || t.isParenthesizedExpression(value))
+        ? unwrapTs(value.expression)
+        : value;
+
+export const lowerFormActionValue = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>, value: t.Expression | t.ObjectMethod | null | undefined): t.Expression | null => {
+    if (value == null) return null;
+    const written = prop.isJSXAttribute() && t.isJSXExpressionContainer(prop.node.value) ? unwrapTs(prop.node.value.expression) : null;
+    if (written !== null && t.isExpression(value)
+        && (t.isIdentifier(written) || t.isArrowFunctionExpression(written) || t.isFunctionExpression(written) || t.isCallExpression(written))) {
+        return t.arrowFunctionExpression([], value);
+    }
+    return lowerAttrValue(value);
+};
+
 export const makeHtmlAttr = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>,
     name: string,
     value: t.Expression | t.ObjectMethod,
     path: NodePath<t.JSXElement>
 ): t.ObjectProperty | null => {
-    const lowered = lowerAttrValue(value);
+    const lowered = FORM_ACTION_ATTRS.has(name.toLowerCase()) ? lowerFormActionValue(prop, value) : lowerAttrValue(value);
     return lowered === null ? null : t.objectProperty(t.stringLiteral(name), lowered);
 }
 

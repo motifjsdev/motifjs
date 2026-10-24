@@ -104,6 +104,10 @@ type MotifCustomEventProps = {
     [K in `on:${string}` | `on-${string}` | `on_${string}`]?: (senderOrData: any, e?: any) => unknown;
 };
 export type MotifDomEventProps = motifEventsFor<HTMLElement>;
+export type MotifFormAction = (senderOrData: FormData & ComponentBase, data: FormData) => unknown;
+type MotifFormActionProps<K> =
+    (K extends 'form' ? { action?: string | null | MotifFormAction } : {}) &
+    (K extends 'button' | 'input' ? { formAction?: string | null | MotifFormAction; formaction?: string | null | MotifFormAction } : {});
 type MotifTagEventProps = motifModifiedEventsFor<HTMLElement> & MotifCustomEventProps;
 type MotifTagProps = MotifDomEventProps & MotifTagEventProps & {
     class?: MotifClass;
@@ -120,7 +124,7 @@ type MotifManagedProps<P> = 0 extends (1 & P) ? IBaseProp<{}> & MotifTagEventPro
 type MotifElementProps<TElement> = {
     [P in keyof Omit<
         Partial<TElement>,
-        keyof motifEventsFor<TElement> | 'style' | 'class' | 'className' | 'value' | 'for' | MethodLikeKeys
+        keyof motifEventsFor<TElement> | 'style' | 'class' | 'className' | 'value' | 'for' | 'action' | 'formAction' | MethodLikeKeys
     >]?: MotifBindable<Partial<TElement>[P]>;
 };
 
@@ -132,6 +136,7 @@ type IntrinsicHTML = {
     MotifCustomEventProps &
     Partial<MotifBaseProps> &
     MethodLikeProps &
+    MotifFormActionProps<K> &
     (K extends 'input' | 'textarea' ? { value?: MotifValue } : {}) & object & { [key: string]: any };
 };
 

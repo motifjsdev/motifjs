@@ -5,7 +5,7 @@ import htmlTags from 'html-tags';
 import { htmlAttributes, htmlEvents } from './htmlAtributes';
 import svgTags from 'svg-tags';
 
-import { assertLifecycleValue, cacheGuardCalls, findIfStatements, makeComponentTraps, makeDirectives, makeHtmlAttr, makeHtmlEvents, makePreDirectives, mergeHtmlAttributes, returnIfStatement, SUPPORTED_DIRECTIVES, UNSUPPORTED_DIRECTIVES, supportedDirectivesText } from './propBuilder';
+import { assertLifecycleValue, cacheGuardCalls, findIfStatements, FORM_ACTION_ATTRS, makeComponentTraps, makeDirectives, makeHtmlAttr, makeHtmlEvents, makePreDirectives, mergeHtmlAttributes, returnIfStatement, SUPPORTED_DIRECTIVES, UNSUPPORTED_DIRECTIVES, supportedDirectivesText } from './propBuilder';
 import { motifComponent, motifFragment, State, motifFunctionComponent, motifReport } from './constants';
 import { warn as diagWarn, fail } from './diagnostics';
 import { noteOrigin, transferOrigin, explainAt, explainChild, describeTextNode, codeOf, DEPS, isExplaining, type ExplainReactivity } from './explain';
@@ -411,6 +411,11 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
             const live = lowered.some(s => t.isCallExpression(s.expression) && t.isArrayExpression(s.expression.arguments[0]));
             explainProp(prop, 'attr', 'class.object', shown, live ? 'live' : 'static', live ? DEPS.getter : DEPS.none,
                 live ? 'each key toggles its class; values other than literals are wrapped in getters' : undefined);
+            return;
+        }
+        if (FORM_ACTION_ATTRS.has(lname) && (t.isArrowFunctionExpression(atr.value) || t.isFunctionExpression(atr.value))) {
+            explainProp(prop, 'attr', 'attr.action', shown, 'live', DEPS.getter,
+                'form action: the getter result decides on every run — a function is bound as the submit handler (preventDefault; called as fn(formData), or fn(sender, formData) with 2 parameters), a string is written as the URL');
             return;
         }
         const c = classifyAttrValue(prop, value, atr, lowered);

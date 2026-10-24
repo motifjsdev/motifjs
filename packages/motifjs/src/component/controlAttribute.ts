@@ -5,8 +5,71 @@ import { effectOwner } from "../devtools/reactivity";
 import { Binding } from "../bindings/Binding";
 import { IBaseBinding } from "../bindings/IBaseBinding";
 import { isComponentLike } from "./componentBase";
+import { reportError } from "../common/diagnostics";
 
 export type ElementTypes = Node | Element | HTMLElement | Text | DocumentFragment | Comment | HTMLDivElement;
+
+export const FORM_ACTION_ATTRS = new Set<string>(['action', 'formaction']);
+
+type FormActionEntry = { handler: Function; owner: ComponentBase<any, any> };
+const formActions = new WeakMap<Element, FormActionEntry>();
+const formActionRoots = new WeakSet<Node>();
+const formActionProbes = new WeakSet<Element>();
+
+function onFormActionSubmit(e: Event) {
+    if (e.defaultPrevented) return;
+    const form = e.target as HTMLFormElement | null;
+    if (!form || typeof FormData === 'undefined') return;
+    const submitter = ((e as SubmitEvent).submitter ?? null) as HTMLElement | null;
+    let entry: FormActionEntry | undefined;
+    if (submitter) {
+        entry = formActions.get(submitter);
+        if (!entry && submitter.hasAttribute('formaction')) return;
+    }
+    if (!entry) entry = formActions.get(form);
+    if (!entry) return;
+    e.preventDefault();
+    if (entry.owner.isDisposed) {
+        formActions.delete(submitter && formActions.get(submitter) === entry ? submitter : form);
+        return;
+    }
+    let data: FormData;
+    try {
+        data = submitter ? new FormData(form, submitter) : new FormData(form);
+    } catch {
+        data = new FormData(form);
+    }
+    const fn = entry.handler as any;
+    let res: any;
+    try {
+        res = fn.length <= 1 ? fn(data) : fn(entry.owner, data);
+    } catch (error) {
+        reportError('MJX123', error, 'submit');
+    }
+    if (res && typeof res.then === 'function') {
+        res.then(undefined, (error: unknown) => reportError('MJX123', error, 'submit'));
+    }
+}
+
+function listenFormActionRoot(root: Node | null) {
+    if (!root || formActionRoots.has(root)) return;
+    formActionRoots.add(root);
+    root.addEventListener('submit', onFormActionSubmit);
+}
+
+function listenFormActions(el: Element) {
+    listenFormActionRoot(el.ownerDocument);
+    if (formActionProbes.has(el)) return;
+    formActionProbes.add(el);
+    const type = el.tagName === 'FORM' ? 'submit' : 'click';
+    const probe = () => {
+        el.removeEventListener(type, probe);
+        formActionProbes.delete(el);
+        const root = el.getRootNode();
+        if (root !== el.ownerDocument) listenFormActionRoot(root);
+    };
+    el.addEventListener(type, probe);
+}
 
 const METHOD_ATTRS = new Set<string>([
     'focus', 'blur', 'click', 'pause', 'submit', 'reset',
@@ -40,6 +103,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
     private _parent: ComponentBase<ElementType, any>;
     private _attrMapStore?: Map<string | symbol, any>;
     private _watchersStore?: Map<string | symbol, { stop: () => void, binding?: IBaseBinding }>;
+    private _formActionElement?: Element;
     constructor(parent: ComponentBase<ElementType, any>) {
         this._parent = parent;
     }
@@ -102,7 +166,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                 propertyName: `__attr:${String(key)}`,
                 dataSource: null,
                 activate() { /* no-op */ },
-                deactivate() { stop(); },
+                deactivate: () => { stop(); this._forgetFormAction(key); },
                 reActivate: () => {
                     stop();
                     current = run();
@@ -119,6 +183,20 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
     private _applyValue(key: string | symbol, raw: any) {
         if (!key) return;
         const el = this._getElement();
+
+        if (typeof key === 'string' && FORM_ACTION_ATTRS.has(key.toLowerCase())) {
+            if (typeof raw === 'function') {
+                if (el) {
+                    formActions.set(el, { handler: raw, owner: this._parent });
+                    this._formActionElement = el;
+                    try { el.removeAttribute(key); } catch { }
+                    listenFormActions(el);
+                }
+                this._attrMap.delete(key);
+                return;
+            }
+            this._forgetFormAction(key);
+        }
 
         try {
             if (typeof raw === 'function') {
@@ -382,11 +460,19 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
     }
 
     private _release(key: string | symbol) {
+        this._forgetFormAction(key);
         const stopper = this._watchersStore?.get(key);
         if (!stopper) return;
         try { stopper.stop(); } catch { }
         try { stopper.binding && this._parent.bindings.remove(stopper.binding); } catch { }
         this._watchersStore!.delete(key);
+    }
+
+    private _forgetFormAction(key: string | symbol) {
+        if (typeof key !== 'string' || !FORM_ACTION_ATTRS.has(key.toLowerCase())) return;
+        const el = this._formActionElement ?? this._getElement();
+        if (el) formActions.delete(el);
+        this._formActionElement = undefined;
     }
 
     private _getElement(): Element | null {

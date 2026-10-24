@@ -12,7 +12,7 @@ import { BindingCollection } from "../bindings/BindingCollection";
 import { IBaseBinding } from "../bindings/IBaseBinding";
 import { effect } from "../store/reactivity-core";
 import { ComponentEmiter } from "./ComponentEmiter";
-import { controlAttribute } from "./controlAttribute";
+import { controlAttribute, FORM_ACTION_ATTRS } from "./controlAttribute";
 import { controlClass } from "./controlClass";
 import { ComponentBaseOptions, ElementType, EventArgs, HtmlElementEvents, OptionalParams, RouterClassingSettings, shimAnimation, VisibilityChangedEventArgs } from "./types";
 import { Flags, UnwrapValueRefs } from "../store/common";
@@ -2797,9 +2797,13 @@ function isJavascriptUrl(value: unknown): boolean {
 }
 
 function guardSpreadUrl(key: string, read: () => any): () => any {
+        const formAction = FORM_ACTION_ATTRS.has(key.toLowerCase());
         return () => {
                 let value = read();
-                if (typeof value === 'function') value = value();
+                if (typeof value === 'function') {
+                        if (formAction) return value;
+                        value = value();
+                }
                 if (typeof value === 'function') value = value();
                 if (!isJavascriptUrl(value)) return value;
                 reportWarning('MJX125', [key]);
