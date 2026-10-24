@@ -2512,20 +2512,22 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         private async _stopAnimations() {
                 const t = peekTransition(this);
                 try { t?.activeCssCancel?.(); } catch { }
+                const running = t?.activeAnimations?.length ? t.activeAnimations : [];
+                if (t) t.activeAnimations = [];
                 try {
-                        if (t?.activeAnimations?.length) {
+                        if (running.length) {
+                                const finished = running.map(a => a.finished?.catch(() => { }));
+                                running.forEach(a => {
+                                        try { if (a.playState !== 'finished') a.cancel(); } catch { }
+                                });
                                 try {
-                                        await Promise.all(t.activeAnimations.map(a =>
-                                                a.finished?.catch(() => { })
-                                        ));
+                                        await Promise.all(finished);
                                 } catch { /* ignore */ }
                         }
 
                 } catch (error) {
 
                 }
-                if (this.isDisposed) return;
-                if (t) t.activeAnimations = [];
         }
         //         return this;
 
