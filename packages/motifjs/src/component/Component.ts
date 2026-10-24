@@ -338,6 +338,14 @@ function materializeOptionsObject(spec: any, props: any): any {
             result[key] = spec[key];
         }
     });
+    if (typeof spec.view !== 'function' && (typeof spec.el === 'string' || spec.el instanceof Node)) {
+        const kids = result.childs;
+        if (Array.isArray(kids)) {
+            for (const kid of kids) {
+                if (kid && !result.controls.items.includes(kid)) result.controls.add(kid);
+            }
+        }
+    }
     if (typeof spec.ctor === 'function') {
         callReported(() => spec.ctor.call(result, props), 'MJX122', 'ctor');
     }
