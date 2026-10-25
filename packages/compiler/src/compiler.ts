@@ -252,6 +252,25 @@ export default class Compiler {
         return outcome.named || strip.stripped || elements.declared ? result : null;
     }
 
+    public stripDevOnly(code: string, filename: string): babel.BabelFileResult | null {
+        const file = filename.split('?')[0];
+        const strip = { stripped: false };
+        const result = babel.transformSync(code, {
+            sourceType: 'module',
+            babelrc: false,
+            configFile: false,
+            code: true,
+            sourceMaps: true,
+            comments: true,
+            highlightCode: false,
+            filename: file,
+            sourceFileName: file,
+            parserOpts: { plugins: /\.m?tsx$/.test(file) ? ['typescript', 'jsx', 'decorators-legacy'] : ['jsx'] },
+            plugins: this.stripPlugins(strip),
+        });
+        return strip.stripped ? result : null;
+    }
+
     public start(code: string, filename: string): babel.BabelFileResult | null {
 
         beginCollect();

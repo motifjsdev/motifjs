@@ -242,6 +242,16 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
           } catch (error) {
             throw error;
           }
+        } else if (strip) {
+          const compiler = new Compiler();
+          compiler.production = strip;
+          const result = compiler.stripDevOnly(src, id);
+          if (result && result.code != null) {
+            return {
+              code: result.code,
+              map: result.map
+            }
+          }
         }
       }
     }
