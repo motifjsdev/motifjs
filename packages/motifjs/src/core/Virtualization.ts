@@ -183,6 +183,15 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
         return offsets[Math.min(Math.max(0, index), offsets.length - 1)];
     }
 
+    private _restHeight(): number {
+        const rest = this._state.hasMore ? Math.max(0, this._state.totalCount - this._state.data.length) : 0;
+        if (rest === 0) return 0;
+        const h = this._fixedHeight();
+        if (h !== null) return rest * h;
+        const total = this._view.length;
+        return total > 0 ? Math.round(this._offsetOf(total) / total * rest) : 0;
+    }
+
     private _indexAt(y: number, offsets: number[]): number {
         const total = offsets.length - 1;
         if (total <= 0) return 0;
@@ -300,7 +309,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
             // Satırlar sökülürken içerik kısalmasın: kısalırsa tarayıcı kaydırmayı kırpar.
             // Boşluğu geçici olarak yeni listenin tam boyuna sabitle; renderViewport düzeltir.
             this._topSpacer.style({ height: '0px' });
-            this._bottomSpacer.style({ height: this._offsetOf(this._view.length) + 'px' });
+            this._bottomSpacer.style({ height: this._offsetOf(this._view.length) + this._restHeight() + 'px' });
             this._clearContent();
             if (el && el.scrollTop !== top) el.scrollTop = top;
             this.renderViewport();
@@ -384,7 +393,16 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
         } finally {
             this._isLoadingMore = false;
         }
+        if (!this.isDisposed && seq === this._loadSeq && !this._state.error && this._wantsMore()) void this._loadMore();
+    }
 
+    private _wantsMore(): boolean {
+        if (this.props.autoLoad === false || !this._state.hasMore) return false;
+        const el = this.wrapper?.element as HTMLElement | undefined;
+        if (!el || el.clientHeight <= 0) return false;
+        const fixed = this._fixedHeight();
+        const loadedBottom = fixed !== null ? this._state.data.length * fixed : this._offsetOf(this._view.length);
+        return loadedBottom - (el.scrollTop + el.clientHeight) < (this.props.autoLoadThreshold ?? 100);
     }
 
 
@@ -447,7 +465,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
             first = Math.max(0, anchor - overscan);
             last = Math.min(total, anchor + visible + overscan);
             topPx = first * h;
-            bottomPx = Math.max(0, total - last) * h;
+            bottomPx = Math.max(0, total - last) * h + this._restHeight();
         } else {
             if (el.clientHeight <= 0) {
                 this._renderPending = !(el as any).isConnected;
@@ -466,7 +484,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
             first = Math.max(0, anchor - overscan);
             last = Math.min(total, Math.max(end, anchor + 1) + overscan);
             topPx = offsets[first];
-            bottomPx = Math.max(0, offsets[total] - offsets[last]);
+            bottomPx = Math.max(0, offsets[total] - offsets[last]) + this._restHeight();
         }
 
         const rows: ComponentBase[] = new Array(last - first);

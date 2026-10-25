@@ -42,6 +42,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - The compiler contract stays at 1; a lone compiled setup is marked so the runtime takes it directly, and core class fields are compiled as constructor assignments.
 - Enter transitions start in a microtask again; `RouterLink` builds its content in `onBuilt` and writes hrefs in the address form of the router mode.
 - Core objects are marked non-reactive with a symbol instead of by constructor name.
+- `Virtualization` sizes its scroll area from `totalCount` while `hasMore` is true: items not loaded yet take space below the rows (estimated from the loaded rows when `itemHeight` is a function), and scrolling into that space requests the pages in order up to it.
 - Internal modules import their dependencies directly instead of through the package barrels, and `Component`, `Frame` and `Application` register themselves in a slot module, so the bundle loads in any entry order (rollup 4.61 and later sort entry modules alphabetically).
 - Tooling: rollup ^4.64.12, rollup-plugin-typescript2 ^0.37, @rollup/plugin-terser ^1.0; eslint moved to devDependencies; `argparse` is pinned to 2 under `js-yaml` so the test toolchain no longer pulls in `sprintf-js`; the stale `yarn.lock` was dropped.
 
