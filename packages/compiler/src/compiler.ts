@@ -187,6 +187,13 @@ function devOnlyStrip(production: boolean, outcome?: { stripped: boolean }) {
                 for (const stmtPath of path.get('body') as NodePath[]) {
                     try { if (hasMarker(stmtPath.node)) remove(stmtPath); } catch { }
                 }
+                path.traverse({
+                    ClassBody(body: NodePath<t.ClassBody>) {
+                        for (const member of body.get('body') as NodePath[]) {
+                            try { if (hasMarker(member.node)) remove(member); } catch { }
+                        }
+                    }
+                });
             },
             Statement(path: NodePath) {
                 if (isDev) return;

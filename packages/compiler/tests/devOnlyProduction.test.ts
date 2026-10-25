@@ -179,6 +179,44 @@ describe('@DEV-ONLY-BEGIN ile @DEV-ONLY-END arası production çıktısına girm
         expect(out).not.toContain('@DEV-ONLY');
     });
 
+    test('tek işaret ardındaki sınıf üyesini siler: metot, statik alan, erişimci', () => {
+        const src = [
+            'class Store {',
+            '    get(key) { return this.map.get(key); }',
+            '    /* @DEV-ONLY */',
+            '    debugDump() { return [...this.map]; }',
+            '    /* @DEV-ONLY */ static debugCount = 0;',
+            '    /* @DEV-ONLY */ get debugSize() { return this.map.size; }',
+            '    set(key, value) { this.map.set(key, value); }',
+            '}',
+            'export { Store };',
+        ].join('\n');
+        const out = vite(true).transform(src, LIB_ID)!.code;
+        expect(out).toContain('get(key)');
+        expect(out).toContain('set(key, value)');
+        expect(out).not.toContain('debugDump');
+        expect(out).not.toContain('debugCount');
+        expect(out).not.toContain('debugSize');
+        expect(out).not.toContain('@DEV-ONLY');
+    });
+
+    test('JSX dosyasındaki sınıfta tek işaretli alan ve metot üretimde silinir, geliştirmede kalır', () => {
+        const src = [
+            'export class Panel {',
+            '    /* @DEV-ONLY */ debugName = "panel";',
+            '    /* @DEV-ONLY */ inspect() { return this.debugName; }',
+            '    view() { return <div>x</div>; }',
+            '}',
+        ].join('\n');
+        const prod = vite(true).transform(src, '/app/src/Panel.tsx')!.code;
+        expect(prod).not.toContain('debugName');
+        expect(prod).not.toContain('inspect');
+        expect(prod).toContain('view()');
+        const dev = vite(false).transform(src, '/app/src/Panel.tsx')!.code;
+        expect(dev).toContain('debugName');
+        expect(dev).toContain('inspect');
+    });
+
     test('aynı blokta iki aralık ve tek satır işaret birlikte silinir', () => {
         const src = [
             'function run() {',
