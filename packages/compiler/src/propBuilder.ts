@@ -194,7 +194,11 @@ export const mergeHtmlAttributes = (htmlAttrlist: t.ObjectProperty[]): t.Express
                         );
                     }
                 } else if (keyValue === 'checked' || keyValue === 'value' || keyValue === 'selected') {
-                    const val = attr.value;
+                    const val = t.isTemplateLiteral(attr.value)
+                        ? (attr.value.expressions.length === 0
+                            ? t.stringLiteral(attr.value.quasis.map(q => q.value.raw).join(""))
+                            : t.arrowFunctionExpression([], attr.value))
+                        : attr.value;
                     if (t.isArrowFunctionExpression(val) || t.isExpression(val)) {
                         htmlProps.push(t.expressionStatement(t.callExpression(t.identifier('sender.bindings.add'), [t.stringLiteral(keyValue), val])));
                     }

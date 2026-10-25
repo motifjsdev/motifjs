@@ -61,8 +61,8 @@ describe('explain: every attr row shows the call that is really generated', () =
         expect(row.lowered).toMatch(/^sender\.bindings\.add\("value", \(\) => /);
         expect(row.reactive).toBe('live');
         const [tpl] = explainWithCode('<input value={`a ${this.x}`} />').rows;
-        expect(tpl.lowered).toBe('sender.bindings.add("value", `a ${this.x}`)');
-        expect(tpl.reactive).toBe('once');
+        expect(tpl.lowered).toBe('sender.bindings.add("value", () => `a ${this.x}`)');
+        expect(tpl.reactive).toBe('live');
     });
 
     test('x-style is recorded from the generated call', () => {
