@@ -34,6 +34,10 @@ export class UrlRoutingModule {
 
     constructor(options: RouterOptions, application: Application) {
         this._routerOptions = options;
+        if (options.mode === 'history' && (globalThis as any).location?.protocol === 'file:') {
+            reportWarning('MJX321', []);
+            this._routerOptions = { ...options, mode: 'hash' };
+        }
         this.routeCollection = new RouteCollection(options.RouteItems);
         this.routingEngine = new RoutingEngine();
         this.application = application;

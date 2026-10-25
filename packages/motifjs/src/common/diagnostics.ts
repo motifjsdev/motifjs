@@ -67,6 +67,7 @@ export const motifMessages = {
     MJX318: (path: string) => `Route '${path}' was given a component instance that is already disposed; give a class, a factory or a lazy import so a fresh page can be created.`,
     MJX319: (path: string) => `Route path has ':' outside '{…}': "${path}". Parameters are written as "{name}"; ':' only gives a default inside braces.`,
     MJX320: (path: string, reason: string) => `Route path "${path}" has a parameter pattern that cannot be used: ${reason}.`,
+    MJX321: () => `History mode cannot be used on a file: address; the router uses hash mode.`,
 
     MJX401: (token: string) => `Service not registered for token: ${token}`,
     MJX402: (token: string) => `Async factory used with get() for token ${token}; use getAsync().`,
