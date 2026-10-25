@@ -838,8 +838,9 @@ function writeStyleKey(so: any, key: string, value: any): void {
         }
 }
 
-function writeStyleObject(so: any, content: any): void {
+function writeStyleObject(so: any, content: any, skip?: Map<string, any>): void {
         for (const key of Object.keys(content)) {
+                if (skip && skip.has(key)) continue;
                 writeStyleKey(so, key, content[key]);
         }
 }
@@ -1671,7 +1672,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 this._bindings = value;
         }
         /** style(fn) izleyicisi: tek tek tutulur, yeniden çağrıda önceki durdurulur. */
-        private _styleFx?: { stop: () => void; binding: IBaseBinding };
+        private _styleFx?: { stop: () => void; binding: IBaseBinding; pins: Map<string, any> };
 
         public useModel<TModel>(modelCtor: TModel): UnwrapValueRefs<TModel> {
                 return reactive<TModel>(modelCtor);
@@ -1989,6 +1990,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         this._stopStyleEffect();
                         let prevKeys: string[] = [];
                         let prevWasString = false;
+                        const pins = new Map<string, any>();
                         const run = () => effect(() => {
                                 const v = (content as () => any)();
                                 if (this.isDisposed) return;
@@ -1996,18 +1998,19 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 if (!so) return;
                                 if (typeof v === 'string') {
                                         so.cssText = v;
+                                        pins.forEach((value, k) => { try { writeStyleKey(so, k, value); } catch { } });
                                         prevKeys = [];
                                         prevWasString = true;
                                 } else if (v && typeof v === 'object') {
-                                        if (prevWasString) { so.cssText = ''; prevWasString = false; }
+                                        if (prevWasString) { so.cssText = ''; prevWasString = false; pins.forEach((value, k) => { try { writeStyleKey(so, k, value); } catch { } }); }
                                         for (const k of prevKeys) {
-                                                if (!(k in v)) { try { writeStyleKey(so, k, ''); } catch { } }
+                                                if (!(k in v) && !pins.has(k)) { try { writeStyleKey(so, k, ''); } catch { } }
                                         }
-                                        writeStyleObject(so, v);
+                                        writeStyleObject(so, v, pins);
                                         prevKeys = Object.keys(v);
                                 } else {
-                                        if (prevWasString) { so.cssText = ''; prevWasString = false; }
-                                        for (const k of prevKeys) { try { writeStyleKey(so, k, ''); } catch { } }
+                                        if (prevWasString) { so.cssText = ''; prevWasString = false; pins.forEach((value, k) => { try { writeStyleKey(so, k, value); } catch { } }); }
+                                        for (const k of prevKeys) { if (!pins.has(k)) { try { writeStyleKey(so, k, ''); } catch { } } }
                                         prevKeys = [];
                                 }
                         });
@@ -2026,12 +2029,15 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 deactivate() { stop(); }
                         } as any;
                         try { this.bindings.add(binding); } catch { }
-                        this._styleFx = { stop, binding };
+                        this._styleFx = { stop, binding, pins };
                         return this;
                 }
                 if (typeof content === 'string') {
+                        this._stopStyleEffect();
                         (styleObj as any).cssText = content;
                 } else if (content && typeof content === 'object') {
+                        const pins = this._styleFx?.pins;
+                        if (pins) for (const key of Object.keys(content)) pins.set(key, (content as any)[key]);
                         writeStyleObject(styleObj, content);
                 }
                 return this;

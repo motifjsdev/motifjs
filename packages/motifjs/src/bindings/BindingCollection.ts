@@ -117,6 +117,10 @@ export class BindingCollection implements IBindingCollection {
             binding = new Binding(this._component, propertyName, dataSource, dataMember, formatString, formatInfo);
         }
 
+        const name = binding.propertyName;
+        if (name === 'value' || name === 'checked' || name === 'selected') {
+            for (const old of this._items.filter(b => b.propertyName === name && !this._modelWriters?.has(b))) this.remove(old);
+        }
         pushTight(this._items, binding);
 
         if (this._component.isBuilt) {
