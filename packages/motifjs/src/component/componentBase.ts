@@ -829,6 +829,21 @@ function placedIn(owner: ComponentBase, c: ComponentBase): boolean {
         return (c.element as Node | null)?.parentNode === host || trace?.parentNode === host;
 }
 
+function writeStyleKey(so: any, key: string, value: any): void {
+        if (key.startsWith('--')) {
+                if (value == null || value === '') so.removeProperty(key);
+                else so.setProperty(key, String(value));
+        } else {
+                so[key] = value;
+        }
+}
+
+function writeStyleObject(so: any, content: any): void {
+        for (const key of Object.keys(content)) {
+                writeStyleKey(so, key, content[key]);
+        }
+}
+
 function waitsAtTrace(owner: ComponentBase, c: ComponentBase): boolean {
         const host = findAppendableComponent(owner)?.element as Node | undefined;
         const trace = optionsOf(c)?.placeholder as Node | undefined;
@@ -1982,13 +1997,13 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 } else if (v && typeof v === 'object') {
                                         if (prevWasString) { so.cssText = ''; prevWasString = false; }
                                         for (const k of prevKeys) {
-                                                if (!(k in v)) { try { so[k] = ''; } catch { } }
+                                                if (!(k in v)) { try { writeStyleKey(so, k, ''); } catch { } }
                                         }
-                                        Object.assign(so, v);
+                                        writeStyleObject(so, v);
                                         prevKeys = Object.keys(v);
                                 } else {
                                         if (prevWasString) { so.cssText = ''; prevWasString = false; }
-                                        for (const k of prevKeys) { try { so[k] = ''; } catch { } }
+                                        for (const k of prevKeys) { try { writeStyleKey(so, k, ''); } catch { } }
                                         prevKeys = [];
                                 }
                         });
@@ -2013,7 +2028,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 if (typeof content === 'string') {
                         (styleObj as any).cssText = content;
                 } else if (content && typeof content === 'object') {
-                        Object.assign(styleObj as any, content);
+                        writeStyleObject(styleObj, content);
                 }
                 return this;
         }
