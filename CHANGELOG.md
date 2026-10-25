@@ -71,6 +71,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - `mode: 'history'` on a `file:` address runs the router in hash mode and warns `MJX321` in development.
 - A page shown again from the `keepAlive` cache or from a detached stack entry moves to the current navigation's `scoped` instances before `onActivated` runs, so what `onActivated` writes there is kept.
 - Children disposed with their parent, and `disposeAsync()`, stop their running animations and leave without a leave transition, so an animated child no longer holds its parent or a conditional branch back.
+- A page built for a navigation that a newer one overtakes is disposed instead of being kept for the next visit, so going to that route later, or to the same route with other parameters, shows a page built for the address in the bar.
 - Compiler: a template string in `value`, `checked` or `selected` is live like in other attributes; a JSX element given as an attribute value without braces compiles like the braced form; a single `@DEV-ONLY` before a class member removes the member; a production build strips dev-only code from files matched by `exclude`.
 
 ## 1.1.0

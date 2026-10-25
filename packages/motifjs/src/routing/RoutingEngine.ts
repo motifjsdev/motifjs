@@ -18,7 +18,7 @@ import type { RouteSnapshot } from "./routerState";
 
 type StackLeave = { top: ComponentBase | null; retained: RetainedEntry | null; disposeAfter: ComponentBase[] };
 type StackMotion = { animate: boolean; pages: boolean; direction: NavigationDirection };
-type NavigationRun = { provider?: ServiceProvider; scope?: ServiceProvider; route: RouteSnapshot; committed: boolean; suppressed: ComponentBase[] };
+type NavigationRun = { provider?: ServiceProvider; scope?: ServiceProvider; route: RouteSnapshot; committed: boolean; suppressed: ComponentBase[]; created: Array<[RouteItem, ComponentBase]> };
 
 export class RoutingEngine {
 
@@ -153,7 +153,7 @@ export class RoutingEngine {
             state: undefined,
         };
         const provider = this._rootProvider();
-        const run: NavigationRun = { provider, scope: provider?._beginNavigation(), route, committed: false, suppressed: [] };
+        const run: NavigationRun = { provider, scope: provider?._beginNavigation(), route, committed: false, suppressed: [], created: [] };
         try {
             await this._execute(path, nav, run);
         } finally {
@@ -162,9 +162,26 @@ export class RoutingEngine {
         }
     }
 
+    private _uncommitted: WeakSet<ComponentBase> = new WeakSet();
+
+    private _noteCreated(run: NavigationRun, item: RouteItem, inst: any): void {
+        if (!(inst instanceof ComponentBase) || this._keepsInstance(item)) return;
+        this._uncommitted.add(inst);
+        run.created.push([item, inst]);
+    }
+
+    private _dropUncommitted(run: NavigationRun): void {
+        for (const [item, inst] of run.created) {
+            if (!this._uncommitted.delete(inst)) continue;
+            if (this.controlCache.get(item) === inst) this.controlCache.delete(item);
+            if (!inst.isDisposed) void this._depart(inst, null, true);
+        }
+    }
+
     private _commitNavigation(run: NavigationRun): void {
         if (run.committed) return;
         run.committed = true;
+        for (const [, inst] of run.created) this._uncommitted.delete(inst);
         if (run.scope) run.provider!._commitNavigation(run.scope);
         this.application?._routerState.commit(run.route);
     }
@@ -267,11 +284,12 @@ export class RoutingEngine {
             }
             if (this.controlCache.has(element)) {
                 let control = this.controlCache.get(element);
-                if (!control || control.isDisposed) {
+                if (!control || control.isDisposed || this._uncommitted.has(control)) {
                     this.controlCache.delete(element);
                     const task = this.createInstance(element, run.scope, run.route).then(inst => {
-                        this.controlCache.set(element, inst);
+                        if (navVersion === this._navVersion || this._keepsInstance(element)) this.controlCache.set(element, inst);
                         controlList[i] = inst;
+                        this._noteCreated(run, element, inst);
                     });
                     prepTasks.push(task);
                 } else {
@@ -282,8 +300,9 @@ export class RoutingEngine {
                 }
             } else {
                 const task = this.createInstance(element, run.scope, run.route).then(inst => {
-                    this.controlCache.set(element, inst);
+                    if (navVersion === this._navVersion || this._keepsInstance(element)) this.controlCache.set(element, inst);
                     controlList[i] = inst;
+                    this._noteCreated(run, element, inst);
                 });
                 prepTasks.push(task);
             }
@@ -366,8 +385,12 @@ export class RoutingEngine {
                 reportError('MJX306', error, 'onEnter');
             }
         }
-        this._previousPath = path;
-        this._previousInstances = controlList.slice();
+        if (navVersion === this._navVersion) {
+            this._previousPath = path;
+            this._previousInstances = controlList.slice();
+        } else if (!run.committed) {
+            this._dropUncommitted(run);
+        }
 
         if (stack && leave) {
             if (leave.top && navVersion === this._navVersion && (leave.retained || leave.disposeAfter.length)) {
