@@ -34,6 +34,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - Forms: a function given to `action` on a `<form>` or to `formAction` on a button is the submit handler: it is called with the form's `FormData` after `preventDefault`, and skipped when an `onsubmit` listener prevented the event; a string stays the URL.
 - Async results: `using(promise, onfulfilled?, onrejected?)` types the value from the promise and takes callbacks of any return type; a callback that throws, or an `async` one that rejects, is reported as `MJX129` with the original error as `cause`.
 - Project: contributing guide, security policy and issue templates.
+- Mounting: `app.run` takes a comment or text node as the host; the application is placed right before it and the node stays. `MJX416` is thrown when the node has no parent element.
 
 ### Changed
 

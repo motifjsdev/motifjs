@@ -126,9 +126,14 @@ export class Application {
             engine.startGc();
         }, 'Application.run.engine.startGc');
         let target: HTMLElement | null;
+        let anchor: Node | null = null;
         if (typeof host === 'string') {
             target = document.querySelector(host) as HTMLElement | null;
             if (!target) throw motifError('MJX406', host);
+        } else if (host.nodeType === Node.COMMENT_NODE || host.nodeType === Node.TEXT_NODE) {
+            target = host.parentNode as HTMLElement | null;
+            if (!target || target.nodeType !== Node.ELEMENT_NODE) throw motifError('MJX416');
+            anchor = host;
         } else {
             target = host as HTMLElement;
         }
@@ -141,6 +146,7 @@ export class Application {
         /* @DEV-ONLY */ setTreeRoot(AppShell);
         safeCallSilent(() => {
             (AppShell as any)._keepElementOnDispose = true;
+            if (anchor) (AppShell as any)._mountAnchor = anchor;
             (AppShell as any).application = this;
             (AppShell as any).provider = this.provider;
 

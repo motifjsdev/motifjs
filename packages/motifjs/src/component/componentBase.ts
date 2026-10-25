@@ -867,7 +867,8 @@ function followingAnchor(owner: ComponentBase, start: number, host: Node): Node 
                 const close = optionsOf(owner)?.closeFragment as unknown as Node | undefined;
                 return close && close.parentNode === host ? close : null;
         }
-        return null;
+        const mount = (owner as any)._mountAnchor as Node | undefined;
+        return mount && mount.parentNode === host ? mount : null;
 }
 
 function placeTrace(owner: ComponentBase, c: ComponentBase): void {
@@ -1923,7 +1924,10 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                         if ((target as any).nodeType === Node.TEXT_NODE) {
                                                 (target as Text).appendData(ph.textContent);
                                         } else {
-                                                if ((target as any).appendChild) {
+                                                const mount = (this as any)._mountAnchor as Node | undefined;
+                                                if (mount && mount.parentNode === target) {
+                                                        (target as any).insertBefore(ph, mount);
+                                                } else if ((target as any).appendChild) {
                                                         (target as any).appendChild(ph);
                                                 } else {
                                                         (target as any).append(ph);
