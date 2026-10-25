@@ -29,15 +29,23 @@ The same plugin works in a plain Rollup build:
 
 ```js
 import compiler from '@motifx/compiler';
+import esbuild from 'rollup-plugin-esbuild';
+import resolve from '@rollup/plugin-node-resolve';
 
 const production = !process.env.ROLLUP_WATCH;
 
 export default {
     input: 'src/index.tsx',
     output: { dir: 'dist', format: 'esm' },
-    plugins: [compiler({ production })],
+    plugins: [
+        compiler({ production }),
+        esbuild(),
+        resolve({ extensions: ['.tsx', '.ts', '.mjs', '.js'] }),
+    ],
 };
 ```
+
+The plugin removes the types from the `.tsx` and `.jsx` files it compiles. Plain `.ts` files still need a TypeScript plugin (`rollup-plugin-esbuild` here, or `@rollup/plugin-typescript`), and imports written without an extension or by package name need `@rollup/plugin-node-resolve` with the `.tsx` and `.ts` extensions.
 
 Rollup has no mode of its own, so `production` tells the plugin that this is a production build. Without it, the plugin treats the build as production when `NODE_ENV` is `production`.
 
