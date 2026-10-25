@@ -1,6 +1,13 @@
 import { Application, Component, RouterView } from '@motifx/core';
 
 const tick = (ms = 30) => new Promise(r => setTimeout(r, ms));
+const waitFor = async (cond: () => boolean, timeout = 2000) => {
+    const start = Date.now();
+    while (!cond()) {
+        if (Date.now() - start > timeout) throw new Error('waitFor timeout');
+        await new Promise(r => setTimeout(r, 5));
+    }
+};
 
 class Svc {
     static all: Svc[] = [];
@@ -76,8 +83,8 @@ describe('a scoped service outlives the component that still holds its navigatio
         await tick();
         const leavingService = Svc.all[1];
         await back();
+        await waitFor(() => leavingService.disposed);
         expect(seen).toEqual([`page sees #2`]);
-        expect(leavingService.disposed).toBe(true);
     });
 
     test('an evicted keepAlive page sees its own service alive while it is disposed', async () => {

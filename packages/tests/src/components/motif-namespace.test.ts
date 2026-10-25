@@ -242,10 +242,11 @@ describe('this.motif: a subclass reusing the old names does not break the framew
 
     test('the transition prop is applied and the user options field is untouched', async () => {
         const { host, root, calls } = build();
-        await tick();
+        for (let i = 0; i < 5; i++) await Promise.resolve();
         const el = host.querySelector('#faded') as HTMLElement;
         expect(el.hasAttribute('transition')).toBe(false);
         expect(el.classList.contains('fade-enter-from') || el.classList.contains('fade-enter-active') || el.classList.contains('fade-enter-to')).toBe(true);
+        await tick();
         const trap = (root.controls.items[0] as any);
         const faded = findByTag(trap, 'faded');
         expect(faded.motif.options.transition.name).toBe('fade');
