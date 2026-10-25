@@ -19,7 +19,7 @@ import { Flags, UnwrapValueRefs } from "../store/common";
 import { getTransitionInfo, runCssTransition, TransitionProps } from "../common/transition";
 import { callReported, formatMotifMessage, motifError, MotifError, reportError, reportWarning } from "../common/diagnostics";
 import { ComponentMotif } from "./ComponentMotif";
-import { ServiceProvider, pinServiceOwner, recordServiceOwner, retireServiceOwner, unpinServiceOwner } from "../dependencyInjection/ServiceProvider";
+import { ServiceProvider, pinServiceOwner, recordServiceOwner, releaseServiceOwner, retireServiceOwner, unpinServiceOwner } from "../dependencyInjection/ServiceProvider";
 import { contentBlocks as liveContentBlocks } from "./contentBlockRegistry";
 import { OPTIONS_OWNER, TRANSITION_SLOT } from "./optionsSlots";
 import { deferUntilEntered, isTransitionMode, pendingLeaves, trackEnter, trackLeave, transitionSettings, TransitionMode } from "../common/transitionRegistry";
@@ -1129,6 +1129,7 @@ function disposeFinish(c: any, options: IDisposeOptions, asChild: boolean): void
                 if (options?.deep !== false) {
                         deepCleanup(c);
                 }
+                releaseServiceOwner(c);
                 return;
         }
         c.element = null;
@@ -1136,6 +1137,7 @@ function disposeFinish(c: any, options: IDisposeOptions, asChild: boolean): void
         safeCall(() => { c._baseCtx?._emiters?.clear(); }, 'dispose.emiters');
         offAll(c);
         deepCleanup(c);
+        releaseServiceOwner(c);
 }
 
 async function disposeRemainderAsync(c: any, options: IDisposeOptions, asChild: boolean, leave: Promise<void> | undefined): Promise<void> {

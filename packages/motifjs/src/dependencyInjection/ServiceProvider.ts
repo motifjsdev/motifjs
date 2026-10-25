@@ -7,7 +7,7 @@ import { scopeCreated, scopeDisposed, scopesChanged, serviceCreated } from "../d
 
 type ScopeKind = 'root' | 'navigation' | 'user';
 type OwnerSlot = { owner: object | null; ownerless?: boolean };
-type OwnerPin = { scope: ServiceProvider; live: boolean };
+type OwnerPin = { scope: ServiceProvider; live: boolean; retiring?: boolean };
 type NavigationState = { current: ServiceProvider; version: Signal<number>; scopes: Set<ServiceProvider> };
 
 let activeResolver: ((token: any) => any) | null = null;
@@ -122,14 +122,19 @@ export function unpinServiceOwner(owner: object): void {
 export function retireServiceOwner(owner: object): void {
     const pin = pins.get(owner);
     if (pin) {
-        if (pin.live) {
-            pin.live = false;
-            pin.scope._releaseLivePin();
-        }
+        if (pin.live) pin.retiring = true;
         return;
     }
     if (!navigatingRoot || !slotsByOwner.has(owner)) return;
     pins.set(owner, { scope: pinnedScopeOf(owner) ?? navigatingRoot._currentScope(), live: false });
+}
+
+export function releaseServiceOwner(owner: object): void {
+    const pin = pins.get(owner);
+    if (!pin || !pin.live || !pin.retiring) return;
+    pin.live = false;
+    pin.retiring = false;
+    pin.scope._releaseLivePin();
 }
 
 export class ServiceProvider {
