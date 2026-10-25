@@ -59,6 +59,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - Children added to a hidden fragment, built or moved ones included, are placed when the fragment is shown; `stopAnimations()` cancels running keyframe animations and a cut leave transition completes the hide; the `style` prop of `Virtualization` is applied after the list's own root styles.
 - Calling `useRouter` again while the router runs keeps the running router until `restartRouter`; a route page resolved from DI follows its lifetime: a singleton page is kept across visits and a scoped page is built once per navigation.
 - An `errorHandler` listener that throws no longer stops the listeners after it; its error is rethrown later.
+- `Transporter.transport` with an `index` places the child in the new parent's element, and `transportMany` keeps the given order from that index.
 
 ## 1.1.0
 

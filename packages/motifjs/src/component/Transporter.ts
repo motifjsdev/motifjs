@@ -1,6 +1,5 @@
 import { ComponentBase } from "./componentBase";
 import { motifError } from "../common/diagnostics";
-import { treeChanged } from "../devtools/tree";
 
 export interface TransportOptions {
     index?: number;
@@ -20,8 +19,7 @@ export class Transporter {
         }
         if (typeof options.index === "number") {
             if (!newParent.controls.items.includes(child)) {
-                newParent.controls.items.splice(options.index, 0, child);
-                /* @DEV-ONLY */ treeChanged(newParent);
+                newParent.controls.insert(options.index, child);
             }
         } else {
             if (!newParent.controls.items.includes(child)) {
@@ -36,7 +34,12 @@ export class Transporter {
 
     static transportMany(children: ComponentBase[], newParent: ComponentBase, options: TransportOptions = {}) {
         if (!Array.isArray(children)) return;
-        children.forEach(child => this.transport(child, newParent, options));
+        if (typeof options.index === "number") {
+            const index = options.index;
+            children.forEach((child, i) => this.transport(child, newParent, { ...options, index: index + i }));
+        } else {
+            children.forEach(child => this.transport(child, newParent, options));
+        }
     }
 
     static createSlot(name: string, parent?: ComponentBase) {
