@@ -84,6 +84,19 @@ class Layout extends Component {
     }
 }
 
+class ListPage extends Page {
+    static rowsDisposing = 0;
+    constructor() {
+        super('list');
+        const items = Array.from({ length: 50 }, (_, i) => ({ id: i }));
+        this.bindings.list(() => items, () => {
+            const row = new Component('div');
+            row.motif.on('x:disposing' as any, () => { ListPage.rowsDisposing++; });
+            return row;
+        });
+    }
+}
+
 const page = (name: string) => () => new Page(name);
 
 describe('a route change does not wait for the leaving page to be disposed', () => {
@@ -130,6 +143,17 @@ describe('a route change does not wait for the leaving page to be disposed', () 
         expect(a.isDisposed).toBe(false);
         await waitFor(() => a.isDisposed);
         expect(events).toEqual(['a disposing, b on screen: true', 'a disposed']);
+    });
+
+    test('the rows of a list on the leaving page are disposed with the page, after the new page arrives', async () => {
+        ListPage.rowsDisposing = 0;
+        await start('/list', [{ path: '/list', control: () => new ListPage() }, { path: '/b', control: page('b') }]);
+        const list = Page.all.find(p => p.name === 'list')!;
+        await app.router.navigate('/b');
+        expect(connected('page-b')).toBe(true);
+        expect(ListPage.rowsDisposing).toBe(0);
+        await waitFor(() => list.isDisposed);
+        expect(ListPage.rowsDisposing).toBe(50);
     });
 
     test('a page with its own leave transition plays it first and is disposed after the new page arrives', async () => {

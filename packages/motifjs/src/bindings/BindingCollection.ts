@@ -441,6 +441,15 @@ export class BindingCollection implements IBindingCollection {
         }
     }
 
+    pauseAll(): void {
+        for (const binding of this._items) {
+            const paused = binding as IBaseBinding & { pause?: () => void };
+            if (typeof paused.pause === 'function') paused.pause();
+            else binding.deactivate();
+        }
+        this.stopEffects();
+    }
+
     reActivateAll(): void {
         for (const binding of [...this._items]) {
             if (typeof binding.reActivate !== 'function') continue;

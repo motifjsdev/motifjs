@@ -3109,8 +3109,7 @@ export function detachBeforeDispose(component: ComponentBase, instant: boolean =
         const nodes: any[] = [root];
         for (let n = 0; n < nodes.length; n++) {
                 const node = nodes[n];
-                safeCall(() => { node._bindings?.stopEffects(); }, 'detachBeforeDispose.effects');
-                deactivateBindings(node);
+                safeCall(() => { node._bindings?.pauseAll(); }, 'detachBeforeDispose.bindings');
                 const offs = node._contextOffs as Array<() => void> | undefined;
                 if (offs) {
                         node._contextOffs = undefined;

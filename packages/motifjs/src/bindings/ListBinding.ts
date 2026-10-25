@@ -43,6 +43,12 @@ export class ListBinding implements IBaseBinding {
         }
         this._disposeAll();
     }
+    pause(): void {
+        if (this._effectCleanup) {
+            this._effectCleanup();
+            this._effectCleanup = undefined;
+        }
+    }
     reActivate(): void {
 
         this.deactivate();
