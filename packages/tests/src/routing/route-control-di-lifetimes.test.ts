@@ -89,7 +89,7 @@ describe('a route control registered in DI', () => {
         const first = Page.made[0];
         expect(shown()).toBe(first.element);
         expect(Object.getPrototypeOf(first)).toBe(Page.prototype);
-        await app.navigate('/'); await tick();
+        await app.navigate('/'); await tick(150);
         expect(first.isDisposed).toBe(true);
         await app.navigate('/p/2'); await tick();
         expect(Page.made.length).toBe(2);
@@ -119,6 +119,7 @@ describe('a route control registered in DI', () => {
         await app.navigate('/'); await tick();
         await app.navigate('/p/2'); await tick();
         expect(Page.made.length).toBe(2);
+        await tick(150);
         expect(Page.made[0].isDisposed).toBe(true);
         expect(shown()).toBe(Page.made[1].element);
     });

@@ -141,7 +141,7 @@ describe('Scroll memory', () => {
         view.state.height = 300;
         await app.router.navigate('/uzun');
         expect(view.state.top).toBe(300);
-        expect(view.pendingFrames).toBe(1);
+        expect(view.pendingFrames).toBeGreaterThan(0);
 
         // İçerik yerleşti.
         view.state.height = 5000;

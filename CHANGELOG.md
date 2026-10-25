@@ -19,6 +19,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - The esbuild `jsx` setting is no longer part of the setup instructions; the compiler plugin alone configures JSX.
 - **`doWork(promise)` is typed `Promise<T | MotifError>`.** Once the component is disposed it resolves to a `MotifError` (`MJX108`); a rejection that arrives after disposal resolves the same way, with the rejection as `cause`, instead of reaching `catch`. Check `instanceof Error` before using the value; code that used the value unchecked no longer compiles.
 - **`onMounted` hooks run after the current task**, in small batches, so a page with many of them does not freeze. Work that does not need the element in the document belongs in `onBuilt`.
+- **A route change does not wait for the leaving page to be disposed.** The router removes the leaving page (after its own leave transition, when it has one), mounts the new page and disposes the leaving page after the new page is painted. A left page's `onDisposing` and `onDisposed` run later and see the new route, and `app.navigate` resolves before them; the page's bindings and its `context.on` / `context.onRouterChanged` subscriptions stop as it leaves, and its `scoped` services stay alive until it is disposed.
 
 ### Added
 
@@ -45,6 +46,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - `Virtualization` sizes its scroll area from `totalCount` while `hasMore` is true: items not loaded yet take space below the rows (estimated from the loaded rows when `itemHeight` is a function), and scrolling into that space requests the pages in order up to it.
 - Internal modules import their dependencies directly instead of through the package barrels, and `Component`, `Frame` and `Application` register themselves in a slot module, so the bundle loads in any entry order (rollup 4.61 and later sort entry modules alphabetically).
 - Tooling: rollup ^4.64.12, rollup-plugin-typescript2 ^0.37, @rollup/plugin-terser ^1.0; eslint moved to devDependencies; `argparse` is pinned to 2 under `js-yaml` so the test toolchain no longer pulls in `sprintf-js`; the stale `yarn.lock` was dropped.
+- A navigation scope that a component still holds (a page being disposed, a `keepAlive` page, a stack-kept page, a detached component) closes when that component has been disposed, so its `onDisposing` and `onDisposed` see live `scoped` services. The stack disposes the pages it drops after the new page is painted, and the content a left page sent with `TransportTo` leaves its slot at once.
 
 ### Fixed
 

@@ -53,4 +53,8 @@ export class RouterView extends Component {
         } catch { /* ignore */ }
     }
 
+    public __detachBeforeDispose() {
+        RouterViewRegistry.unregister(this.props.name ?? 'default', this);
+    }
+
 }

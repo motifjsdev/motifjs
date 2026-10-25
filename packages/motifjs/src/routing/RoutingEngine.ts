@@ -1,6 +1,6 @@
 import { Component, assertLoadedComponent, resolveToComponent, unwrapModule } from "../component/Component";
-import { ComponentBase, notifyActivated, notifyDeactivated } from "../component/componentBase";
-import { cancelAnimationsDeep } from "../component/navigation";
+import { ComponentBase, detachBeforeDispose, notifyActivated, notifyDeactivated } from "../component/componentBase";
+import { afterNextPaint, cancelAnimationsDeep } from "../component/navigation";
 import { errorHandler } from "../common/ErrorHandler";
 import { callReported, motifError, reportError, reportWarning } from "../common/diagnostics";
 import { NavigationDirection, NavigationOptions, ResolveResult } from "./common";
@@ -73,6 +73,38 @@ export class RoutingEngine {
         this.stack = null;
         if (stack) { try { await stack.dispose(); } catch { } }
         await this._release(Array.from(this.controlCache.keys()), true);
+        const departing = Array.from(this._departures.keys());
+        this._departures.clear();
+        for (const inst of departing) {
+            try { if (!inst.isDisposed) await inst.dispose({ deep: true, skipLeaveTransition: true }); } catch (error) { reportError('MJX307', error); }
+        }
+    }
+
+    private _departures: Map<ComponentBase, Promise<void>> = new Map();
+
+    private _depart(inst: ComponentBase, outlet: RouterView | null, instant: boolean = false): Promise<void> {
+        const running = this._departures.get(inst);
+        if (running) return running;
+        if (outlet && outlet.current === inst) {
+            outlet.current = null;
+            outlet.previouspage = null;
+        }
+        pinServiceOwner(inst);
+        const scheduled = () => afterNextPaint(() => this._finishDeparture(inst));
+        const departed = detachBeforeDispose(inst, instant).then(scheduled, scheduled);
+        this._departures.set(inst, departed);
+        return departed;
+    }
+
+    private _finishDeparture(inst: ComponentBase): void {
+        if (!this._departures.delete(inst) || inst.isDisposed) return;
+        inst.dispose({ deep: true, skipLeaveTransition: true }).catch(error => reportError('MJX307', error));
+    }
+
+    private _previousOutlet(index: number): RouterView | null {
+        const container = index - 1 >= 0 ? this._previousInstances[index - 1] : this.root;
+        const outletName = (this._previousPath?.chain[index]?.extend?.targetOutlet) || 'default';
+        try { return container && !container.isDisposed ? this.findRouterView(container, outletName) : null; } catch { return null; }
     }
 
     generatePathString(routeDefinition: string, params: Record<string, any>): string {
@@ -170,10 +202,11 @@ export class RoutingEngine {
                         this.controlCache.delete(leafRoute);
                     } else {
                         const oldInstance = this.controlCache.get(leafRoute);
-                        if (oldInstance && typeof oldInstance.dispose === 'function' && !oldInstance.isDisposed) {
-                            try { await oldInstance.dispose(); } catch { }
-                        }
                         this.controlCache.delete(leafRoute);
+                        if (oldInstance instanceof ComponentBase && !oldInstance.isDisposed) {
+                            const index = this._previousInstances.indexOf(oldInstance);
+                            await this._depart(oldInstance, index >= 0 ? this._previousOutlet(index) : null);
+                        }
                     }
                 }
 
@@ -342,7 +375,7 @@ export class RoutingEngine {
             }
             if (leave.retained) stack.settle(leave.retained);
             for (const inst of leave.disposeAfter) {
-                try { if (!inst.isDisposed) await inst.dispose({ deep: true, skipLeaveTransition: true }); } catch (error) { reportError('MJX307', error); }
+                if (!inst.isDisposed) void this._depart(inst, null, true);
             }
         }
     }
@@ -422,9 +455,9 @@ export class RoutingEngine {
                         result.disposeAfter.push(inst);
                     } else if (motion.pages) {
                         markDirection(inst, motion.direction);
-                        await inst.dispose();
+                        await this._depart(inst, null);
                     } else {
-                        await inst.dispose({ deep: true, skipLeaveTransition: true });
+                        await this._depart(inst, null, true);
                     }
                 }
             } catch (error) {
@@ -478,7 +511,7 @@ export class RoutingEngine {
                     notifyDeactivated(inst);
                 } else {
                     if (this.controlCache.get(item) === inst) this.controlCache.delete(item);
-                    await inst.dispose();
+                    await this._depart(inst, null);
                 }
             } catch (error) {
                 reportError('MJX307', error);

@@ -1,5 +1,5 @@
 import { ComponentBase, notifyDeactivated } from "../component/componentBase";
-import { disposeNavigationTarget, hasOwnTransition } from "../component/navigation";
+import { afterNextPaint, disposeNavigationTarget, hasOwnTransition } from "../component/navigation";
 import { reportError } from "../common/diagnostics";
 import type { NavigationDirection, RouteItem, StackEntryInfo, StackOptions, StackTransitionContext } from "./";
 
@@ -220,7 +220,7 @@ export class NavigationStack {
             this.truncate(point.index);
         } else if (nav.direction === 'replace') {
             const stale = this.entries.get(point.index);
-            if (stale) { this.entries.delete(point.index); void this.disposeEntry(stale); }
+            if (stale) { this.entries.delete(point.index); this.disposeLater(stale); }
         }
     }
 
@@ -250,7 +250,7 @@ export class NavigationStack {
             try { top.parent?.controls.silentDetach(top); } catch { }
         }
         const previous = this.entries.get(point.index);
-        if (previous && previous !== entry) void this.disposeEntry(previous);
+        if (previous && previous !== entry) this.disposeLater(previous);
         this.entries.set(point.index, entry);
         this.evict();
         return entry;
@@ -387,6 +387,10 @@ export class NavigationStack {
         }
     }
 
+    private disposeLater(entry: RetainedEntry): void {
+        afterNextPaint(() => { void this.disposeEntry(entry); });
+    }
+
     public async disposeEntry(entry: RetainedEntry): Promise<void> {
         const top = entry.top;
         if (!top || top.isDisposed) return;
@@ -414,7 +418,7 @@ export class NavigationStack {
         for (const [index, entry] of Array.from(this.entries)) {
             if (index >= fromIndex) {
                 this.entries.delete(index);
-                void this.disposeEntry(entry);
+                this.disposeLater(entry);
             }
         }
     }
@@ -425,7 +429,7 @@ export class NavigationStack {
             for (const index of this.entries.keys()) if (index < oldest) oldest = index;
             const entry = this.entries.get(oldest);
             this.entries.delete(oldest);
-            if (entry) void this.disposeEntry(entry);
+            if (entry) this.disposeLater(entry);
         }
     }
 

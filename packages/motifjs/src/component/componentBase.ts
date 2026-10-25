@@ -1813,11 +1813,14 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 }
                 return this._scopedContext!;
         }
+        private _contextOffs?: Array<() => void>;
+
         /** @internal context üzerinden açılan aboneliği bileşenin ömrüne bağlar; iptal fonksiyonunu döndürür. */
         public _trackContextSubscription(off: () => void): () => void {
                 if (typeof off !== 'function') { return off; }
                 if (this.isDisposed) { off(); return off; }
                 const d = this._register(trackedCleanup(off));
+                (this._contextOffs ??= []).push(off);
                 return () => { this._disposables.detach(d); off(); };
         }
 
@@ -3097,6 +3100,32 @@ export function notifyActivated(component: ComponentBase): void {
 export function notifyDeactivated(component: ComponentBase): void {
         pinServiceOwner(component);
         ComponentHelper.deactivateTree(component);
+}
+
+export function detachBeforeDispose(component: ComponentBase, instant: boolean = false): Promise<void> {
+        const root: any = component;
+        if (!root || root.isDisposed) return Promise.resolve();
+        const nodes: any[] = [root];
+        for (let n = 0; n < nodes.length; n++) {
+                const node = nodes[n];
+                safeCall(() => { node._bindings?.stopEffects(); }, 'detachBeforeDispose.effects');
+                deactivateBindings(node);
+                const offs = node._contextOffs as Array<() => void> | undefined;
+                if (offs) {
+                        node._contextOffs = undefined;
+                        for (const off of offs) safeCall(off, 'detachBeforeDispose.context');
+                }
+                if (typeof node.__detachBeforeDispose === 'function') {
+                        safeCall(() => { node.__detachBeforeDispose(); }, 'detachBeforeDispose.hook');
+                }
+                const items = childrenOf(node);
+                for (let i = 0; i < items.length; i++) {
+                        if (items[i] && !items[i].isDisposed) nodes.push(items[i]);
+                }
+        }
+        safeCall(() => { root.parent?.controls?.silentUnlink?.(root); }, 'detachBeforeDispose.unlink');
+        if (instant) root._forceInstantDetach = true;
+        return detachDomWithAnimationAsync(root);
 }
 
 Object.defineProperty(ComponentBase.prototype, Flags.SKIP, { value: true });

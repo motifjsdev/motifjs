@@ -109,11 +109,12 @@ describe('app.router and useNavigation() are live', () => {
         expect(p.uriAtStart).toBe('/p/5');
     });
 
-    test('the leaving page still reads its own route while it is removed', async () => {
+    test('the leaving page is disposed after the new route is in place', async () => {
         await tick();
         await app.router.navigate('/b');
-        await tick();
-        expect(Page.leftWith).toEqual(['/a']);
+        expect(Page.leftWith).toEqual([]);
+        await tick(150);
+        expect(Page.leftWith).toEqual(['/b']);
         expect(app.router.uri).toBe('/b');
     });
 

@@ -1,7 +1,7 @@
 
 import { TransportRegistry, SLOT_REGISTERED_EVENT, SLOT_UNREGISTERED_EVENT } from "./TransportRegistry";
 import { Transporter } from "./Transporter";
-import { ComponentBase, IBaseProp } from "./componentBase";
+import { ComponentBase, IBaseProp, detachBeforeDispose } from "./componentBase";
 import { Application } from "../application";
 import { EventArgs } from "./types";
 import { Transport } from "./Transport";
@@ -89,6 +89,12 @@ export class TransportTo extends Component<any, { name: string }> {
         this.controls.onRemove = this._onRemoveRef;
 
 
+    }
+
+    public __detachBeforeDispose(): void {
+        for (const child of this._transported) {
+            if (!child.isDisposed) void detachBeforeDispose(child);
+        }
     }
 
     public onDisposing(sender: ComponentBase, e: EventArgs): void {

@@ -101,6 +101,7 @@ describe('Options API factories as route components', () => {
         await tick();
         expect(host.querySelector('#page-a')).toBeNull();
         expect(host.querySelector('#page-b')?.textContent).toBe('b:1');
+        await tick(150);
         expect(created[0].isDisposed).toBe(true);
         expect(reported).toEqual([]);
         await app.dispose();

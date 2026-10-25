@@ -55,6 +55,23 @@ export function cancelAnimationsDeep(target: any): void {
     } catch { }
 }
 
+export function afterNextPaint(run: () => void): void {
+    let done = false;
+    const go = () => {
+        if (done) return;
+        done = true;
+        run();
+    };
+    const raf = (globalThis as any).requestAnimationFrame;
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    if (typeof raf === 'function' && !hidden) {
+        raf(() => setTimeout(go, 0));
+        setTimeout(go, 1000);
+    } else {
+        setTimeout(go, 0);
+    }
+}
+
 export async function disposeNavigationTarget(target: ComponentBase | ComponentBase[] | null, options: IDisposeOptions = { deep: true }): Promise<void> {
     if (!target) return;
     const list = Array.isArray(target) ? target : [target];

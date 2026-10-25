@@ -194,7 +194,7 @@ describe('stack navigation plays the pages\' own transitions', () => {
         expect(at('page-b pg-leave')).toBeLessThan(at('page-b remove'));
         expect(at('page-b remove')).toBeLessThan(at('page-a pg-enter'));
         expect(at('page-a dir back')).toBeLessThan(at('page-a pg-enter'));
-        expect(live('b').length).toBe(0);
+        await waitFor(() => live('b').length === 0);
         expect(live('a')[0]).toBe(a);
         expect(pgClasses(el(a))).toEqual([]);
         expect(el(a).hasAttribute('data-nav-direction')).toBe(false);
@@ -247,7 +247,7 @@ describe('stack navigation plays the pages\' own transitions', () => {
         await settle();
 
         expect(app.router.uri).toBe('/a');
-        expect(live('b').length).toBe(0);
+        await waitFor(() => live('b').length === 0);
         expect(log.filter(l => / pg-/.test(l) || / dir /.test(l))).toEqual([]);
     });
 

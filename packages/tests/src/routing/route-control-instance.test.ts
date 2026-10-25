@@ -227,8 +227,7 @@ describe('route control given as a ready instance', () => {
         await tick();
         expect(shown('page-s')).toBe(shared.element);
         await app.router.navigate('/b');
-        await tick();
-        expect(shared.isDisposed).toBe(true);
+        await waitFor(() => shared.isDisposed);
         await app.router.navigate('/s');
         await tick();
         expect(codes()).toEqual(['MJX304<MJX318']);

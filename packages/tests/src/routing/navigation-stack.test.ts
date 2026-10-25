@@ -108,7 +108,7 @@ describe('Navigation stack', () => {
         await app.navigate('/b');
         await tick();
 
-        expect(instances('a')[0].isDisposed).toBe(true);
+        await waitFor(() => instances('a')[0].isDisposed);
         expect(app.router.stack).toBeUndefined();
     });
 
@@ -131,7 +131,7 @@ describe('Navigation stack', () => {
             expect(el(a).isConnected).toBe(true);
             expect(el(a).dataset.mark).toBe('kept');
             expect(a.activated).toBe(1);
-            expect(instances('b')[0].isDisposed).toBe(true);
+            await waitFor(() => instances('b')[0].isDisposed);
             expect(host.querySelectorAll('.page').length).toBe(1);
         });
 
@@ -144,7 +144,7 @@ describe('Navigation stack', () => {
 
             expect(app.router.uri).toBe('/b');
             expect(instances('b').length).toBe(2);
-            expect(instances('b')[0].isDisposed).toBe(true);
+            await waitFor(() => instances('b')[0].isDisposed);
             expect(live('a').length).toBe(1);
         });
 
@@ -162,7 +162,7 @@ describe('Navigation stack', () => {
             expect(app.router.uri).toBe('/p/1');
             expect(live('p1')).toEqual([p1]);
             expect(instances('p1').length).toBe(1);
-            expect(live('p2').length).toBe(0);
+            await waitFor(() => live('p2').length === 0);
         });
 
         it('respects depth and releases the oldest page', async () => {
@@ -173,7 +173,7 @@ describe('Navigation stack', () => {
             await app.navigate('/d');
             await tick();
 
-            expect(live('a').length).toBe(0);
+            await waitFor(() => live('a').length === 0);
             expect(live('b').length).toBe(1);
             expect(live('c').length).toBe(1);
             expect(live('d').length).toBe(1);
@@ -185,7 +185,7 @@ describe('Navigation stack', () => {
             await app.navigate('/b', { replace: true });
             await tick();
 
-            expect(live('a').length).toBe(0);
+            await waitFor(() => live('a').length === 0);
         });
 
         it('push after going back drops the stale forward pages', async () => {
@@ -199,8 +199,8 @@ describe('Navigation stack', () => {
             await app.navigate('/d');
             await tick();
 
-            expect(live('b').length).toBe(0);
-            expect(live('c').length).toBe(0);
+            await waitFor(() => live('b').length === 0);
+            await waitFor(() => live('c').length === 0);
             expect(live('a').length).toBe(1);
         });
 
@@ -242,7 +242,7 @@ describe('Navigation stack', () => {
             expect(app.router.uri).toBe('/app/x');
             expect(live('x')).toEqual([x]);
             expect(el(x).isConnected).toBe(true);
-            expect(live('y').length).toBe(0);
+            await waitFor(() => live('y').length === 0);
         });
 
         it('nested routes keep the whole layout when leaving it', async () => {
@@ -458,7 +458,7 @@ describe('Navigation stack', () => {
 
             await back();
             expect(el(a).getAttribute('style')).toBeNull();
-            expect(b.isDisposed).toBe(true);
+            await waitFor(() => b.isDisposed);
         });
 
         it('custom animation receives both pages with the leaving one layered, then styles are restored', async () => {
@@ -485,7 +485,7 @@ describe('Navigation stack', () => {
                 { direction: 'back', entering: 'page-a', leaving: 'page-b', leavingPosition: 'absolute', enteringZ: '', leavingConnected: true },
             ]);
             expect(el(a).getAttribute('style')).toBeNull();
-            expect(live('b').length).toBe(0);
+            await waitFor(() => live('b').length === 0);
         });
 
         it('back animation also works without attached retention', async () => {
@@ -496,7 +496,7 @@ describe('Navigation stack', () => {
             await back();
 
             expect(calls).toContain('back:page-b');
-            expect(live('b').length).toBe(0);
+            await waitFor(() => live('b').length === 0);
         });
     });
 
@@ -531,7 +531,7 @@ describe('Navigation stack', () => {
             await tick();
 
             expect(app.router.uri).toBe('/a');
-            expect(b.isDisposed).toBe(true);
+            await waitFor(() => b.isDisposed);
             expect(el(a).getAttribute('style')).toBeNull();
             expect(a.activated).toBe(1);
         });

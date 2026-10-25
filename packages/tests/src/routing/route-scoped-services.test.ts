@@ -141,6 +141,7 @@ describe('scoped services: one scope per navigation', () => {
         expect(shown.layout.length).toBe(1);
         expect(b.svc.id).not.toBe(firstId);
         expect(layout.svc.id).toBe(b.svc.id);
+        await tick(150);
         expect(byId(firstId).disposed).toBe(true);
         expect(b.svc.disposed).toBe(false);
     });
@@ -189,6 +190,7 @@ describe('scoped services: one scope per navigation', () => {
         expect(p1Cart.id).toBe(p1Id);
         expect(p2.svc.items).toEqual([]);
         expect(byId(p1Id).items).toEqual(['product 1 data']);
+        await tick(150);
         expect(byId(p1Id).disposed).toBe(true);
     });
 

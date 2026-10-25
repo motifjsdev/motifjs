@@ -16,6 +16,8 @@ import { reportError } from "../common/diagnostics";
 import { lazyBindMethods } from "../common/lazyBind";
 import { pushTight } from "../common/pushTight";
 
+const STOPPED = () => { };
+
 function resolveValue(value: any): any {
     return typeof value === 'function' ? resolveValue(value()) : value;
 }
@@ -31,7 +33,7 @@ export class BindingCollection implements IBindingCollection {
     private _modelWriters?: WeakMap<IBaseBinding, (value: any) => void>;
     private _component: ComponentBase;
     private _branchScope: Array<() => void> | null = null;
-    private _effects: Array<{ restart: () => void }> | null = null;
+    private _effects: Array<{ stop: () => void; restart: () => void }> | null = null;
 
     constructor(component: ComponentBase) {
         this._component = component;
@@ -44,11 +46,10 @@ export class BindingCollection implements IBindingCollection {
         this._component.motif.register(quietCleanup(stop));
     }
     private _keepEffect(start: () => () => void, teardown?: () => void): void {
-        let stop = start();
-        const record = { restart: () => { stop(); stop = start(); } };
+        const record = { stop: start(), restart: () => { record.stop(); record.stop = start(); } };
         (this._effects ??= []).push(record);
         this._own(() => {
-            stop();
+            record.stop();
             teardown?.();
             const list = this._effects;
             if (list) {
@@ -429,6 +430,15 @@ export class BindingCollection implements IBindingCollection {
         this._items.forEach(binding => binding.deactivate());
         this._items = [];
         this._effects = null;
+    }
+
+    stopEffects(): void {
+        const effects = this._effects;
+        if (!effects) return;
+        for (const record of effects) {
+            record.stop();
+            record.stop = STOPPED;
+        }
     }
 
     reActivateAll(): void {
