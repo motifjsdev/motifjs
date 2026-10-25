@@ -69,6 +69,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - The value written directly on a tag owns `value`, `checked`, `selected` and each `style` key over a spread getter, as it does for other attributes; a later `bindings.add` for one of those three replaces the earlier binding.
 - `motif.on('x:initializing' | 'x:initialized')` added after construction runs the handler once.
 - `mode: 'history'` on a `file:` address runs the router in hash mode and warns `MJX321` in development.
+- A page shown again from the `keepAlive` cache or from a detached stack entry moves to the current navigation's `scoped` instances before `onActivated` runs, so what `onActivated` writes there is kept.
 - Compiler: a template string in `value`, `checked` or `selected` is live like in other attributes; a JSX element given as an attribute value without braces compiles like the braced form; a single `@DEV-ONLY` before a class member removes the member; a production build strips dev-only code from files matched by `exclude`.
 
 ## 1.1.0

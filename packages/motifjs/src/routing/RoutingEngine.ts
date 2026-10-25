@@ -10,7 +10,7 @@ import { RouterViewRegistry } from "./RouterViewRegistry";
 import { RouteItem } from "./RouteItem";
 import { encodeRest, stripPattern } from "./scanner";
 import { Application } from "../application";
-import { getInScope, keepOnDispose, pinServiceOwner, runInConstructionScope } from "../dependencyInjection/ServiceProvider";
+import { getInScope, keepOnDispose, pinServiceOwner, runInConstructionScope, unpinServiceOwner } from "../dependencyInjection/ServiceProvider";
 import type { ServiceProvider } from "../dependencyInjection/ServiceProvider";
 import { hasOwnTransition, markDirection, playLeave, unmarkDirection } from "./NavigationStack";
 import type { NavigationStack, RetainedEntry, StackNavigation } from "./NavigationStack";
@@ -633,8 +633,10 @@ export class RoutingEngine {
 
             const revealed = this._revealed.delete(inst);
             const alreadyShown = outlet.current === inst && !revealed;
+            const activating = this._pendingActivate.delete(inst);
+            if (activating) unpinServiceOwner(inst);
             await outlet.navigate(inst);
-            if (this._pendingActivate.delete(inst)) {
+            if (activating) {
                 notifyActivated(inst);
             }
             const showHook = (chain[index] as RouteItem | undefined)?.onShow;
