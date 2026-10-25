@@ -62,7 +62,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - `Transporter.transport` with an `index` places the child in the new parent's element, and `transportMany` keeps the given order from that index.
 - A `display` or `wait` binding set up in `initializeComponent` hides the child from the start, leaves a trace and shows the child in its place.
 - Style objects and style getters write CSS custom properties (`--name`); a `null` or empty value removes one.
-- Compiler: a template string in `value`, `checked` or `selected` is live like in other attributes; a production build strips dev-only code from files matched by `exclude`.
+- Compiler: a template string in `value`, `checked` or `selected` is live like in other attributes; a JSX element given as an attribute value without braces compiles like the braced form; a production build strips dev-only code from files matched by `exclude`.
 
 ## 1.1.0
 

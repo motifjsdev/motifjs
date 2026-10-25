@@ -364,6 +364,8 @@ export default class Compiler {
                     return {
                         visitor: {
                             JSXAttribute(path: NodePath<t.JSXAttribute>, state: State) {
+                                const raw = path.node.value;
+                                if (t.isJSXElement(raw) || t.isJSXFragment(raw)) path.node.value = t.jsxExpressionContainer(raw);
                                 if (!isVirtualizationDataRequest(path)) return;
                                 const value = path.get('value');
                                 if (!value.isJSXExpressionContainer()) return;
