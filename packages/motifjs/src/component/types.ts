@@ -52,7 +52,7 @@ export interface ComponentBaseOptions<TProps> {
         in: (op: { keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions }) => void,
         out: (op: { keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions }) => void,
         enterTransition: (resolve: () => void) => Animation,
-        leaveTransition: (resolve: () => void) => Animation,
+        leaveTransition: (resolve: () => void, run?: object) => Animation,
         _runCss: (phase: 'enter' | 'leave', resolve: () => void, appear?: boolean) => Animation,
         activeAnimations: Animation[],
         run: (keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions, resolve?: () => void) => Animation

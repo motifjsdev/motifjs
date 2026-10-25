@@ -155,11 +155,15 @@ function createTransitionApi(owner: ComponentBase): TransitionApi {
                         }
                         return animation;
                 },
-                leaveTransition: (resolve: () => void): Animation => {
+                leaveTransition: (resolve: () => void, run?: object): Animation => {
                         const s = cur();
                         const node = owner.element as unknown as Node;
                         const leave = trackLeave(node, resolve);
                         const play = (): Animation => {
+                                if (run && (owner as any)._baseCtx?._leaveRun !== run) {
+                                        leave.done();
+                                        return shimAnimation as Animation;
+                                }
                                 const transitionOut = owner.motif.options?.transitionOut;
                                 const animation = transitionOut
                                         ? s.run(transitionOut.keyframes, transitionOut.options, leave.done)
@@ -348,7 +352,7 @@ interface BaseCtx extends LifecycleStorage {
         _activatePreBindings: () => void;
         _reactivateBindings: () => void;
         _detachDomWithAnimation: () => void;
-        _detachDomWithAnimationAsync: () => Promise<void>;
+        _detachDomWithAnimationAsync: (run?: object) => Promise<void>;
         _disposeShallow: () => void;
         _deepCleanup: () => void;
         emiters: ComponentEmiter;
@@ -940,7 +944,7 @@ function detachDomWithAnimation(c: any): void {
         }
 }
 
-async function detachDomWithAnimationAsync(c: any): Promise<void> {
+async function detachDomWithAnimationAsync(c: any, run?: object): Promise<void> {
         const node = c.element as unknown as Node | null;
         if (!node || c._keepElementOnDispose === true) return;
         const opts = c.motif.options;
@@ -961,9 +965,9 @@ async function detachDomWithAnimationAsync(c: any): Promise<void> {
         return new Promise<void>((resolve) => {
                 try {
                         opts.transition.leaveTransition(() => {
-                                removeComponentDom(c, node, false);
+                                if (!run || c._baseCtx?._leaveRun === run) removeComponentDom(c, node, false);
                                 resolve();
-                        });
+                        }, run);
                 } catch {
                         removeComponentDom(c, node, false);
                         resolve();
@@ -1253,8 +1257,8 @@ const BASE_PROTO = {
         _detachDomWithAnimation(this: BaseCtx): void {
                 detachDomWithAnimation(this.owner);
         },
-        _detachDomWithAnimationAsync(this: BaseCtx): Promise<void> {
-                return detachDomWithAnimationAsync(this.owner);
+        _detachDomWithAnimationAsync(this: BaseCtx, run?: object): Promise<void> {
+                return detachDomWithAnimationAsync(this.owner, run);
         },
         _disposeShallow(this: BaseCtx): void {
                 disposeShallow(this.owner);
@@ -2064,8 +2068,16 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
 
                 if (this.isDisposed || !this.element) { return; }
-                if (this.isVisible) { return; }/* A*/
+                if (this.isVisible) {
+                        if (this.isWait || !this._base._leaveRun) { return; }
+                        if (this._computeHideStrategy() === 'detach') {
+                                ComponentHelper.callVisibilityChanged(this, true);
+                                if (this.isDisposed) { return; }
+                        }
+                        return this._cutLeave();
+                }/* A*/
                 if (this.isWait) { return; }
+                this._base._leaveRun = null;
 
                 if (this.parent && enterModeOf(this.parent) === 'out-in') {
                         const showHost = ((this.motif.options.placeholder as Node | undefined)?.parentNode)
@@ -2148,7 +2160,10 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 if (strategy === 'detach') {
                         ComponentHelper.callVisibilityChanged(this, false);
                         if (this.isDisposed) { return; }
-                        await this._base._detachDomWithAnimationAsync();
+                        const leave = this._base._leaveRun ?? (this._base._leaveRun = {});
+                        await this._base._detachDomWithAnimationAsync(leave);
+                        if (this.isDisposed || this._base._leaveRun !== leave) { return; }
+                        this._base._leaveRun = null;
                         this.isVisible = false;
                         ComponentHelper.deactivateTree(this);
                         return;
@@ -2156,13 +2171,18 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         const transition = this.motif.options.transition;
                         const skip = transition.skipNextLeave === true;
                         if (skip) transition.skipNextLeave = false;
+                        const leave = this._base._leaveRun ?? (this._base._leaveRun = {});
                         const finish = (): Promise<unknown> | undefined => {
                                 ComponentHelper.callVisibilityChanged(this, false);
                                 if (this.isDisposed) { return; }
                                 if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
                                         const waits = this._detachChildrenToTraces(skip);
                                         this.isVisible = false;
-                                        const settle = () => { if (!this.isDisposed) ComponentHelper.deactivateTree(this); };
+                                        const settle = () => {
+                                                if (this.isDisposed || this._base._leaveRun !== leave) { return; }
+                                                this._base._leaveRun = null;
+                                                ComponentHelper.deactivateTree(this);
+                                        };
                                         if (waits) return waits.then(settle);
                                         settle();
                                         return;
@@ -2177,6 +2197,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                         parent.replaceChild(this.motif.options.placeholder!, this.element as Node);
 
                                 }
+                                this._base._leaveRun = null;
                                 this.isVisible = false;
                                 ComponentHelper.deactivateTree(this);
                         };
@@ -2185,8 +2206,9 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         }
                         return new Promise<void>((resolve) => {
                                 transition.leaveTransition(() => {
+                                        if (this._base._leaveRun !== leave) { resolve(); return; }
                                         resolve(finish() as Promise<void> | undefined);
-                                });
+                                }, leave);
                         });
                 }
 
@@ -2218,8 +2240,13 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         return;
                 };
                 if (skip) { return swap(); }
+                const leave = this._base._leaveRun ?? (this._base._leaveRun = {});
                 return new Promise<void>((resolve) => {
-                        transition.leaveTransition(() => { resolve(swap() as Promise<void> | undefined); });
+                        transition.leaveTransition(() => {
+                                if (this._base._leaveRun !== leave) { resolve(); return; }
+                                this._base._leaveRun = null;
+                                resolve(swap() as Promise<void> | undefined);
+                        }, leave);
                 });
         }
 
@@ -2231,14 +2258,24 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
         private _attachFromTrace(): void {
                 if ((this.element as Node).nodeType === Node.COMMENT_NODE) {
+                        this._base._leaveRun = null;
                         this._attachChildrenFromTraces();
                         return;
                 }
                 const placeholder = this.motif.options.placeholder as Node | undefined;
                 const parent = placeholder?.parentElement;
-                if (!parent) { return; }
+                if (!parent) {
+                        if (this._base._leaveRun && this._isInDom()) { this._cutLeave(); }
+                        return;
+                }
                 wantsEnterTransition(this) && this.motif.options.transition.enterTransition(() => { });
                 parent.replaceChild(this.element as Node, placeholder!);
+        }
+        private async _cutLeave(): Promise<void> {
+                this._base._leaveRun = null;
+                await this.motif.stopAnimations();
+                if (this.isDisposed || !this.isVisible || this._base._leaveRun) { return; }
+                wantsEnterTransition(this) && this.motif.options.transition.enterTransition(() => { });
         }
         private _toggle() {
                 if (this.isDisposed || !this.element) { return; }
