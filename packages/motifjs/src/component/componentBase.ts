@@ -1146,6 +1146,7 @@ async function disposeRemainderAsync(c: any, options: IDisposeOptions, asChild: 
         } else {
                 if (asChild) {
                         await c.motif.stopAnimations();
+                        c._forceInstantDetach = true;
                 } else if (peekTransition(c)?.skipNextLeave) {
                         await c.motif.stopAnimations();
                 }
