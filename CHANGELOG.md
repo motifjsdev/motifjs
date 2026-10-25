@@ -64,6 +64,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - A `display` or `wait` binding set up in `initializeComponent` hides the child from the start, leaves a trace and shows the child in its place.
 - Style objects and style getters write CSS custom properties (`--name`); a `null` or empty value removes one.
 - The value written directly on a tag owns `value`, `checked`, `selected` and each `style` key over a spread getter, as it does for other attributes; a later `bindings.add` for one of those three replaces the earlier binding.
+- `motif.on('x:initializing' | 'x:initialized')` added after construction runs the handler once.
 - `mode: 'history'` on a `file:` address runs the router in hash mode and warns `MJX321` in development.
 - Compiler: a template string in `value`, `checked` or `selected` is live like in other attributes; a JSX element given as an attribute value without braces compiles like the braced form; a single `@DEV-ONLY` before a class member removes the member; a production build strips dev-only code from files matched by `exclude`.
 

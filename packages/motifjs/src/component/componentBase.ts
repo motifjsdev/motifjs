@@ -2271,6 +2271,11 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 }
                                 return this;
                         }
+                        if ((xName === "initializing" || xName === "initialized") && this.isInitialized) {
+                                const ev = { cancel: false } as EventArgs;
+                                callReported(() => (cb as any).length <= 1 ? (cb as any)(ev) : cb(this, ev as any), 'MJX122', 'x:' + xName);
+                                return this;
+                        }
                         if (LIFECYCLE_X_EVENTS.has(xName)) {
                                 this._base.emiters.on("on" + xName, cb as any);
                                 return this;
