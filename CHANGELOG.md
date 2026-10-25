@@ -60,6 +60,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - Calling `useRouter` again while the router runs keeps the running router until `restartRouter`; a route page resolved from DI follows its lifetime: a singleton page is kept across visits and a scoped page is built once per navigation.
 - An `errorHandler` listener that throws no longer stops the listeners after it; its error is rethrown later.
 - `Transporter.transport` with an `index` places the child in the new parent's element, and `transportMany` keeps the given order from that index.
+- A `display` or `wait` binding set up in `initializeComponent` hides the child from the start, leaves a trace and shows the child in its place.
 - Compiler: a template string in `value`, `checked` or `selected` is live like in other attributes.
 
 ## 1.1.0

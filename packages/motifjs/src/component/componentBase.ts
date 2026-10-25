@@ -673,6 +673,10 @@ const ComponentHelper = {
 
                 if (c.isDisposed || this.isDisposed) return;
                 c.parent = this;
+                if (c.isWait) {
+                        placeTrace(this, c);
+                        return;
+                }
 
                 const ownItems = this.controls.items;
                 const currentIndex = ownItems.length > 0 && ownItems[ownItems.length - 1] === c ? ownItems.length - 1 : ownItems.indexOf(c);
@@ -823,6 +827,12 @@ function placedIn(owner: ComponentBase, c: ComponentBase): boolean {
         if (!host) return true;
         const trace = optionsOf(c)?.placeholder as Node | undefined;
         return (c.element as Node | null)?.parentNode === host || trace?.parentNode === host;
+}
+
+function waitsAtTrace(owner: ComponentBase, c: ComponentBase): boolean {
+        const host = findAppendableComponent(owner)?.element as Node | undefined;
+        const trace = optionsOf(c)?.placeholder as Node | undefined;
+        return !!host && trace?.parentNode === host && (c.element as Node | null)?.parentNode !== host;
 }
 
 export function domAnchor(c: ComponentBase, host: Node): Node | null {
@@ -1667,10 +1677,12 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
         }
         public set isWait(value: boolean) {
                 /* @DEV-ONLY */ if (((this._flags & F_WAIT) !== 0) !== value) componentEvent('component:wait', this, { waiting: value });
-                this._flags =value ? this._flags | F_WAIT : this._flags & ~F_WAIT;
+                this._flags = value ? this._flags | F_WAIT : this._flags & ~F_WAIT;
                 if (this.isBuilt) {
                         if (value) {
                                 this.motif.hide();
+                        } else if (this.isVisible && this.parent && waitsAtTrace(this.parent, this)) {
+                                ComponentHelper.internalBuild.call(this.parent, this);
                         } else {
                                 this.motif.show();
                         }
