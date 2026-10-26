@@ -114,6 +114,11 @@ export const dom = {
     }
 }
 
+export function windowOf(node: any): any {
+    const doc = node?.nodeType === 9 ? node : node?.ownerDocument;
+    return doc?.defaultView ?? dom.window;
+}
+
 
 
 

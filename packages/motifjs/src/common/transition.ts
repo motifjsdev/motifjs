@@ -1,5 +1,5 @@
 
-import { dom } from "../core/dom";
+import { dom, windowOf } from "../core/dom";
 
 type TransitionKind = 'transition' | 'animation'
 
@@ -87,15 +87,17 @@ function computeTransitionInfo(styles: any, Type?: TransitionProps['type']): CSS
 }
 
 export function getTransitionInfo(el: Element, name: string, Type?: TransitionProps['type']): CSSTransitionInfo {
+    const win = windowOf(el);
     if (el.isConnected && el.nodeType !== 8) {
-        return computeTransitionInfo(dom.window.getComputedStyle(el), Type);
+        return computeTransitionInfo(win.getComputedStyle(el), Type);
     }
-    const fxElement = dom.createElement('div');
+    const doc = el.ownerDocument ?? dom.document;
+    const fxElement = doc.createElement('div');
     fxElement.setAttribute('style', 'width:0!important;height:0!important;display:none');
-    dom.body.appendChild(fxElement);
+    doc.body.appendChild(fxElement);
     fxElement.setAttribute('class', name);
     try {
-        return computeTransitionInfo(dom.window.getComputedStyle(fxElement), Type);
+        return computeTransitionInfo(win.getComputedStyle(fxElement), Type);
     } finally {
         fxElement.remove();
     }
@@ -103,7 +105,7 @@ export function getTransitionInfo(el: Element, name: string, Type?: TransitionPr
 
 
 export function getTransitionInfoFromElement(el: Element, Type?: TransitionProps['type']): CSSTransitionInfo {
-    return computeTransitionInfo(dom.window.getComputedStyle(el), Type);
+    return computeTransitionInfo(windowOf(el).getComputedStyle(el), Type);
 }
 
 export type TransitionPhase = 'enter' | 'leave';
@@ -139,6 +141,7 @@ export function runCssTransition(el: Element, props: TransitionProps, phase: Tra
     const addC = (c: string) => { if (c) c.split(/\s+/).forEach(x => { if (x) try { el.classList.add(x); } catch { } }); };
     const removeC = (c: string) => { if (c) c.split(/\s+/).forEach(x => { if (x) try { el.classList.remove(x); } catch { } }); };
 
+    const win = windowOf(el);
     let finished = false;
     let guardTimer: any = undefined;
     let endEvent: string | null = null;
@@ -148,7 +151,7 @@ export function runCssTransition(el: Element, props: TransitionProps, phase: Tra
         removeC(classes.from);
         removeC(classes.to);
         removeC(classes.active);
-        if (guardTimer !== undefined) { try { clearTimeout(guardTimer); } catch { } guardTimer = undefined; }
+        if (guardTimer !== undefined) { try { win.clearTimeout(guardTimer); } catch { } guardTimer = undefined; }
         if (endEvent && endHandler) { try { el.removeEventListener(endEvent, endHandler); } catch { } endHandler = null; }
     };
     const finish = () => {
@@ -163,8 +166,7 @@ export function runCssTransition(el: Element, props: TransitionProps, phase: Tra
     try { void (el as HTMLElement).offsetHeight; } catch { }
 
     const nextFrame = (cb: () => void) => {
-        const raf = (globalThis as any).requestAnimationFrame;
-        if (typeof raf === 'function') { raf(() => cb()); } else { setTimeout(cb, 16); }
+        if (typeof win.requestAnimationFrame === 'function') { win.requestAnimationFrame(() => cb()); } else { win.setTimeout(cb, 16); }
     };
 
     nextFrame(() => {
@@ -199,7 +201,7 @@ export function runCssTransition(el: Element, props: TransitionProps, phase: Tra
             if (++ended >= expectedEnds) finish();
         };
         try { el.addEventListener(endEvent, endHandler); } catch { }
-        guardTimer = setTimeout(finish, timeout + 60);
+        guardTimer = win.setTimeout(finish, timeout + 60);
     });
 
     return finish;
