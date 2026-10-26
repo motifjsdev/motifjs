@@ -63,14 +63,17 @@ export class UrlRoutingModule {
 
     private _windowNavListener: ((this: Window, ev: Event) => any) | null = null;
     private _closed: 'restart' | 'dispose' | null = null;
-    public start(mainApp: Component, shellUri?: string, handover?: RouterHandover) {
+    public start(mainApp: Component, uri?: string, handover?: RouterHandover) {
         this.mainApp = mainApp;
         this.routingEngine.register(this.mainApp, this.application, this);
         this.routingEngine.adopt(handover);
-        const path = this._routerOptions.mode === 'shell' ? (shellUri ?? '/') : this._getCurrentUri();
+        const current = this._routerOptions.mode === 'shell' ? '/' : this._getCurrentUri();
         this._seedHistoryIndex();
         this._suppressMiddlewaresOnce = true;
-        const first = this.navigate(path);
+        const first = uri === undefined
+            ? this.navigate(current)
+            : this.navigate(uri, canonicalUri(uri) === canonicalUri(current) ? { replace: true } : { replace: true, state: null });
+        if (handover) first.then(result => this._settleHandover(result), () => this._settleHandover({ cancelled: true }));
         if (this._routerOptions.mode === 'shell') return first;
         this._windowNavListener = () => {
             void this._onHistoryTraversal();
@@ -82,8 +85,9 @@ export class UrlRoutingModule {
         return first;
     }
 
-    public get shownUri(): string | undefined {
-        return this._previousRoute ? this._currentUri : undefined;
+    private _settleHandover(result: any): void {
+        if (this._closed || !result?.cancelled) return;
+        void this.routingEngine.abandonHandover();
     }
 
     private _getCurrentUri(): string {

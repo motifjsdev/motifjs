@@ -153,6 +153,24 @@ export class RoutingEngine {
         this._retiredEngines = handover.engines;
     }
 
+    private _abandoning: Promise<void> | null = null;
+
+    public abandonHandover(): Promise<void> {
+        const handover = this._handover;
+        if (!handover) return this._abandoning ?? Promise.resolve();
+        this._handover = null;
+        const clear = () => { if (this._abandoning === abandoning) this._abandoning = null; };
+        const abandoning: Promise<void> = this._abandon(handover).then(clear, clear);
+        this._abandoning = abandoning;
+        return abandoning;
+    }
+
+    private async _abandon(handover: RouterHandover): Promise<void> {
+        await this._departInherited(handover, []);
+        this.application?._routerState.reset();
+        this._releaseRetired(handover);
+    }
+
     private async _departInherited(handover: RouterHandover, keep: ComponentBase[]): Promise<void> {
         const { chain, instances } = handover;
         const unit: LeavingLink[] = [];
@@ -574,6 +592,7 @@ export class RoutingEngine {
         if (prepTasks.length) {
             await Promise.all(prepTasks);
         }
+        if (this._abandoning) await this._abandoning;
         const handover = this._handover;
         if (handover) {
             this._handover = null;

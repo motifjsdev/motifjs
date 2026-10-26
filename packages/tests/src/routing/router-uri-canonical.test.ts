@@ -53,8 +53,7 @@ describe('router.uri is the address form and links match it in either spelling',
         await app.navigate('/');
         await tick();
         expect([has('raw', 'ex'), has('enc', 'ex')]).toEqual([false, false]);
-        window.history.replaceState({}, '', '/tags/%C3%A7ay');
-        app.restartRouter();
+        app.restartRouter('/tags/%C3%A7ay');
         await tick(40);
         expect([has('raw', 'ex'), has('enc', 'ex'), has('href', 'ex')]).toEqual([true, true, true]);
     });

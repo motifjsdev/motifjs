@@ -48,17 +48,37 @@ describe('restartRouter', () => {
         host.remove();
     });
 
-    test('rebuilds the page at the same address with the same configuration', async () => {
+    test('restarts at the root with the same configuration and replaces the address', async () => {
         await start([{ path: '/', control: page('home') }, { path: '/a', control: page('a') }], 'history');
         await app.navigate('/a');
         built = [];
+        const entries = window.history.length;
 
         const e = await restart();
 
+        expect(built).toEqual(['home']);
+        expect(shown()).toBe('p-home');
+        expect(app.router.uri).toBe('/');
+        expect(window.location.pathname).toBe('/');
+        expect(window.history.length).toBe(entries);
+        expect(e?.initial).toBe(true);
+    });
+
+    test('restarts at the given address', async () => {
+        await start([{ path: '/', control: page('home') }, { path: '/a', control: page('a') }], 'history');
+        built = [];
+        const entries = window.history.length;
+
+        const done = navigated();
+        const result: any = await app.restartRouter('/a');
+        const e = await done;
+
+        expect(result.ok).toBe(true);
         expect(built).toEqual(['a']);
         expect(shown()).toBe('p-a');
         expect(app.router.uri).toBe('/a');
         expect(window.location.pathname).toBe('/a');
+        expect(window.history.length).toBe(entries);
         expect(e?.initial).toBe(true);
     });
 
@@ -78,12 +98,28 @@ describe('restartRouter', () => {
         expect(built).toEqual(['k']);
     });
 
-    test('a new useRouter configuration takes over at the current address', async () => {
+    test('a new useRouter configuration takes over at the root', async () => {
         await start([{ path: '/', control: page('old-home') }, { path: '/a', control: page('old-a') }], 'history');
         await app.navigate('/a');
 
         app.useRouter({ routes: [{ path: '/', control: page('new-home') }, { path: '/a', control: page('new-a') }, { path: '/b', control: page('new-b') }], mode: 'history' });
         await restart();
+
+        expect(shown()).toBe('p-new-home');
+        expect(app.router.uri).toBe('/');
+        const result: any = await app.navigate('/b');
+        expect(result.ok).toBe(true);
+        expect(shown()).toBe('p-new-b');
+    });
+
+    test('a new useRouter configuration takes over at the given address and the history stays navigable', async () => {
+        await start([{ path: '/', control: page('old-home') }, { path: '/a', control: page('old-a') }], 'history');
+        await app.navigate('/a');
+
+        app.useRouter({ routes: [{ path: '/', control: page('new-home') }, { path: '/a', control: page('new-a') }, { path: '/b', control: page('new-b') }], mode: 'history' });
+        const done = navigated();
+        app.restartRouter('/a');
+        await done;
 
         expect(shown()).toBe('p-new-a');
         const result: any = await app.navigate('/b');
@@ -114,26 +150,41 @@ describe('restartRouter', () => {
         expect(app.router.uri).toBe('/b');
 
         await restart();
-        expect(shown()).toBe('p-new-b');
-        expect(app.router.uri).toBe('/b');
+        expect(shown()).toBe('p-new-home');
+        expect(app.router.uri).toBe('/');
         const after: any = await app.navigate('/a');
         expect(after.ok).toBe(true);
         expect(shown()).toBe('p-new-a');
     });
 
-    test('hash mode restarts at the address', async () => {
+    test('hash mode restarts at the root and replaces the hash', async () => {
         await start([{ path: '/', control: page('home') }, { path: '/a', control: page('a') }], 'hash');
         await app.navigate('/a');
         built = [];
+        const entries = window.history.length;
 
         await restart();
+
+        expect(built).toEqual(['home']);
+        expect(app.router.uri).toBe('/');
+        expect(window.location.hash).toBe('#/');
+        expect(window.history.length).toBe(entries);
+    });
+
+    test('hash mode restarts at the given address', async () => {
+        await start([{ path: '/', control: page('home') }, { path: '/a', control: page('a') }], 'hash');
+        built = [];
+
+        const done = navigated();
+        app.restartRouter('/a');
+        await done;
 
         expect(built).toEqual(['a']);
         expect(app.router.uri).toBe('/a');
         expect(window.location.hash).toBe('#/a');
     });
 
-    test('shell mode restarts at the shown page with a new configuration', async () => {
+    test('shell mode restarts at the root with a new configuration and leaves the document address alone', async () => {
         window.history.replaceState({}, '', '/app/index.html');
         await start([{ path: '/', control: page('home') }, { path: '/a', control: page('a') }], 'shell');
         await app.navigate('/a');
@@ -141,8 +192,21 @@ describe('restartRouter', () => {
         app.useRouter({ routes: [{ path: '/', control: page('home2') }, { path: '/a', control: page('a2') }], mode: 'shell' });
         await restart();
 
+        expect(app.router.uri).toBe('/');
+        expect(shown()).toBe('p-home2');
+        expect(window.location.pathname).toBe('/app/index.html');
+    });
+
+    test('shell mode restarts at the given address', async () => {
+        window.history.replaceState({}, '', '/app/index.html');
+        await start([{ path: '/', control: page('home') }, { path: '/a', control: page('a') }], 'shell');
+
+        const done = navigated();
+        app.restartRouter('/a');
+        await done;
+
         expect(app.router.uri).toBe('/a');
-        expect(shown()).toBe('p-a2');
+        expect(shown()).toBe('p-a');
         expect(window.location.pathname).toBe('/app/index.html');
     });
 

@@ -78,7 +78,7 @@ describe("router 'shell' mode", () => {
         expect(app.router.uri).toBe('/b');
     });
 
-    test('restartRouter stays on the shown page, not the page address', async () => {
+    test('restartRouter starts at the root, not at the page address', async () => {
         start('/app/index.html');
         await app.router.navigate('/b');
         const restarted = new Promise<void>(resolve => {
@@ -88,7 +88,7 @@ describe("router 'shell' mode", () => {
         app.restartRouter();
         await restarted;
         expect(app.router.ok).toBe(true);
-        expect(app.router.uri).toBe('/b');
+        expect(app.router.uri).toBe('/');
         expect(window.location.pathname).toBe('/app/index.html');
     });
 });

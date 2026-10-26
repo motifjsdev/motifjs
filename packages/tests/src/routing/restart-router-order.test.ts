@@ -280,7 +280,8 @@ describe('restartRouter releases the old chain like a leaving page', () => {
         const alive = Shell.all.filter(s => !s.isDisposed);
         expect(alive.length).toBe(1);
         expect(`shell-${alive[0].id}`).toBe(shown[0]);
-        expect(app.router.uri).toBe('/x');
+        expect(app.router.uri).toBe('/');
+        expect(window.location.pathname).toBe('/');
     });
 
     test('a navigation waiting on a guard when the router restarts ends with reason restart and leaves the address alone', async () => {

@@ -346,20 +346,18 @@ export class Application {
         return this;
     }
 
-    public restartRouter(): Promise<any> {
+    public restartRouter(uri?: string): Promise<any> {
         const root = this._routerRoot;
         if (!root || !this._routerConfig) return Promise.resolve(undefined);
         const previous = this._startedRouter;
-        const shownUri = previous?.shownUri;
         const handover = previous?.retire();
         let fresh = this.urlRoutingModule;
         if (!fresh || fresh === previous) {
             fresh = new UrlRoutingModule(this._routerConfig, this);
             this.urlRoutingModule = fresh;
         }
-        this._routerState.reset();
         this._startedRouter = fresh;
-        return fresh.start(root, shownUri, handover);
+        return fresh.start(root, uri ?? '/', handover);
     }
 
     public async navigate(uri: string, options?: NavigationOptions) {
