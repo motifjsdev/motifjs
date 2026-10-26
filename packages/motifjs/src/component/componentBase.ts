@@ -3140,9 +3140,9 @@ export function notifyDeactivated(component: ComponentBase): void {
         ComponentHelper.deactivateTree(component);
 }
 
-export function detachBeforeDispose(component: ComponentBase, instant: boolean = false): Promise<void> {
+export function pauseBeforeDispose(component: ComponentBase, keep?: ReadonlySet<ComponentBase>): void {
         const root: any = component;
-        if (!root || root.isDisposed) return Promise.resolve();
+        if (!root || root.isDisposed) return;
         const nodes: any[] = [root];
         for (let n = 0; n < nodes.length; n++) {
                 const node = nodes[n];
@@ -3157,9 +3157,15 @@ export function detachBeforeDispose(component: ComponentBase, instant: boolean =
                 }
                 const items = childrenOf(node);
                 for (let i = 0; i < items.length; i++) {
-                        if (items[i] && !items[i].isDisposed) nodes.push(items[i]);
+                        if (items[i] && !items[i].isDisposed && !keep?.has(items[i])) nodes.push(items[i]);
                 }
         }
+}
+
+export function detachBeforeDispose(component: ComponentBase, instant: boolean = false): Promise<void> {
+        const root: any = component;
+        if (!root || root.isDisposed) return Promise.resolve();
+        pauseBeforeDispose(root);
         safeCall(() => { root.parent?.controls?.silentUnlink?.(root); }, 'detachBeforeDispose.unlink');
         if (instant) root._forceInstantDetach = true;
         return detachDomWithAnimationAsync(root);

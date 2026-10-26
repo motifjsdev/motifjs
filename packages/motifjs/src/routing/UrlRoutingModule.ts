@@ -9,6 +9,7 @@ import { NavigationStack, StackNavigation } from "./NavigationStack";
 import { RouteCollection, compareRouteRecords } from "./RouteCollection";
 import { RouteItem, RouteRecord, RouterValidateEventArgs } from "./RouteItem";
 import { RoutingEngine } from "./RoutingEngine";
+import type { RouterHandover } from "./RoutingEngine";
 import { errorHandler } from "../common/ErrorHandler";
 import { navigationStarted, navigationFinished } from "../devtools/devbus";
 import { motifError, reportError, reportWarning } from "../common/diagnostics";
@@ -61,14 +62,16 @@ export class UrlRoutingModule {
     }
 
     private _windowNavListener: ((this: Window, ev: Event) => any) | null = null;
-    public start(mainApp: Component, shellUri?: string) {
+    private _closed: 'restart' | 'dispose' | null = null;
+    public start(mainApp: Component, shellUri?: string, handover?: RouterHandover) {
         this.mainApp = mainApp;
         this.routingEngine.register(this.mainApp, this.application, this);
+        this.routingEngine.adopt(handover);
         const path = this._routerOptions.mode === 'shell' ? (shellUri ?? '/') : this._getCurrentUri();
         this._seedHistoryIndex();
         this._suppressMiddlewaresOnce = true;
-        this.navigate(path);
-        if (this._routerOptions.mode === 'shell') return;
+        const first = this.navigate(path);
+        if (this._routerOptions.mode === 'shell') return first;
         this._windowNavListener = () => {
             void this._onHistoryTraversal();
         };
@@ -76,6 +79,7 @@ export class UrlRoutingModule {
             this._routerOptions.mode === 'hash' || this._routerOptions.mode === 'file' ? 'hashchange' : 'popstate',
             this._windowNavListener
         );
+        return first;
     }
 
     public get shownUri(): string | undefined {
@@ -245,7 +249,9 @@ export class UrlRoutingModule {
         /* @DEV-ONLY */ const devNav = navigationStarted(uri);
         const requestedUri = uri;
         uri = canonicalUri(uri);
+        const closed = () => ({ ok: false, uri, cancelled: true, reason: this._closed });
         const run = async () => {
+            if (this._closed) return closed();
 
             const suppressBeforeEachThisCall = this._suppressBeforeEachOnce;
             if (suppressBeforeEachThisCall) {
@@ -399,6 +405,7 @@ export class UrlRoutingModule {
                 state: entryState,
             });
 
+            if (this._closed) return closed();
             if (!target.ok && !redirectError) {
                 target = this._buildFallbackResult(uri, 'notFound', { path: uri });
             }
@@ -430,6 +437,7 @@ export class UrlRoutingModule {
                 target = this._buildFallbackResult(uri, 'error', { path: uri, error });
                 try { await this.routingEngine.execute(target, stackNav, snapshotOf(target)); } catch (e2) { reportError('MJX305', e2); }
             }
+            if (this._closed) return closed();
             if (this._stack) this.application._routerState.touch();
             if (navOptions.scroll) {
                 this._scroll?.arrived(this._uriWithHash(appliedPath, uri), direction, false);
@@ -898,7 +906,26 @@ export class UrlRoutingModule {
         } catch { }
     }
 
+    public retire(): RouterHandover {
+        this._closed = 'restart';
+        try { this._scroll?.dispose(); } catch { }
+        this._scroll = null;
+        this._historyStamp = null;
+        const handover = this.routingEngine.retire();
+        if (this._navHandler) {
+            try { document.removeEventListener('click', this._navHandler); } catch { }
+            this._navHandler = null;
+        }
+        if (this._windowNavListener) {
+            const evt = this._routerOptions.mode === 'hash' || this._routerOptions.mode === 'file' ? 'hashchange' : 'popstate';
+            try { window.removeEventListener(evt, this._windowNavListener); } catch { }
+            this._windowNavListener = null;
+        }
+        return handover;
+    }
+
     public dispose(): Promise<void> {
+        this._closed = 'dispose';
         try { this._scroll?.dispose(); } catch { }
         this._scroll = null;
         this._historyStamp = null;

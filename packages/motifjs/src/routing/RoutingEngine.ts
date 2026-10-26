@@ -1,5 +1,5 @@
 import { Component, assertLoadedComponent, resolveToComponent, unwrapModule } from "../component/Component";
-import { ComponentBase, detachBeforeDispose, notifyActivated, notifyDeactivated } from "../component/componentBase";
+import { ComponentBase, detachBeforeDispose, notifyActivated, notifyDeactivated, pauseBeforeDispose } from "../component/componentBase";
 import { afterNextPaint, cancelAnimationsDeep } from "../component/navigation";
 import { errorHandler } from "../common/ErrorHandler";
 import { callReported, motifError, reportError, reportWarning } from "../common/diagnostics";
@@ -19,11 +19,24 @@ import type { RouteSnapshot } from "./routerState";
 type StackLeave = { top: ComponentBase | null; retained: RetainedEntry | null; disposeAfter: ComponentBase[] };
 type StackMotion = { animate: boolean; pages: boolean; direction: NavigationDirection };
 type NavigationRun = { provider?: ServiceProvider; scope?: ServiceProvider; route: RouteSnapshot; committed: boolean; suppressed: ComponentBase[]; created: Array<[RouteItem, ComponentBase]> };
+export type RouterHandover = { chain: RouteItem[]; instances: ComponentBase[]; given: (item: RouteItem | undefined) => boolean; engines: RoutingEngine[] };
+type LeavingLink = { index: number; inst: ComponentBase; outlet: RouterView | null; keep: boolean };
+
+const leavingUnits: WeakMap<ComponentBase, Promise<void>> = new WeakMap();
+
+function hideLeft(inst: ComponentBase): void {
+    const style = (inst.element as any)?.style;
+    if (style && !inst.isDisposed) style.visibility = 'hidden';
+}
 
 export class RoutingEngine {
 
     public stack: NavigationStack | null = null;
     private _revealed: Set<ComponentBase> = new Set();
+    private _closed = false;
+    private _handover: RouterHandover | null = null;
+    private _retiredEngines: RoutingEngine[] = [];
+    private _retiredStack: NavigationStack | null = null;
 
     private root!: ComponentBase;
     private application!: Application;
@@ -66,21 +79,162 @@ export class RoutingEngine {
 
     public async dispose(): Promise<void> {
         this._navVersion++;
+        this._closed = true;
         this._previousPath = null;
         this._previousInstances = [];
         this._revealed.clear();
-        const stack = this.stack;
+        const stack = this.stack ?? this._retiredStack;
         this.stack = null;
+        this._retiredStack = null;
         if (stack) { try { await stack.dispose(); } catch { } }
         await this._release(Array.from(this.controlCache.keys()), true);
-        const departing = Array.from(this._departures.keys());
+        const departing = [...this._departures.keys(), ...this._leaving];
         this._departures.clear();
+        this._leaving.clear();
         for (const inst of departing) {
             try { if (!inst.isDisposed) await inst.dispose({ deep: true, skipLeaveTransition: true }); } catch (error) { reportError('MJX307', error); }
+        }
+        const handover = this._handover;
+        this._handover = null;
+        if (handover) {
+            for (let i = handover.instances.length - 1; i >= 0; i--) {
+                const inst = handover.instances[i];
+                try { if (inst && !inst.isDisposed) await inst.dispose({ deep: true, skipLeaveTransition: true }); } catch (error) { reportError('MJX307', error); }
+            }
+        }
+        const retired = this._retiredEngines;
+        this._retiredEngines = [];
+        for (const engine of retired) {
+            try { await engine.dispose(); } catch { }
+        }
+    }
+
+    public retire(): RouterHandover {
+        this._navVersion++;
+        this._closed = true;
+        const inherited = this._handover;
+        this._handover = null;
+        const handover: RouterHandover = inherited && !this._previousInstances.length
+            ? { ...inherited, engines: [...this._retiredEngines, this] }
+            : {
+                chain: this._previousPath?.chain.slice() ?? [],
+                instances: this._previousInstances.slice(),
+                given: item => this._instanceGiven(item),
+                engines: [...this._retiredEngines, this],
+            };
+        this._retiredEngines = [];
+        this._previousPath = null;
+        this._previousInstances = [];
+        this._revealed.clear();
+        this._retiredStack = this.stack;
+        this.stack = null;
+        return handover;
+    }
+
+    public adopt(handover: RouterHandover | null | undefined): void {
+        if (!handover) return;
+        this._handover = handover;
+        this._retiredEngines = handover.engines;
+    }
+
+    private async _departInherited(handover: RouterHandover, keep: ComponentBase[]): Promise<void> {
+        const { chain, instances } = handover;
+        const unit: LeavingLink[] = [];
+        for (let i = 0; i < instances.length; i++) {
+            const inst = instances[i];
+            if (!inst || inst.isDisposed || keep.includes(inst)) continue;
+            unit.push({ index: i, inst, outlet: this._outletIn(i > 0 ? instances[i - 1] : this.root, chain[i]), keep: handover.given(chain[i]) });
+        }
+        await this._departUnit(unit, true);
+    }
+
+    private _releaseRetired(handover: RouterHandover): void {
+        const shown = new Set(handover.instances);
+        for (const engine of handover.engines) engine._releaseCache(shown);
+    }
+
+    private _releaseCache(keep: Set<ComponentBase>): void {
+        const stack = this._retiredStack;
+        this._retiredStack = null;
+        if (stack) void stack.dispose();
+        for (const [item, inst] of Array.from(this.controlCache)) {
+            if (keep.has(inst) || this._instanceGiven(item)) continue;
+            this.controlCache.delete(item);
+            if (inst instanceof ComponentBase && !inst.isDisposed) void this._depart(inst, null, true);
         }
     }
 
     private _departures: Map<ComponentBase, Promise<void>> = new Map();
+    private _leaving: Set<ComponentBase> = new Set();
+
+    private async _departUnit(unit: LeavingLink[], animate: boolean, direction?: NavigationDirection): Promise<void> {
+        const waits: Promise<void>[] = [];
+        const own = unit.filter(link => {
+            const running = leavingUnits.get(link.inst);
+            if (running) waits.push(running);
+            return !running && !link.inst.isDisposed;
+        });
+        if (!own.length) {
+            await Promise.all(waits);
+            return;
+        }
+        let finish!: () => void;
+        const done = new Promise<void>(resolve => { finish = resolve; });
+        for (const link of own) leavingUnits.set(link.inst, done);
+        const leadsAlone = (link: LeavingLink) => !link.keep && !own.some(other => other.index === link.index - 1 && !other.keep);
+        const kept = new Set(own.filter(link => link.keep).map(link => link.inst));
+        const parents = new Map(own.map(link => [link.inst, link.inst.parent] as const));
+        try {
+            for (const link of own) {
+                if (link.outlet && link.outlet.current === link.inst) {
+                    link.outlet.current = null;
+                    link.outlet.previouspage = null;
+                }
+                if (link.keep) {
+                    cancelAnimationsDeep(link.inst);
+                    notifyDeactivated(link.inst);
+                } else {
+                    pinServiceOwner(link.inst);
+                    if (direction) markDirection(link.inst, direction);
+                    if (leadsAlone(link)) {
+                        this._leaving.add(link.inst);
+                        pauseBeforeDispose(link.inst, kept);
+                    }
+                }
+            }
+            const ends: Promise<void>[] = [...waits];
+            if (animate) {
+                let cut: Promise<void> | null = null;
+                for (const link of own) {
+                    if (link.keep || !hasOwnTransition(link.inst, 'leave')) continue;
+                    const inst = link.inst;
+                    const left = playLeave(inst).then(() => hideLeft(inst));
+                    const end: Promise<void> = cut ? Promise.race([left, cut]) : left;
+                    cut = end;
+                    ends.push(end);
+                }
+            }
+            if (ends.length) await Promise.all(ends);
+            for (let i = own.length - 1; i >= 0; i--) {
+                const link = own[i];
+                if (link.inst.isDisposed) continue;
+                try {
+                    if (link.keep) {
+                        const parent = parents.get(link.inst);
+                        if (parent && link.inst.parent === parent) parent.controls.silentDetach(link.inst);
+                    } else if (leadsAlone(link)) {
+                        this._leaving.delete(link.inst);
+                        await this._depart(link.inst, null, true);
+                    }
+                } catch (error) {
+                    reportError('MJX307', error);
+                }
+            }
+        } finally {
+            for (const link of own) leavingUnits.delete(link.inst);
+            finish();
+        }
+    }
 
     private _depart(inst: ComponentBase, outlet: RouterView | null, instant: boolean = false): Promise<void> {
         const running = this._departures.get(inst);
@@ -146,6 +300,7 @@ export class RoutingEngine {
 
     private _pendingActivate: Set<ComponentBase> = new Set();
     public async execute(path: ResolveResult, nav?: StackNavigation, route?: RouteSnapshot) {
+        if (this._closed) return;
         route ??= {
             target: path,
             chain: path.chain.map(r => this.generatePathString(r.path, path.params) || ''),
@@ -168,6 +323,10 @@ export class RoutingEngine {
         if (!(inst instanceof ComponentBase) || this._keepsInstance(item)) return;
         this._uncommitted.add(inst);
         run.created.push([item, inst]);
+    }
+
+    private _noteGivenInactive(item: RouteItem, inst: any): void {
+        if (inst instanceof ComponentBase && this._instanceGiven(item) && (inst as any)._baseCtx?._inactive) this._pendingActivate.add(inst);
     }
 
     private _dropUncommitted(run: NavigationRun): void {
@@ -290,6 +449,7 @@ export class RoutingEngine {
                         if (navVersion === this._navVersion || this._keepsInstance(element)) this.controlCache.set(element, inst);
                         controlList[i] = inst;
                         this._noteCreated(run, element, inst);
+                        this._noteGivenInactive(element, inst);
                     });
                     prepTasks.push(task);
                 } else {
@@ -303,12 +463,18 @@ export class RoutingEngine {
                     if (navVersion === this._navVersion || this._keepsInstance(element)) this.controlCache.set(element, inst);
                     controlList[i] = inst;
                     this._noteCreated(run, element, inst);
+                    this._noteGivenInactive(element, inst);
                 });
                 prepTasks.push(task);
             }
         }
         if (prepTasks.length) {
             await Promise.all(prepTasks);
+        }
+        const handover = this._handover;
+        if (handover) {
+            this._handover = null;
+            await this._departInherited(handover, controlList);
         }
         let leave: StackLeave | null = null;
         let motion: StackMotion | null = null;
@@ -344,6 +510,7 @@ export class RoutingEngine {
         }
         if (navVersion === this._navVersion) this._commitNavigation(run);
         await this.mountChain(controlList, path.chain, this.root, navVersion);
+        if (handover) this._releaseRetired(handover);
         if (motion?.pages) {
             if (restored?.attached && !restored.top.isDisposed && hasOwnTransition(restored.top, 'enter')) {
                 restored.top.motif.options.transition.enterTransition(() => { });
@@ -448,6 +615,27 @@ export class RoutingEngine {
         }
 
         const deferTop = motion.animate && !!top && !top.isDisposed && !this._keepsInstance(topItem);
+        if (!deferTop) {
+            const unit: LeavingLink[] = [];
+            for (let i = d; i < prevInstances.length; i++) {
+                const inst = prevInstances[i];
+                const item = prevChain[i];
+                if (!inst || newInstances.includes(inst)) continue;
+                if (inst.isDisposed) {
+                    if (item && this.controlCache.get(item) === inst) this.controlCache.delete(item);
+                    continue;
+                }
+                const keep = this._keepsInstance(item);
+                if (keep) {
+                    if (!this.controlCache.has(item)) this.controlCache.set(item, inst);
+                } else if (item && this.controlCache.get(item) === inst) {
+                    this.controlCache.delete(item);
+                }
+                unit.push({ index: i, inst, outlet: outletFor(i), keep });
+            }
+            await this._departUnit(unit, motion.pages, motion.pages ? motion.direction : undefined);
+            return result;
+        }
         for (let i = prevInstances.length - 1; i >= d; i--) {
             const inst = prevInstances[i];
             const item = prevChain[i];
@@ -509,37 +697,28 @@ export class RoutingEngine {
             }
         }
 
-        for (let i = prevInstances.length - 1; i >= divergeIndex; i--) {
+        const unit: LeavingLink[] = [];
+        for (let i = divergeIndex; i < prevInstances.length; i++) {
             const inst = prevInstances[i];
             const item = prevChain[i];
             if (!inst || inst.isDisposed) {
                 if (item && this.controlCache.get(item) === inst) this.controlCache.delete(item);
                 continue;
             }
-            try {
-                const containerIndex = i - 1;
-                const container = containerIndex >= 0 ? prevInstances[containerIndex] : this.root;
-                const outletName = (item?.extend?.targetOutlet) || 'default';
-                const outlet = this.findRouterView(container, outletName);
-
-                if (outlet && outlet.current === inst) {
-                    outlet.current = null;
-                    outlet.previouspage = null;
-                }
-
-                if (this._keepsInstance(item)) {
-                    cancelAnimationsDeep(inst);
-                    try { inst.parent?.controls.silentDetach(inst); } catch { /* ignore */ }
-                    if (!this.controlCache.has(item)) this.controlCache.set(item, inst);
-                    notifyDeactivated(inst);
-                } else {
-                    if (this.controlCache.get(item) === inst) this.controlCache.delete(item);
-                    await this._depart(inst, null);
-                }
-            } catch (error) {
-                reportError('MJX307', error);
+            const keep = this._keepsInstance(item);
+            if (keep) {
+                if (!this.controlCache.has(item)) this.controlCache.set(item, inst);
+            } else if (this.controlCache.get(item) === inst) {
+                this.controlCache.delete(item);
             }
+            unit.push({ index: i, inst, outlet: this._outletIn(i > 0 ? prevInstances[i - 1] : this.root, item), keep });
         }
+        await this._departUnit(unit, true);
+    }
+
+    private _outletIn(container: ComponentBase | undefined, item: RouteItem | undefined): RouterView | null {
+        const outletName = (item?.extend?.targetOutlet) || 'default';
+        try { return container && !container.isDisposed ? this.findRouterView(container, outletName) : null; } catch { return null; }
     }
 
     private _construct<T>(scope: ServiceProvider | undefined, route: RouteSnapshot | undefined, create: () => T): T {
