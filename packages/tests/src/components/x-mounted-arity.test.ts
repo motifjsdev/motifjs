@@ -3,7 +3,8 @@ import { wait, createTestContainer, cleanupTestContainer } from '../helpers/test
 
 describe("on('x:mounted') handler signature", () => {
     let container: HTMLElement;
-    beforeEach(() => { container = createTestContainer(); });
+    let root: Component;
+    beforeEach(() => { container = createTestContainer(); root = new Component(container); root.build(); });
     afterEach(() => cleanupTestContainer(container));
 
     test('a single-parameter handler receives the event args', async () => {
@@ -11,7 +12,7 @@ describe("on('x:mounted') handler signature", () => {
         const calls: any[] = [];
         c.motif.on('x:mounted' as any, (e: any) => { calls.push(e); });
         c.build();
-        container.appendChild(c.element as Node);
+        root.controls.add(c);
         await wait(20);
 
         expect(calls.length).toBe(1);
@@ -24,7 +25,7 @@ describe("on('x:mounted') handler signature", () => {
         const calls: any[] = [];
         c.motif.on('x:mounted' as any, (s: any, e: any) => { calls.push([s, e]); });
         c.build();
-        container.appendChild(c.element as Node);
+        root.controls.add(c);
         await wait(20);
 
         expect(calls.length).toBe(1);
@@ -38,7 +39,7 @@ describe("on('x:mounted') handler signature", () => {
         c.motif.on('x:built' as any, (e: any) => { built = e; });
         c.motif.on('x:mounted' as any, (e: any) => { mounted = e; });
         c.build();
-        container.appendChild(c.element as Node);
+        root.controls.add(c);
         await wait(20);
 
         expect(built).toEqual({ cancel: false });

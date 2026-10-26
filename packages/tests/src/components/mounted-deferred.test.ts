@@ -15,7 +15,7 @@ let root: Component;
 const log: string[] = [];
 
 class Row extends Component<HTMLDivElement> {
-    constructor(public tag: string) { super('div'); }
+    constructor(public tag: string, element?: HTMLDivElement) { super((element ?? 'div') as any); }
     onMounted() { log.push(this.tag); }
 }
 
@@ -52,9 +52,8 @@ describe('onMounted kurulumla aynı görevde değil, sonraki görevde ve dilimle
         expect(log).toEqual(['a']);
     });
 
-    test('sayfadaki bir eleman üzerinde kurulan bileşenin kancası da sonraki görevde çalışır', async () => {
-        const row = new Row('direct');
-        host.appendChild(row.element as Node);
+    test('sayfadaki hazır bir elemanı saran bileşenin kancası da sonraki görevde çalışır', async () => {
+        const row = new Row('direct', host.appendChild(document.createElement('div')));
         row.build();
         expect(log).toEqual([]);
         await nextTask();
@@ -99,13 +98,15 @@ describe('onMounted kurulumla aynı görevde değil, sonraki görevde ve dilimle
         expect(removed).not.toHaveBeenCalled();
     });
 
-    test('elle appendChild ile sayfaya konan bileşenin kancası yine çalışır', async () => {
+    test('çekirdek dışından appendChild ile sayfaya konan bileşenin kancası çalışmaz, controls.add ile verilince çalışır', async () => {
         const row = new Row('manual');
         row.build();
         host.appendChild(row.element as Node);
+        await afterTasks();
+        expect(log).toEqual([]);
+        root.controls.add(row);
         await until(() => log.length === 1);
         expect(log).toEqual(['manual']);
-        await row.dispose();
     });
 
     test('iç içe bileşenlerde alt bileşen üstten önce çalışır', async () => {

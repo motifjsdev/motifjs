@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  *
- * A2: onMounted kancası + x:mounted gözlemcisinin dispose'a bağlanması.
+ * A2: onMounted kancası + x:mounted dinleyicisinin dispose'a bağlanması.
  * A3: class.add SVG elementlerinde de çalışmalı.
  */
 import { Component } from '@motifx/core';
@@ -13,7 +13,7 @@ const until = async (done: () => boolean, ms = 3000) => {
 };
 
 describe('onMounted (A2)', () => {
-    it('fires once, only after the element is attached to document', async () => {
+    it('fires once, only after the component is placed under a parent that is in the document', async () => {
         const calls: string[] = [];
         class X extends Component<HTMLDivElement> {
             constructor() { super('div'); }
@@ -25,17 +25,22 @@ describe('onMounted (A2)', () => {
         await tick();
         expect(calls).toEqual(['built:false']);
 
-        document.body.appendChild(x.element as any);
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const parent = new Component(host);
+        parent.build();
+        parent.controls.add(x);
         await until(() => calls.length === 2);
         expect(calls).toEqual(['built:false', 'mounted:true']);
 
-        // yeniden bağlanma ikinci kez tetiklemez
-        (x.element as HTMLElement).remove();
-        document.body.appendChild(x.element as any);
+        // yeniden yerleşme ikinci kez tetiklemez
+        await parent.controls.detach(x);
+        parent.controls.add(x);
+        await tick();
         await tick();
         expect(calls.length).toBe(2);
-        x.dispose();
-        (x.element as HTMLElement | null)?.remove?.();
+        parent.dispose();
+        host.remove();
     });
 
     it('supports the onMounted prop and fires once the component is placed in an attached parent', async () => {
@@ -52,36 +57,28 @@ describe('onMounted (A2)', () => {
         host.remove();
     });
 
-    it('disconnects the observer when a never-attached component is disposed', async () => {
-        const disconnect = jest.spyOn(MutationObserver.prototype, 'disconnect');
-        try {
-            const x = new Component('div', { onMounted: () => { } });
-            x.build();
-            expect(disconnect).not.toHaveBeenCalled();
-            await x.dispose();
-            expect(disconnect).toHaveBeenCalledTimes(1);
-        } finally {
-            disconnect.mockRestore();
-        }
+    it('never runs the hook of a component that is disposed before it is placed', async () => {
+        const mounted = jest.fn();
+        const x = new Component('div', { onMounted: mounted });
+        x.build();
+        await x.dispose();
+        await tick();
+        await tick();
+        expect(mounted).not.toHaveBeenCalled();
     });
 
-    it('x:mounted observer is also bound to dispose', async () => {
-        const disconnect = jest.spyOn(MutationObserver.prototype, 'disconnect');
-        try {
-            const x = new Component('div');
-            x.build();
-            const cb = jest.fn();
-            const el = x.element as HTMLElement;
-            await x.motif.on('x:mounted' as any, cb);
-            await x.dispose();
-            expect(disconnect).toHaveBeenCalledTimes(1);
-            document.body.appendChild(el);
-            await tick();
-            expect(cb).not.toHaveBeenCalled();
-            el.remove();
-        } finally {
-            disconnect.mockRestore();
-        }
+    it('x:mounted listener dies with the component', async () => {
+        const x = new Component('div');
+        x.build();
+        const cb = jest.fn();
+        const el = x.element as HTMLElement;
+        await x.motif.on('x:mounted' as any, cb);
+        await x.dispose();
+        document.body.appendChild(el);
+        await tick();
+        await tick();
+        expect(cb).not.toHaveBeenCalled();
+        el.remove();
     });
 });
 

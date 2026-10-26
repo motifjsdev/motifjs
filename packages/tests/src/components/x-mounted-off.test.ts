@@ -5,7 +5,8 @@ const storeSize = (c: Component) => { const st = (c as any)._disposables; return
 
 describe("off('x:mounted')", () => {
     let container: HTMLElement;
-    beforeEach(() => { container = createTestContainer(); });
+    let root: Component;
+    beforeEach(() => { container = createTestContainer(); root = new Component(container); root.build(); });
     afterEach(() => cleanupTestContainer(container));
 
     test('removing before the element is attached prevents the call', async () => {
@@ -14,7 +15,7 @@ describe("off('x:mounted')", () => {
         c.motif.on('x:mounted' as any, cb);
         await c.motif.off('x:mounted' as any, cb);
         c.build();
-        container.appendChild(c.element as Node);
+        root.controls.add(c);
         await wait(20);
         expect(cb).not.toHaveBeenCalled();
     });
@@ -26,7 +27,7 @@ describe("off('x:mounted')", () => {
         c.motif.on('x:mounted' as any, cb);
         await c.motif.off('x:mounted' as any, cb);
         c.build();
-        container.appendChild(c.element as Node);
+        root.controls.add(c);
         await wait(20);
         expect(cb).not.toHaveBeenCalled();
     });
@@ -39,7 +40,7 @@ describe("off('x:mounted')", () => {
         c.motif.on('x:mounted' as any, kept);
         await c.motif.off('x:mounted' as any, removed);
         c.build();
-        container.appendChild(c.element as Node);
+        root.controls.add(c);
         await wait(20);
         expect(removed).not.toHaveBeenCalled();
         expect(kept).toHaveBeenCalledTimes(1);
@@ -50,7 +51,7 @@ describe("off('x:mounted')", () => {
         const cb = jest.fn();
         c.motif.on('x:mounted' as any, cb);
         c.build();
-        container.appendChild(c.element as Node);
+        root.controls.add(c);
         await wait(20);
         await c.motif.off('x:mounted' as any, cb);
         expect(cb).toHaveBeenCalledTimes(1);
@@ -73,7 +74,7 @@ describe("off('x:mounted')", () => {
         const before = storeSize(c);
         c.motif.on('x:mounted' as any, () => { });
         expect(storeSize(c)).toBe(before + 1);
-        container.appendChild(c.element as Node);
+        root.controls.add(c);
         await wait(20);
         expect(storeSize(c)).toBe(before);
     });
@@ -83,11 +84,11 @@ describe("off('x:mounted')", () => {
         const cb = jest.fn();
         c.motif.on('x:mounted' as any, cb);
         c.build();
-        container.appendChild(c.element as Node);
+        root.controls.add(c);
         await wait(20);
-        container.removeChild(c.element as Node);
+        await root.controls.detach(c);
         await wait(20);
-        container.appendChild(c.element as Node);
+        root.controls.add(c);
         await wait(20);
         expect(cb).toHaveBeenCalledTimes(1);
     });

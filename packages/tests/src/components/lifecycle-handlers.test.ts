@@ -171,10 +171,12 @@ describe('hook presence and errors', () => {
         detached.controls.add(c);
         await settle();
         expect(log).toEqual([]);
-        document.body.appendChild(detached.element as unknown as Node);
+        const host = new Component(document.body.appendChild(document.createElement('div')));
+        host.build();
+        host.controls.add(detached);
         await settle();
         expect(log).toEqual(['mounted']);
-        detached.dispose();
+        host.dispose();
     });
 
     test('a component without hooks runs without lifecycle lists', async () => {

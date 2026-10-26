@@ -58,12 +58,14 @@ describe('on("x:…") lifecycle events', () => {
         expect(fired).toBe(0);
     });
 
-    test('x:mounted still fires once the element is attached', async () => {
+    test('x:mounted still fires once the component is placed under a parent in the document', async () => {
         const box = new Box();
         let mounted = 0;
         box.motif.on('x:mounted', () => { mounted++; });
         box.build();
-        container.appendChild(box.element as Node);
+        const root = new Component(container);
+        root.build();
+        root.controls.add(box);
         await wait(20);
         expect(mounted).toBe(1);
     });

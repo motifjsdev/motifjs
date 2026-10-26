@@ -1,5 +1,5 @@
 import { ControlCollection } from "../core/ControlCollection";
-import { dom } from "../core/dom";
+import { dom, windowOf } from "../core/dom";
 import { Disposable } from "../disposable/Disposable";
 import { IClass } from "../common/IAttribute";
 import { IDisposable } from "../disposable/IDisposable";
@@ -54,6 +54,7 @@ const F_DISPOSED_FIRED = 1024;
 const F_BUILDING = 2048;
 const F_LIST_SEEN = 4096;
 const F_LIST_ADOPTED = 8192;
+const F_EXTERNAL = 16384;
 
 function optionsOf(c: any): any {
         return c?._motif?.options;
@@ -542,13 +543,11 @@ const ComponentHelper = {
                 component._base._mountedScheduled = true;
                 const el = component.element as Element | null;
                 if (!el || typeof (el as any).nodeType !== 'number') { return; }
-                const stop = onElementAttachedLater(el, () => {
+                const stop = mountedLater(component, () => {
                         if (component.isDisposed) { return; }
                         ComponentHelper.callMounted(component);
                 });
-                if (stop) {
-                        component._register(trackedCleanup(stop));
-                }
+                component._register(trackedCleanup(stop));
         },
         callMounted(component: ComponentBase | any) {
                 if (!component || component.isDisposed || component._base._mountedFired) { return; }
@@ -741,6 +740,7 @@ const ComponentHelper = {
                                 appendableElement?.element.appendChild(controlElement!);
                         }
                         if (ownTrace && ownTrace.parentNode) ownTrace.parentNode.removeChild(ownTrace);
+                        placed(c);
                 }
                 if (c.isVisible && !ownerHidden) {
                         const enteredInBuild = !cisBuilt && (c as any)._baseCtx?._enterSeq !== enterSeq;
@@ -1907,6 +1907,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                                 (target as any).appendChild(element.element);
                                         }
                                 }
+                                placed(element);
                                 if ((element as any)._baseCtx?._inactive && element.isVisible) {
                                         ComponentHelper.activateTree(element);
                                 }
@@ -2146,6 +2147,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         if (parent) {
                                 parent.replaceChild(this.element as Node, this.motif.options.placeholder!);
                                 this.isVisible = true;
+                                placed(this);
                                 ComponentHelper.activateTree(this);
                         }
                 }
@@ -2270,6 +2272,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 }
                 wantsEnterTransition(this) && this.motif.options.transition.enterTransition(() => { });
                 parent.replaceChild(this.element as Node, placeholder!);
+                placed(this);
         }
         private async _cutLeave(): Promise<void> {
                 this._base._leaveRun = null;
@@ -2296,7 +2299,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         const xName = full.slice(2).toLowerCase();
                         if (xName === "mounted") {
                                 let sub: IDisposable | undefined;
-                                const stop = onElementAttachedLater(this.element as Element, () => {
+                                const stop = mountedLater(this, () => {
                                         if (sub) {
                                                 this._base._mountedSubs?.get(cb)?.delete(sub);
                                                 this._disposables.detach(sub);
@@ -3042,93 +3045,115 @@ function findParentElement(component: ComponentBase): ComponentBase | null {
 }
 
 
-type AttachWaiter = { element: Element; callback: () => any };
-const attachWaiters = new Set<AttachWaiter>();
-let attachObserver: MutationObserver | null = null;
+type MountEntry = { component: any; callback: () => any; stopped: boolean };
+type MountQueue = { list: MountEntry[]; timer: any };
+const mountQueues = new Map<any, MountQueue>();
 
-function releaseAttachObserver() {
-        if (attachWaiters.size || !attachObserver) { return; }
-        try { attachObserver.disconnect(); } catch { /* ignore */ }
-        attachObserver = null;
+export function markExternalElement(component: ComponentBase): void {
+        const type = (component.element as Node | null)?.nodeType;
+        if (type === 1 || type === 9 || type === 11) (component as any)._flags |= F_EXTERNAL;
 }
 
-function flushAttachWaiters() {
-        for (const waiter of [...attachWaiters]) {
-                if (!attachWaiters.has(waiter) || !document.contains(waiter.element)) { continue; }
-                attachWaiters.delete(waiter);
-                try {
-                        waiter.callback();
-                } catch (error) {
-                        queueMicrotask(() => { throw error; });
-                }
+function mountedRoot(component: any): any {
+        for (let c: any = component; c; c = c.parent) {
+                if (c.isDisposed) return null;
+                if ((c._flags & F_EXTERNAL) !== 0) return (c.element as Node | null)?.isConnected === true ? c : null;
+                if ((c._flags & (F_WAIT | F_HIDDEN)) !== 0) return null;
         }
-        releaseAttachObserver();
+        return null;
 }
 
-function onElementAttached(element: Element, callback: () => any): (() => void) | null {
-        if (document.contains(element)) {
-                callback();
-                return null;
-        }
-
-        const waiter: AttachWaiter = { element, callback };
-        attachWaiters.add(waiter);
-        if (!attachObserver) {
-                attachObserver = new MutationObserver(flushAttachWaiters);
-                attachObserver.observe(document.documentElement, {
-                        childList: true,
-                        subtree: true,
-                });
-        }
-
-        return () => {
-                if (attachWaiters.delete(waiter)) { releaseAttachObserver(); }
-        };
+function pendingHolder(component: any): any {
+        let c: any = component;
+        while (c.parent && !c.isDisposed && (c._flags & (F_WAIT | F_HIDDEN | F_EXTERNAL)) === 0) c = c.parent;
+        return c;
 }
 
-let mountedQueue: any[] = [];
-let mountedTimer: any = null;
+function parkMounted(entry: MountEntry): void {
+        const component = entry.component;
+        (component._base._pendingMount ??= []).push(entry);
+        watchPending(component);
+}
 
-function runMountedQueue() {
+function watchPending(component: any): void {
+        const holder = pendingHolder(component);
+        if (holder === component) return;
+        (holder._base._pendingWatch ??= new Set()).add(component);
+}
+
+function settleMounted(entry: MountEntry): void {
+        const root = mountedRoot(entry.component);
+        if (root) queueMounted(entry, root); else parkMounted(entry);
+}
+
+function placed(component: any): void {
+        const base = component._baseCtx;
+        if (!base) return;
+        const watched: Set<any> | undefined = base._pendingWatch;
+        if (watched && watched.size) {
+                base._pendingWatch = undefined;
+                for (const child of watched) { if (!child.isDisposed) placed(child); }
+        }
+        const list: MountEntry[] | undefined = base._pendingMount;
+        if (!list || !list.length) return;
+        if (mountedRoot(component)) {
+                base._pendingMount = undefined;
+                for (const entry of list) { if (!entry.stopped) settleMounted(entry); }
+        } else {
+                watchPending(component);
+        }
+}
+
+function runMountedQueue(win: any): void {
+        const queue = mountQueues.get(win);
+        if (!queue) return;
         var start = Date.now();
-        var list = mountedQueue;
-        mountedQueue = [];
+        var list = queue.list;
+        queue.list = [];
         for (var i = 0; i < list.length; i++) {
                 var entry = list[i];
-                if (!entry.stopped) {
-                        try {
-                                entry.callback();
-                        } catch (error) {
-                                queueMicrotask(() => { throw error; });
+                if (!entry.stopped && !entry.component.isDisposed) {
+                        if (!mountedRoot(entry.component)) {
+                                parkMounted(entry);
+                        } else {
+                                try {
+                                        entry.callback();
+                                } catch (error) {
+                                        queueMicrotask(() => { throw error; });
+                                }
                         }
                 }
                 if (i + 1 < list.length && Date.now() - start >= 8) {
-                        mountedQueue = list.slice(i + 1).concat(mountedQueue);
-                        mountedTimer = setTimeout(runMountedQueue, 0);
+                        queue.list = list.slice(i + 1).concat(queue.list);
+                        queue.timer = win.setTimeout(() => runMountedQueue(win), 0);
                         return;
                 }
         }
-        if (mountedQueue.length) {
-                mountedTimer = setTimeout(runMountedQueue, 0);
+        if (queue.list.length) {
+                queue.timer = win.setTimeout(() => runMountedQueue(win), 0);
         } else {
-                mountedTimer = null;
+                queue.timer = null;
+                mountQueues.delete(win);
         }
 }
 
-function queueMounted(entry: any) {
-        mountedQueue.push(entry);
-        if (!mountedTimer) {
-                mountedTimer = setTimeout(runMountedQueue, 0);
+function queueMounted(entry: MountEntry, root: any): void {
+        const win = windowOf(root.element);
+        let queue = mountQueues.get(win);
+        if (!queue) {
+                queue = { list: [], timer: null };
+                mountQueues.set(win, queue);
+        }
+        queue.list.push(entry);
+        if (!queue.timer) {
+                queue.timer = win.setTimeout(() => runMountedQueue(win), 0);
         }
 }
 
-function onElementAttachedLater(element: Element, callback: () => any): () => void {
-        var entry = { callback: callback, stopped: false };
-        var stop = onElementAttached(element, () => queueMounted(entry));
-        return () => {
-                entry.stopped = true;
-                if (stop) { stop(); }
-        };
+function mountedLater(component: any, callback: () => any): () => void {
+        const entry: MountEntry = { component, callback, stopped: false };
+        settleMounted(entry);
+        return () => { entry.stopped = true; };
 }
 
 export function notifyActivated(component: ComponentBase): void {

@@ -3,23 +3,6 @@
  */
 import { Component, ComponentBase } from '@motifx/core';
 
-const NativeObserver = window.MutationObserver;
-let created = 0;
-let active = 0;
-
-class CountingObserver extends NativeObserver {
-    private live = false;
-    constructor(cb: MutationCallback) { super(cb); created++; }
-    observe(target: Node, options?: MutationObserverInit) {
-        if (!this.live) { this.live = true; active++; }
-        super.observe(target, options);
-    }
-    disconnect() {
-        if (this.live) { this.live = false; active--; }
-        super.disconnect();
-    }
-}
-
 const settle = () => new Promise(r => setTimeout(r, 0));
 const until = async (done: () => boolean, ms = 3000) => {
     const end = Date.now() + ms;
@@ -31,23 +14,12 @@ let root: Component;
 const log: string[] = [];
 
 class Row extends Component<HTMLDivElement> {
-    constructor(public tag: string) { super('div'); }
+    constructor(public tag: string, element?: HTMLDivElement) { super((element ?? 'div') as any); }
     onMounted() { log.push(this.tag); }
 }
 
-beforeAll(() => {
-    (window as any).MutationObserver = CountingObserver;
-    (globalThis as any).MutationObserver = CountingObserver;
-});
-
-afterAll(() => {
-    (window as any).MutationObserver = NativeObserver;
-    (globalThis as any).MutationObserver = NativeObserver;
-});
-
 beforeEach(() => {
     log.length = 0;
-    created = 0;
     host = document.body.appendChild(document.createElement('div'));
     root = new Component(host);
     root.build();
@@ -59,13 +31,13 @@ afterEach(async () => {
     await settle();
 });
 
-describe('onMounted bekleyişi', () => {
-    test('çok sayıda bileşen tek bir gözlemciyle, kayıt sırasıyla ve birer kez bağlanır', async () => {
+describe('onMounted yerleşme izi', () => {
+    test('çok sayıda bileşen kayıt sırasıyla ve birer kez bağlanır', async () => {
         for (let i = 0; i < 300; i++) root.controls.add(new Row('r' + i));
-        expect(created).toBe(1);
         await until(() => log.length === 300);
         expect(log).toEqual(Array.from({ length: 300 }, (_, i) => 'r' + i));
-        expect(active).toBe(0);
+        await settle();
+        expect(log.length).toBe(300);
     });
 
     test('kanca eklemeyle aynı görevde ve onun microtask aşamasında değil, sonraki görevde çalışır', async () => {
@@ -88,40 +60,75 @@ describe('onMounted bekleyişi', () => {
         expect(log).toEqual(['inner', 'outer']);
     });
 
-    test('bağlanmadan bertaraf edilen bileşenin kancası çalışmaz ve gözlemci kapanır', async () => {
+    test('kopuk kurulan alt ağaç sonradan sayfaya verilince bekleyen kancalar alt-önce sırasıyla çalışır', async () => {
+        class Outer extends Component<HTMLDivElement> {
+            constructor() { super('div'); }
+            view() { return new Row('inner'); }
+            onMounted() { log.push('outer'); }
+        }
+        const outer = new Outer();
+        outer.build();
+        await settle();
+        expect(log).toEqual([]);
+        root.controls.add(outer);
+        await until(() => log.length === 2);
+        expect(log).toEqual(['inner', 'outer']);
+    });
+
+    test('bağlanmadan serbest bırakılan bileşenin kancası çalışmaz', async () => {
         const row = new Row('gone');
         row.build();
         const element = row.element as Node;
-        expect(active).toBe(1);
         await row.dispose();
-        expect(active).toBe(0);
         host.appendChild(element);
         await settle();
-        expect(log).toEqual([]);
-    });
-
-    test('elle appendChild ile belgeye eklenen bileşen de bağlanır', async () => {
-        const row = new Row('manual');
-        row.build();
         await settle();
         expect(log).toEqual([]);
-        host.appendChild(row.element as Node);
-        await until(() => log.length === 1);
-        expect(log).toEqual(['manual']);
-        await row.dispose();
     });
 
-    test('kurulum sonunda zaten bağlı olan bileşen sonraki görevde bağlanır, gözlemci açılmaz', async () => {
-        const row = new Row('direct');
+    test('çekirdek dışından appendChild ile belgeye konan bileşen bağlanmaz, controls.add ile verilince bağlanır', async () => {
+        const row = new Row('manual');
+        row.build();
         host.appendChild(row.element as Node);
+        await settle();
+        await settle();
+        expect(log).toEqual([]);
+        root.controls.add(row);
+        await until(() => log.length === 1);
+        expect(log).toEqual(['manual']);
+    });
+
+    test('sayfadaki hazır elemanı saran bileşen kök sayılır, kancası sonraki görevde çalışır', async () => {
+        const row = new Row('direct', host.appendChild(document.createElement('div')));
         row.build();
         expect(log).toEqual([]);
         await settle();
         expect(log).toEqual(['direct']);
-        expect(created).toBe(0);
     });
 
-    test('x:mounted dinleyicisi ve off aynı gözlemciyi paylaşır', async () => {
+    test('kopuk bir elemanı saran bileşen, eleman belgede değilken bağlanmaz', async () => {
+        const row = new Row('loose', document.createElement('div'));
+        row.build();
+        await settle();
+        await settle();
+        expect(log).toEqual([]);
+    });
+
+    test('ayrılan alt ağaca eklenen çocuk, ağaç yeniden takılınca bağlanır', async () => {
+        const page = new Component('section');
+        root.controls.add(page);
+        await settle();
+        await root.controls.detach(page);
+        page.controls.add(new Row('late'));
+        await settle();
+        await settle();
+        expect(log).toEqual([]);
+        root.controls.add(page);
+        await until(() => log.length === 1);
+        expect(log).toEqual(['late']);
+    });
+
+    test('x:mounted dinleyicisi çalışır, off ile kaldırılan çalışmaz', async () => {
         const kept = jest.fn();
         const removed = jest.fn();
         const a = new Component('div');
@@ -131,10 +138,9 @@ describe('onMounted bekleyişi', () => {
         await b.motif.off('x:mounted' as any, removed);
         root.controls.add(a, b);
         await until(() => kept.mock.calls.length === 1);
-        expect(created).toBe(1);
+        await settle();
         expect(kept).toHaveBeenCalledTimes(1);
         expect(removed).not.toHaveBeenCalled();
-        expect(active).toBe(0);
     });
 
     test('fırlatan bir kanca diğerlerini durdurmaz', async () => {
@@ -160,6 +166,5 @@ describe('onMounted bekleyişi', () => {
         root.controls.add(new Spawner());
         await until(() => log.length === 2);
         expect(log).toEqual(['spawner', 'spawned']);
-        expect(active).toBe(0);
     });
 });

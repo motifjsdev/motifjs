@@ -248,10 +248,12 @@ describe('hooks added to a plain element after it was made', () => {
         detached.controls.add(c);
         await settle();
         expect(log).toEqual([]);
-        document.body.appendChild(detached.element as unknown as Node);
+        const host = new Component(document.body.appendChild(document.createElement('div')));
+        host.build();
+        host.controls.add(detached);
         await settle();
         expect(log).toEqual(['mounted']);
-        detached.dispose();
+        host.dispose();
     });
 
     test('onDisposed runs once even when dispose is called twice', async () => {

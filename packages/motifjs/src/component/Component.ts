@@ -3,7 +3,7 @@ import { ComponentBase, IBaseProp, ParseProps, applyComponentOptions, applyFallt
 import { safeCallSilent } from "../common/ErrorHandler";
 import { untracked } from "../store/reactivity-core";
 import { componentSlots } from "./componentSlots";
-import { constructComponentRoot, disposeUnplacedChilds } from "./componentBase";
+import { constructComponentRoot, disposeUnplacedChilds, markExternalElement } from "./componentBase";
 import { resolveComponent } from "./resolveComponent";
 import { ElementType, EventArgs } from "./types";
 import { callReported, motifError } from "../common/diagnostics";
@@ -96,6 +96,7 @@ export class Component<TElement extends ElementType = any, TProps extends object
                 // alt sınıflarda yalnızca ortak öznitelikler (applyFallthroughProps).
             } else if (isDomNode(elementOrParams)) {
                 super(elementOrParams as any, options as TProps);
+                markExternalElement(this);
             } else if (elementOrParams instanceof ComponentBase) {
                 // Hazır instance geldi; olduğu gibi kullan
                 return elementOrParams as any;
