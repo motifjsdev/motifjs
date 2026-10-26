@@ -280,7 +280,10 @@ export class WindowManager {
     }
 
     public create(options: WindowOptions = {}): Promise<AppWindow> {
-        if (options.kind === 'pip' && options.fallback === 'none') return Promise.reject(motifError('MJX419'));
+        if (options.kind === 'pip') {
+            if (this.supports('pip')) return this._createPip(options);
+            if (options.fallback === 'none') return Promise.reject(motifError('MJX419'));
+        }
         let win: Window | null = null;
         try { win = dom.window.open('', options.name ?? `motif-window-${++this._seq}`, this._features(options)); } catch { win = null; }
         if (!win) return Promise.reject(motifError('MJX418'));
@@ -383,6 +386,18 @@ export class WindowManager {
         }
         if (!changed) return;
         for (const live of this._live) live.syncStyles();
+    }
+
+    private _createPip(options: WindowOptions): Promise<AppWindow> {
+        let request: Promise<Window>;
+        try {
+            request = (dom.window as any).documentPictureInPicture.requestWindow({ width: options.width, height: options.height });
+        } catch (error) {
+            request = Promise.reject(error);
+        }
+        return request.then(
+            win => this._attach(win, 'pip', options),
+            () => options.fallback === 'none' ? Promise.reject(motifError('MJX419')) : this.create({ ...options, kind: 'popup' }));
     }
 
     private _attach(win: Window, kind: WindowKind | 'attached', options: WindowOptions): AppWindow {

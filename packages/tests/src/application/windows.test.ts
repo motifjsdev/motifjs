@@ -250,7 +250,8 @@ describe('app.windows', () => {
         }
     });
 
-    test('pip istenip fallback none ise MJX419, varsayılanda popup açılır', async () => {
+    test('pip yoksa fallback none ile MJX419, varsayılanda popup açılır', async () => {
+        expect(app.windows.supports('pip')).toBe(false);
         expect(await failure(() => app.windows.create({ kind: 'pip', fallback: 'none' }))).toBe('MJX419');
         const open = jest.spyOn(window, 'open').mockImplementation(() => frameWindow());
         try {
@@ -258,6 +259,28 @@ describe('app.windows', () => {
             expect(win.kind).toBe('popup');
         } finally {
             open.mockRestore();
+        }
+    });
+
+    test('pip varsa requestWindow ile açılır, reddedilirse popup penceresine düşer ya da MJX419 verir', async () => {
+        const requestWindow = jest.fn((_opts: any) => Promise.resolve(frameWindow()));
+        (window as any).documentPictureInPicture = { requestWindow };
+        const open = jest.spyOn(window, 'open').mockImplementation(() => frameWindow());
+        try {
+            expect(app.windows.supports('pip')).toBe(true);
+            const pip = await app.windows.open(b, { kind: 'pip', width: 500, height: 400 });
+            expect(requestWindow).toHaveBeenCalledWith({ width: 500, height: 400 });
+            expect(pip.kind).toBe('pip');
+            expect(pip.components).toEqual([b]);
+            expect(open).not.toHaveBeenCalled();
+            requestWindow.mockImplementation(() => Promise.reject(new Error('no gesture')));
+            const fallen = await app.windows.create({ kind: 'pip' });
+            expect(fallen.kind).toBe('popup');
+            expect(open).toHaveBeenCalledTimes(1);
+            expect(await failure(() => app.windows.create({ kind: 'pip', fallback: 'none' }))).toBe('MJX419');
+        } finally {
+            open.mockRestore();
+            delete (window as any).documentPictureInPicture;
         }
     });
 
