@@ -5,3 +5,4 @@ export { Scanner } from "../routing/scanner";
 export type { IToken } from "../routing/scanner";
 export { RouteCollection } from "../routing/RouteCollection";
 export type { RouteRecord } from "../routing/RouteItem";
+export { connectedDocuments, onDocumentConnection } from "../core/documents";

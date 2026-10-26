@@ -18,6 +18,7 @@ import { flushCompilerContractWarnings } from "./common/compilerContract";
 import { isTransitionMode, transitionSettings, TransitionMode } from "./common/transitionRegistry";
 import { ComponentBase } from "./component/componentBase";
 import { componentSlots } from "./component/componentSlots";
+import { connectDocument } from "./core/documents";
 export interface IStartup {
     configuration?: (services: any) => void;
 
@@ -199,6 +200,14 @@ export class Application {
         this.appShell.element?.appendChild(component);
     }
 
+    private _documentReleases = new Set<() => void>();
+    public connectDocument(doc: Document): () => void {
+        const off = connectDocument(doc);
+        const release = () => { if (this._documentReleases.delete(release)) off(); };
+        this._documentReleases.add(release);
+        return release;
+    }
+
     public dispose(): Promise<void> {
         if (this._disposing) return this._disposing;
         this._state = 'disposing';
@@ -208,6 +217,7 @@ export class Application {
         const addressMode = this._startedRouter?._addressMode() ?? null;
         safeCallSilent(() => { this._removeLifecycleListeners(); }, 'Application.dispose.lifecycle');
         safeCallSilent(() => { routerDone = (this as any).urlRoutingModule?.dispose?.(); }, 'Application.dispose.router');
+        safeCallSilent(() => { for (const release of [...this._documentReleases]) release(); }, 'Application.dispose.documents');
         safeCallSilent(() => { engine.stopGc(); }, 'Application.dispose.gcStop');
         safeCallSilent(() => {
             try {
