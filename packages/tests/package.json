@@ -14,7 +14,7 @@
         "test:memory": "node --expose-gc ../../node_modules/jest/bin/jest.js --config ./jest.config.cjs --runInBand src/memory",
         "test:browser": "node browser/run.mjs chrome,firefox",
         "test:browser:pip": "node browser/pip.mjs",
-        "browser:demo": "node browser/serve.mjs"
+        "browser:demo": "node browser/serve.mjs",
         "build": "",
         "dev": ""
     },
