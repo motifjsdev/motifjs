@@ -90,6 +90,11 @@ async function main() {
     record('kullanıcı kapatınca onClosing içerik penceredeyken çalışır, dışarı alınan dönmez', hooked && closing.join() === 'user:1:true' && order() === 'a' && shelf.controls.items.includes(b) && b.element.ownerDocument === document && !b.isDisposed, `${closing.join()} order=${order()}`);
     strip.controls.add(1, b);
 
+    const sixth = await app.windows.open(b, { width: 300, height: 200, returnOnClose: false, orphans: 'keep' });
+    const sixthResult = await sixth.close();
+    record('returnOnClose false ile içerik kökenine dönmez, orphans karar verir', sixthResult.kept.includes(b) && !b.isDisposed && b.parent === null && order() === 'a', `kept=${sixthResult.kept.length} order=${order()}`);
+    strip.controls.add(1, b);
+
     const fourth = await app.windows.open(a, { width: 300, height: 200 });
     await strip.dispose();
     const fourthResult = await fourth.close();

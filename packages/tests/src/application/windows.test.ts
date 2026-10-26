@@ -284,6 +284,32 @@ describe('app.windows', () => {
         }
     });
 
+    test('returnOnClose false ile kökeni olan içerik de orphans kuralına girer', async () => {
+        const win = app.windows.attach(frameWindow(), { returnOnClose: false });
+        win.add(b);
+        const result = await win.close();
+        expect(result).toEqual({ returned: [], disposed: [b], kept: [] });
+        expect(b.isDisposed).toBe(true);
+        expect(order()).toEqual(['a', 'c']);
+        const kept = app.windows.attach(frameWindow(), { returnOnClose: false, orphans: 'keep' });
+        kept.add(c);
+        const keptResult = await kept.close();
+        expect(keptResult).toEqual({ returned: [], disposed: [], kept: [c] });
+        expect(c.isDisposed).toBe(false);
+        expect(c.parent).toBeNull();
+        expect(app.windows.of(c)).toBeNull();
+        expect(order()).toEqual(['a']);
+        await c.dispose();
+    });
+
+    test('returnOnClose false iken release yine kökene koyar', () => {
+        const win = app.windows.attach(frameWindow(), { returnOnClose: false, closeWhenEmpty: false });
+        win.add(b);
+        win.release(b);
+        expect(order()).toEqual(['a', 'b', 'c']);
+        expect(win.isOpen).toBe(true);
+    });
+
     test('onClosing içerik hâlâ penceredeyken, kapanıştan önce çalışır', async () => {
         const seen: any[] = [];
         const win = app.windows.attach(frameWindow(), { onClosing: (e) => { seen.push({ window: e.window, components: e.components, reason: e.reason, inside: e.components.every(x => x.parent === win.host && (x.element as Node).ownerDocument === win.document), open: win.isOpen }); } });

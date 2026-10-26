@@ -24,6 +24,7 @@ export interface WindowOptions {
     orphans?: 'dispose' | 'keep';
     closeWhenEmpty?: boolean;
     closeOnNavigate?: boolean;
+    returnOnClose?: boolean;
     owner?: ComponentBase;
     onClosing?: (e: WindowClosingEventArgs) => void;
 }
@@ -205,7 +206,7 @@ export class AppWindow {
             this._unwatch(component);
             if (component.isDisposed) continue;
             if (component.parent !== this.host) { this._manager._forget(component); continue; }
-            if (!disposing && this._manager._restore(component)) { result.returned.push(component); continue; }
+            if (!disposing && this._options.returnOnClose !== false && this._manager._restore(component)) { result.returned.push(component); continue; }
             if (!disposing && this._options.orphans === 'keep') {
                 this._manager._forget(component);
                 this.host.controls.silentDetach(component);
