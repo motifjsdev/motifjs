@@ -19,6 +19,7 @@ import { isTransitionMode, transitionSettings, TransitionMode } from "./common/t
 import { ComponentBase } from "./component/componentBase";
 import { componentSlots } from "./component/componentSlots";
 import { connectDocument } from "./core/documents";
+import { WindowManager } from "./core/windows";
 export interface IStartup {
     configuration?: (services: any) => void;
 
@@ -70,6 +71,8 @@ export class ApplicationBuilder {
 
 interface ApplicationEvents {
     'router-changed': 'motifjs-router-navigated';
+    'window-opened': 'window-opened';
+    'window-closed': 'window-closed';
 }
 export type AppLifecycleState = 'visible' | 'hidden' | 'frozen' | 'resumed' | 'restored' | 'online' | 'offline';
 
@@ -110,6 +113,7 @@ export class Application {
     }
     private _middlewares: Array<(ctx: RouteResolveContext, next: () => Promise<void>) => any> = [];
     private _beforeEachGuards: NavigationGuard[] = [];
+    public readonly windows: WindowManager = new WindowManager(this);
     public readonly _routerState = new RouterState();
     public readonly router: Router = createRouter(this._routerState, () => this.urlRoutingModule);
     public _addressOf(uri: string): string { return this.urlRoutingModule?.addressOf(uri) ?? uri; }
@@ -217,6 +221,7 @@ export class Application {
         const addressMode = this._startedRouter?._addressMode() ?? null;
         safeCallSilent(() => { this._removeLifecycleListeners(); }, 'Application.dispose.lifecycle');
         safeCallSilent(() => { routerDone = (this as any).urlRoutingModule?.dispose?.(); }, 'Application.dispose.router');
+        safeCallSilent(() => { this.windows._disposeAll(); }, 'Application.dispose.windows');
         safeCallSilent(() => { for (const release of [...this._documentReleases]) release(); }, 'Application.dispose.documents');
         safeCallSilent(() => { engine.stopGc(); }, 'Application.dispose.gcStop');
         safeCallSilent(() => {
@@ -516,6 +521,7 @@ export function useApplication() {
         application: Application.main,
         services: Application.main.provider,
         router: Application.main.router,
+        windows: Application.main.windows,
         attach(...components: ComponentBase[]) {
             Application.main && Application.main.getAppShell().controls.add(...components);
         }

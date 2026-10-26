@@ -85,6 +85,11 @@ export const motifMessages = {
     MJX415: (token: string, lifetime: string) => `'startup' only applies to singleton services; '${token}' is registered as ${lifetime} and is created when it is first resolved.`,
     MJX416: () => `Application.run: the comment or text node given as host has no parent element.`,
     MJX417: (reason: string) => `Application.connectDocument: ${reason}.`,
+    MJX418: () => `Application.windows: the browser did not open the window; open it from a user gesture and check the popup blocker.`,
+    MJX419: () => `Application.windows: Picture-in-Picture is not available in this browser.`,
+    MJX420: () => `Application.windows: the window is closed.`,
+    MJX421: () => `Application.windows: the value given to attach is not a window.`,
+    MJX422: () => `Application.windows: a disposed component cannot be placed in a window.`,
 
     MJX501: () => `Disposable already disposed.`,
     MJX502: () => `Cannot register a disposable on itself.`,
