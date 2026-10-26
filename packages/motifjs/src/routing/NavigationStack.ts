@@ -1,6 +1,7 @@
 import { ComponentBase, notifyDeactivated } from "../component/componentBase";
 import { afterNextPaint, disposeNavigationTarget, hasOwnTransition } from "../component/navigation";
 import { reportError } from "../common/diagnostics";
+import { connectedDocuments, onDocumentConnection } from "../core/documents";
 import type { NavigationDirection, RouteItem, StackEntryInfo, StackOptions, StackTransitionContext } from "./";
 
 export type HistoryPoint = { index: number; session: string };
@@ -475,10 +476,19 @@ export class NavigationStack {
     private installSwipe(): void {
         if (typeof document === 'undefined') return;
         const onStart = (e: TouchEvent) => this.onTouchStart(e);
-        try {
-            document.addEventListener('touchstart', onStart as any, { passive: true });
-            this.offs.push(() => { try { document.removeEventListener('touchstart', onStart as any); } catch { } });
-        } catch { }
+        const offs = new Map<Document, () => void>();
+        const listen = (doc: Document) => {
+            if (offs.has(doc)) return;
+            try {
+                doc.addEventListener('touchstart', onStart as any, { passive: true });
+                offs.set(doc, () => { try { doc.removeEventListener('touchstart', onStart as any); } catch { } });
+            } catch { }
+        };
+        const unlisten = (doc: Document) => { const off = offs.get(doc); if (off) { offs.delete(doc); off(); } };
+        listen(document);
+        for (const doc of connectedDocuments()) listen(doc);
+        const stop = onDocumentConnection((doc, connected) => { if (connected) listen(doc); else unlisten(doc); });
+        this.offs.push(() => { stop(); for (const doc of [...offs.keys()]) unlisten(doc); });
     }
 
     private onTouchStart(e: TouchEvent): void {
@@ -496,14 +506,16 @@ export class NavigationStack {
         };
         const onMove = (ev: TouchEvent) => this.onTouchMove(g, ev);
         const onEnd = () => this.onTouchEnd(g);
+        const target = e.target as any;
+        const doc: Document = target?.nodeType === 9 ? target : (target?.ownerDocument ?? document);
         try {
-            document.addEventListener('touchmove', onMove as any, { passive: false });
-            document.addEventListener('touchend', onEnd);
-            document.addEventListener('touchcancel', onEnd);
+            doc.addEventListener('touchmove', onMove as any, { passive: false });
+            doc.addEventListener('touchend', onEnd);
+            doc.addEventListener('touchcancel', onEnd);
             g.offs.push(() => {
-                try { document.removeEventListener('touchmove', onMove as any); } catch { }
-                try { document.removeEventListener('touchend', onEnd); } catch { }
-                try { document.removeEventListener('touchcancel', onEnd); } catch { }
+                try { doc.removeEventListener('touchmove', onMove as any); } catch { }
+                try { doc.removeEventListener('touchend', onEnd); } catch { }
+                try { doc.removeEventListener('touchcancel', onEnd); } catch { }
             });
         } catch { }
         this.gesture = g;

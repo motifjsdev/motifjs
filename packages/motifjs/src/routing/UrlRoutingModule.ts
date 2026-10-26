@@ -13,6 +13,7 @@ import type { RouterHandover } from "./RoutingEngine";
 import { errorHandler } from "../common/ErrorHandler";
 import { navigationStarted, navigationFinished } from "../devtools/devbus";
 import { motifError, reportError, reportWarning } from "../common/diagnostics";
+import { connectedDocuments, onDocumentConnection } from "../core/documents";
 
 const pathOf = (uri: string): string => uri.split('#')[0].split('?')[0];
 
@@ -764,18 +765,30 @@ export class UrlRoutingModule {
     }
 
     private _navHandler: ((e: Event) => void) | null = null;
+    private _linkDocuments = new Set<Document>();
+    private _documentsOff: (() => void) | null = null;
+    private _listenLinks(doc: Document) {
+        if (!this._navHandler || this._linkDocuments.has(doc)) return;
+        try { doc.addEventListener('click', this._navHandler); this._linkDocuments.add(doc); } catch { }
+    }
+    private _unlistenLinks(doc: Document) {
+        if (!this._linkDocuments.delete(doc) || !this._navHandler) return;
+        try { doc.removeEventListener('click', this._navHandler); } catch { }
+    }
+    private _removeLinkInterceptor() {
+        for (const doc of [...this._linkDocuments]) this._unlistenLinks(doc);
+        if (this._documentsOff) { try { this._documentsOff(); } catch { } this._documentsOff = null; }
+        this._navHandler = null;
+    }
     private _installLinkInterceptor() {
         try {
             if (this._navHandler) return;
             this._navHandler = (ev: Event) => {
                 const w = window as any;
                 const mode = this._routerOptions.mode || (w?.location?.protocol === 'file:' ? 'hash' : 'history');
-                let el = ev.target as HTMLElement | null;
-                while (el && el !== document.body) {
-                    if (el instanceof HTMLAnchorElement) break;
-                    el = el.parentElement;
-                }
-                if (!el || !(el instanceof HTMLAnchorElement)) return;
+                const target = ev.target as Element | null;
+                const el = typeof target?.closest === 'function' ? target.closest('a') : null;
+                if (!el || typeof (el as any).href !== 'string') return;
                 // opt-in via data-router-link veya rel="router"
                 const rel = (el.getAttribute('rel') || '').toLowerCase().split(/\s+/);
                 const optIn = el.getAttribute("x-command") == 'router' || el.hasAttribute('data-router-link') || rel.includes('router');
@@ -802,7 +815,9 @@ export class UrlRoutingModule {
                 const path = href.startsWith('#') ? href.slice(1) : href;
                 this.navigate(path);
             };
-            document.addEventListener('click', this._navHandler);
+            this._listenLinks(document);
+            for (const doc of connectedDocuments()) this._listenLinks(doc);
+            this._documentsOff = onDocumentConnection((doc, connected) => { if (connected) this._listenLinks(doc); else this._unlistenLinks(doc); });
         } catch { }
     }
 
@@ -945,10 +960,7 @@ export class UrlRoutingModule {
         this._scroll = null;
         this._historyStamp = null;
         const handover: RouterHandover = { ...this.routingEngine.retire(), scroll };
-        if (this._navHandler) {
-            try { document.removeEventListener('click', this._navHandler); } catch { }
-            this._navHandler = null;
-        }
+        this._removeLinkInterceptor();
         if (this._windowNavListener) {
             const evt = this._routerOptions.mode === 'hash' || this._routerOptions.mode === 'file' ? 'hashchange' : 'popstate';
             try { window.removeEventListener(evt, this._windowNavListener); } catch { }
@@ -966,10 +978,7 @@ export class UrlRoutingModule {
         try {
             // keepAlive önbelleğindeki örnekleri bırak
             try { done = this.routingEngine.dispose(); } catch { }
-            if (this._navHandler) {
-                try { document.removeEventListener('click', this._navHandler); } catch { }
-                this._navHandler = null;
-            }
+            this._removeLinkInterceptor();
             if (this._windowNavListener) {
                 const evt = this._routerOptions.mode === 'hash' || this._routerOptions.mode === 'file' ? 'hashchange' : 'popstate';
                 try { window.removeEventListener(evt, this._windowNavListener); } catch { }
