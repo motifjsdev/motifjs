@@ -81,6 +81,15 @@ async function main() {
     const returned = await until(() => !third.isOpen);
     record('kullanıcı kapatınca içerik geri döner', returned && order() === 'ab' && b.element.ownerDocument === document, order());
 
+    const closing = [];
+    const shelf = new Component('div');
+    root.controls.add(shelf);
+    const fifth = await app.windows.open(b, { width: 300, height: 200, onClosing: e => { closing.push(`${e.reason}:${e.components.length}:${b.element.ownerDocument === fifth.document && fifth.document.body.contains(b.element)}`); shelf.controls.add(b); } });
+    fifth.window.close();
+    const hooked = await until(() => !fifth.isOpen);
+    record('kullanıcı kapatınca onClosing içerik penceredeyken çalışır, dışarı alınan dönmez', hooked && closing.join() === 'user:1:true' && order() === 'a' && shelf.controls.items.includes(b) && b.element.ownerDocument === document && !b.isDisposed, `${closing.join()} order=${order()}`);
+    strip.controls.add(1, b);
+
     const fourth = await app.windows.open(a, { width: 300, height: 200 });
     await strip.dispose();
     const fourthResult = await fourth.close();

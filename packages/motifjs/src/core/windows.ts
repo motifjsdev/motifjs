@@ -1,12 +1,14 @@
 import type { Application } from "../application";
 import { Component } from "../component/Component";
 import { ComponentBase } from "../component/componentBase";
-import { motifError } from "../common/diagnostics";
+import { callReported, motifError } from "../common/diagnostics";
 import { reactive } from "../store";
 import { dom } from "./dom";
 import { connectDocument } from "./documents";
 
 export type WindowKind = 'popup' | 'pip';
+export type WindowCloseReason = 'user' | 'code' | 'owner' | 'empty' | 'navigate' | 'page';
+export type WindowClosingEventArgs = { window: AppWindow; components: ComponentBase[]; reason: WindowCloseReason };
 
 export interface WindowOptions {
     kind?: WindowKind;
@@ -23,6 +25,7 @@ export interface WindowOptions {
     closeWhenEmpty?: boolean;
     closeOnNavigate?: boolean;
     owner?: ComponentBase;
+    onClosing?: (e: WindowClosingEventArgs) => void;
 }
 
 export type WindowClosedResult = { returned: ComponentBase[]; disposed: ComponentBase[]; kept: ComponentBase[] };
@@ -84,10 +87,10 @@ export class AppWindow {
         this.host.build();
         try { window.document.title = _options.title ?? dom.document?.title ?? ''; } catch { }
         this._offs.push(connectDocument(window.document));
-        const onHide = () => { this._finish(false); };
+        const onHide = () => { this._finish('user'); };
         window.addEventListener('pagehide', onHide);
         this._offs.push(() => { try { window.removeEventListener('pagehide', onHide); } catch { } });
-        if (_options.owner) _options.owner.motif.setDisposable(() => { this.close(); });
+        if (_options.owner) _options.owner.motif.setDisposable(() => { this._close('owner'); });
         this._setupStyles();
     }
 
@@ -128,11 +131,7 @@ export class AppWindow {
     }
 
     public close(): Promise<WindowClosedResult> {
-        if (this._open) {
-            this._finish(false);
-            try { this.window.close(); } catch { }
-        }
-        return this._closed;
+        return this._close('code');
     }
 
     public syncStyles(): void {
@@ -187,13 +186,25 @@ export class AppWindow {
         this._closeWhenEmpty();
     }
 
-    public _finish(disposing: boolean): void {
+    public _close(reason: WindowCloseReason): Promise<WindowClosedResult> {
+        if (this._open) {
+            this._finish(reason);
+            try { this.window.close(); } catch { }
+        }
+        return this._closed;
+    }
+
+    public _finish(reason: WindowCloseReason): void {
         if (!this._open) return;
         this._open = false;
+        const onClosing = this._options.onClosing;
+        if (onClosing) callReported(() => onClosing({ window: this, components: this.components.slice(), reason }), 'MJX423');
+        const disposing = reason === 'page';
         const result: WindowClosedResult = { returned: [], disposed: [], kept: [] };
         for (const component of this.components.splice(0)) {
             this._unwatch(component);
             if (component.isDisposed) continue;
+            if (component.parent !== this.host) { this._manager._forget(component); continue; }
             if (!disposing && this._manager._restore(component)) { result.returned.push(component); continue; }
             if (!disposing && this._options.orphans === 'keep') {
                 this._manager._forget(component);
@@ -247,7 +258,7 @@ export class AppWindow {
     }
 
     private _closeWhenEmpty(): void {
-        if (this._open && !this.components.length && this._options.closeWhenEmpty !== false) this.close();
+        if (this._open && !this.components.length && this._options.closeWhenEmpty !== false) this._close('empty');
     }
 }
 
@@ -353,7 +364,7 @@ export class WindowManager {
 
     public _disposeAll(): void {
         for (const handle of this._items.slice()) {
-            handle._finish(true);
+            handle._finish('page');
             try { handle.window.close(); } catch { }
         }
         this._unlistenPage();
@@ -408,7 +419,7 @@ export class WindowManager {
         this._items.push(handle);
         this._state.version++;
         this._listenPage();
-        if (options.closeOnNavigate) handle._track(this._app.onRouterChanged(() => { handle.close(); }));
+        if (options.closeOnNavigate) handle._track(this._app.onRouterChanged(() => { handle._close('navigate'); }));
         this._app.fire('window-opened', { window: handle });
         return handle;
     }

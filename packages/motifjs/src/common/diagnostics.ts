@@ -90,6 +90,7 @@ export const motifMessages = {
     MJX420: () => `Application.windows: the window is closed.`,
     MJX421: (reason: string) => `Application.windows: ${reason}.`,
     MJX422: () => `Application.windows: a disposed component cannot be placed in a window.`,
+    MJX423: () => `Application.windows: the onClosing hook threw.`,
 
     MJX501: () => `Disposable already disposed.`,
     MJX502: () => `Cannot register a disposable on itself.`,

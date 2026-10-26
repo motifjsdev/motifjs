@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { Application, Component, ComponentBase, MotifError, RouteItem, effect } from '@motifx/core';
+import { Application, Component, ComponentBase, MotifError, RouteItem, effect, errorHandler } from '@motifx/core';
 
 const tick = () => new Promise(r => setTimeout(r, 0));
 
@@ -284,6 +284,82 @@ describe('app.windows', () => {
         }
     });
 
+    test('onClosing içerik hâlâ penceredeyken, kapanıştan önce çalışır', async () => {
+        const seen: any[] = [];
+        const win = app.windows.attach(frameWindow(), { onClosing: (e) => { seen.push({ window: e.window, components: e.components, reason: e.reason, inside: e.components.every(x => x.parent === win.host && (x.element as Node).ownerDocument === win.document), open: win.isOpen }); } });
+        win.add(a, b);
+        const result = await win.close();
+        expect(seen).toEqual([{ window: win, components: [a, b], reason: 'code', inside: true, open: false }]);
+        expect(result.returned).toEqual([a, b]);
+        expect(order()).toEqual(['a', 'b', 'c']);
+    });
+
+    test('onClosing her kapanış yolunun nedenini alır', async () => {
+        const reasons: string[] = [];
+        const onClosing = (e: any) => { reasons.push(e.reason); };
+        const user = app.windows.attach(frameWindow(), { onClosing });
+        user.window.dispatchEvent(new (user.window as any).Event('pagehide'));
+        const owner = new Component('div');
+        root.controls.add(owner);
+        app.windows.attach(frameWindow(), { onClosing, owner });
+        await owner.dispose();
+        const empty = app.windows.attach(frameWindow(), { onClosing });
+        empty.add(c);
+        await c.dispose();
+        app.windows.attach(frameWindow(), { onClosing });
+        await app.windows.closeAll();
+        app.windows.attach(frameWindow(), { onClosing });
+        window.dispatchEvent(new Event('pagehide'));
+        expect(reasons).toEqual(['user', 'owner', 'empty', 'code', 'page']);
+    });
+
+    test('onClosing içinde başka ebeveyne alınan bileşen ne döner ne serbest bırakılır', async () => {
+        const shelf = new Component('div');
+        root.controls.add(shelf);
+        const win = app.windows.attach(frameWindow(), { onClosing: (e) => { shelf.controls.add(...e.components); } });
+        win.add(a, b);
+        const result = await win.close();
+        expect(result).toEqual({ returned: [], disposed: [], kept: [] });
+        expect(shelf.controls.items).toEqual([a, b]);
+        expect((a.element as Node).ownerDocument).toBe(document);
+        expect(a.isDisposed).toBe(false);
+        expect(order()).toEqual(['c']);
+        expect(app.windows.of(a)).toBeNull();
+        expect(win.components).toEqual([]);
+        expect(await failure(() => win.add(a))).toBe('MJX420');
+    });
+
+    test('onClosing sayfa kapanırken de çağrılır, dışarı aldığı serbest bırakılmaz', async () => {
+        const shelf = new Component('div');
+        root.controls.add(shelf);
+        const win = app.windows.attach(frameWindow(), { onClosing: (e) => { if (e.reason === 'page') shelf.controls.add(a); } });
+        win.add(a, b);
+        window.dispatchEvent(new Event('pagehide'));
+        expect(win.isOpen).toBe(false);
+        await tick();
+        expect(a.isDisposed).toBe(false);
+        expect(shelf.controls.items).toEqual([a]);
+        expect(b.isDisposed).toBe(true);
+    });
+
+    test('onClosing fırlatırsa MJX423 raporlanır ve kapanış tamamlanır', async () => {
+        const reported: any[] = [];
+        const unbind = errorHandler.addListener(e => reported.push(e));
+        const log = jest.spyOn(console, 'error').mockImplementation(() => { });
+        try {
+            const win = app.windows.attach(frameWindow(), { onClosing: () => { throw new Error('boom'); } });
+            win.add(b);
+            const result = await win.close();
+            expect(result.returned).toEqual([b]);
+            expect(order()).toEqual(['a', 'b', 'c']);
+            expect(win.isOpen).toBe(false);
+            expect(reported.map(e => e?.code)).toEqual(['MJX423']);
+        } finally {
+            unbind();
+            log.mockRestore();
+        }
+    });
+
     test('hatalar kendi kodlarıyla gelir', async () => {
         const open = jest.spyOn(window, 'open').mockImplementation(() => null);
         try {
@@ -456,6 +532,14 @@ describe('app.windows ve router', () => {
         await tick();
         expect(win.isOpen).toBe(false);
         expect(root.controls.items).toContain(item);
+    });
+
+    test("closeOnNavigate kapanışı onClosing'e navigate nedeniyle gelir", async () => {
+        const reasons: string[] = [];
+        app.windows.attach(frameWindow(), { closeOnNavigate: true, onClosing: (e) => { reasons.push(e.reason); } });
+        await app.navigate('/b');
+        await tick();
+        expect(reasons).toEqual(['navigate']);
     });
 
     test('closeOnNavigate verilmezse rota değişince pencere açık kalır', async () => {

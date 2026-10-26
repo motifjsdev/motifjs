@@ -116,6 +116,8 @@ export type {
     AppLifecycleState,
     AppWindow,
     WindowClosedResult,
+    WindowCloseReason,
+    WindowClosingEventArgs,
     WindowKind,
     WindowManager,
     WindowOptions,
