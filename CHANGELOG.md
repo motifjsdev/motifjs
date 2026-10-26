@@ -20,6 +20,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - The esbuild `jsx` setting is no longer part of the setup instructions; the compiler plugin alone configures JSX.
 - **`doWork(promise)` is typed `Promise<T | MotifError>`.** Once the component is disposed it resolves to a `MotifError` (`MJX108`); a rejection that arrives after disposal resolves the same way, with the rejection as `cause`, instead of reaching `catch`. Check `instanceof Error` before using the value; code that used the value unchecked no longer compiles.
 - **`onMounted` hooks run after the current task**, in small batches, so a page with many of them does not freeze. Work that does not need the element in the document belongs in `onBuilt`.
+- **`onMounted` follows the component tree.** The hook runs once the component sits under a root that is in a document, with every component on the way visible; the root is the `run()` host or a component that wraps an element already in the page. An element put into the document by hand with `appendChild` no longer mounts: wrap the target with `new Component(element)` and give it the content with `controls.add`.
 - **A route change does not wait for the leaving page to be disposed.** The router removes the leaving page (after its own leave transition, when it has one), mounts the new page and disposes the leaving page after the new page is painted. A left page's `onDisposing` and `onDisposed` run later and see the new route, and `app.navigate` resolves before them; the page's bindings and its `context.on` / `context.onRouterChanged` subscriptions stop as it leaves, and its `scoped` services stay alive until it is disposed.
 
 ### Added
@@ -38,6 +39,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - Async results: `using(promise, onfulfilled?, onrejected?)` types the value from the promise and takes callbacks of any return type; a callback that throws, or an `async` one that rejects, is reported as `MJX129` with the original error as `cause`.
 - Project: contributing guide, security policy and issue templates.
 - Mounting: `app.run` takes a comment or text node as the host; the application is placed right before it and the node stays. `MJX416` is thrown when the node has no parent element.
+- Windows: `app.connectDocument(doc)` connects a same-origin popup or iframe document; router links clicked there navigate the page's router and stack swipes work there. The connection is counted, released by the returned function, on the document's `pagehide` and by `app.dispose()`; `MJX417` is thrown for a value that is not a usable document. A component moved into another document keeps working: `class`, `attr`, the focus state, the fullscreen and pointer-lock exits, transitions and `onMounted` use the element's own document and window.
 
 ### Changed
 
