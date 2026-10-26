@@ -88,9 +88,9 @@ const WHEN_TRUTHY_METHODS = new Set<string>(['close', 'hidePopover', 'requestSub
 const ARGUMENT_METHODS = new Set<string>(['setSelectionRange', 'setRangeText', 'setPointerCapture', 'releasePointerCapture', 'fastSeek']);
 const DOCUMENT_METHODS = new Set<string>(['exitFullscreen', 'exitPointerLock', 'exitPictureInPicture']);
 
-function callDocumentMethod(name: string) {
+function callDocumentMethod(doc: Document | null, name: string) {
     try {
-        const d: any = document;
+        const d: any = doc;
         if (d && typeof d[name] === 'function') {
             const p = d[name]();
             if (p && typeof p.then === 'function') p.catch(() => { });
@@ -216,7 +216,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                 this._attrMap.set(key, raw);
             };
             if (DOCUMENT_METHODS.has(k)) {
-                schedule(() => { if (raw) callDocumentMethod(k); });
+                schedule(() => { if (raw) callDocumentMethod(el.ownerDocument, k); });
                 cacheValue();
                 return;
             }
@@ -298,7 +298,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                         if (raw) {
                             invoke(method);
                         } else {
-                            try { if ((document as any).fullscreenElement === el) callDocumentMethod('exitFullscreen'); } catch { }
+                            try { const d: any = el.ownerDocument; if (d && d.fullscreenElement === el) callDocumentMethod(d, 'exitFullscreen'); } catch { }
                         }
                     };
                     schedule(action);
@@ -311,7 +311,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                         if (raw) {
                             invoke(method);
                         } else {
-                            callDocumentMethod('exitPointerLock');
+                            callDocumentMethod(el.ownerDocument, 'exitPointerLock');
                         }
                     };
                     schedule(action);
@@ -494,7 +494,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
         switch (k) {
             case 'focus':
             case 'blur':
-                try { return (document && (document as any).activeElement) === el; } catch { return false; }
+                try { return (el.getRootNode() as any).activeElement === el; } catch { return false; }
             case 'select': {
                 const inp: any = el as any;
                 if (typeof inp.selectionStart === 'number' && typeof inp.selectionEnd === 'number') {
