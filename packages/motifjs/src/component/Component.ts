@@ -7,6 +7,7 @@ import { constructComponentRoot, disposeUnplacedChilds } from "./componentBase";
 import { resolveComponent } from "./resolveComponent";
 import { ElementType, EventArgs } from "./types";
 import { callReported, motifError } from "../common/diagnostics";
+import { isDomNode } from "../common/functions";
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
@@ -93,7 +94,7 @@ export class Component<TElement extends ElementType = any, TProps extends object
                 }
                 // DOM prop'ları (spread/attr) ComponentBase ctor'ında uygulanır: düz Component'ta tümü,
                 // alt sınıflarda yalnızca ortak öznitelikler (applyFallthroughProps).
-            } else if (elementOrParams instanceof Node) {
+            } else if (isDomNode(elementOrParams)) {
                 super(elementOrParams as any, options as TProps);
             } else if (elementOrParams instanceof ComponentBase) {
                 // Hazır instance geldi; olduğu gibi kullan
@@ -312,7 +313,7 @@ function describeLoaded(value: any): string {
 
 export function assertLoadedComponent(value: unknown): void {
     if (value === null || typeof value !== "object") return;
-    if (value instanceof ComponentBase || Array.isArray(value) || value instanceof Node) return;
+    if (value instanceof ComponentBase || Array.isArray(value) || isDomNode(value)) return;
     if (typeof (value as any).then === "function") return;
     throw motifError('MJX127', describeLoaded(value));
 }
@@ -326,7 +327,7 @@ export function resolveToComponent(input: unknown, props?: any): any {
 }
 
 function materializeOptionsObject(spec: any, props: any): any {
-    const result: any = typeof spec.el === 'string' || spec.el instanceof Node
+    const result: any = typeof spec.el === 'string' || isDomNode(spec.el)
         ? constructComponentRoot(() => motifComponent(spec.el, props))
         : motifComponent(spec.el, props);
     Object.getOwnPropertyNames(spec).forEach(key => {
@@ -338,7 +339,7 @@ function materializeOptionsObject(spec: any, props: any): any {
             result[key] = spec[key];
         }
     });
-    if (typeof spec.view !== 'function' && (typeof spec.el === 'string' || spec.el instanceof Node)) {
+    if (typeof spec.view !== 'function' && (typeof spec.el === 'string' || isDomNode(spec.el))) {
         const kids = result.childs;
         if (Array.isArray(kids)) {
             for (const kid of kids) {

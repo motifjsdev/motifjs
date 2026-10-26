@@ -1,5 +1,6 @@
 import { IClass } from "../common/IAttribute";
 import { reportError } from "../common/diagnostics";
+import { isDomElement } from "../common/functions";
 import { ComponentBase } from "./componentBase";
 import { effect } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
@@ -138,7 +139,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
 
     private _getElement(): (Element & { classList: DOMTokenList, className: string }) | null {
         const el: unknown = this._parent?.element;
-        if (el instanceof Element) return el as any;
+        if (isDomElement(el)) return el as any;
         return null;
     }
 

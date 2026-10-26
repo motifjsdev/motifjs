@@ -4,7 +4,7 @@ import { Disposable } from "../disposable/Disposable";
 import { IClass } from "../common/IAttribute";
 import { IDisposable } from "../disposable/IDisposable";
 import type { Application } from "../application";
-import { isExactMatch, startsWithPath } from "../common/functions";
+import { isDomNode, isExactMatch, startsWithPath } from "../common/functions";
 import { reactive } from "../store";
 import { safeCallSilent, safeCallSilentAsync, safeCall, safeCallAsync } from "../common/ErrorHandler";
 import { mainApplication, isApplicationDisposing } from "./componentSlots";
@@ -419,7 +419,7 @@ function reservedMemberProblems(c: ComponentBase): Array<[string, 'method' | 'fi
         if (!(anyC.class instanceof controlClass)) problems.push(['class', 'replaced']);
         if (!(anyC.attr instanceof controlAttribute)) problems.push(['attr', 'replaced']);
         if (!(anyC.bindings instanceof BindingCollection)) problems.push(['bindings', 'replaced']);
-        if (anyC.element != null && typeof Node !== 'undefined' && !(anyC.element instanceof Node)) problems.push(['element', 'replaced']);
+        if (anyC.element != null && !isDomNode(anyC.element)) problems.push(['element', 'replaced']);
         if (anyC.parent != null && !(anyC.parent instanceof ComponentBase)) problems.push(['parent', 'replaced']);
         return problems;
 }

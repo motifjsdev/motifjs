@@ -6,6 +6,7 @@ import { Binding } from "../bindings/Binding";
 import { IBaseBinding } from "../bindings/IBaseBinding";
 import { isComponentLike } from "./componentBase";
 import { reportError } from "../common/diagnostics";
+import { isDomElement } from "../common/functions";
 
 export type ElementTypes = Node | Element | HTMLElement | Text | DocumentFragment | Comment | HTMLDivElement;
 
@@ -135,8 +136,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
     };
     has(key: string): boolean {
 
-        if (this._parent.element instanceof HTMLElement ||
-            this._parent.element instanceof Element) {
+        if (isDomElement(this._parent.element)) {
             return this._parent.element.hasAttribute(key)
         }
         return false;
@@ -477,7 +477,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
 
     private _getElement(): Element | null {
         const el = this._parent?.element as unknown;
-        if (el instanceof HTMLElement || el instanceof Element) return el as Element;
+        if (isDomElement(el)) return el;
         return null;
     }
 

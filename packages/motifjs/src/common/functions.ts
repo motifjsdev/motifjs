@@ -44,6 +44,12 @@ export function isAnchorElement(source: ComponentBase) {
 export function isElement(source: ComponentBase) {
     return source.element.nodeType == NodeTypes.ELEMENT_NODE;
 }
+export function isDomNode(value: unknown): value is Node {
+    return value != null && typeof (value as Node).nodeType == 'number' && typeof (value as Node).nodeName == 'string';
+}
+export function isDomElement(value: unknown): value is Element {
+    return isDomNode(value) && value.nodeType == NodeTypes.ELEMENT_NODE;
+}
 export function isview(source: ComponentBase) {
     return source.element.nodeName == 'view';
 }
