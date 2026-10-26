@@ -278,6 +278,124 @@ describe('app.windows', () => {
     });
 });
 
+describe('app.windows stilleri', () => {
+    let app: Application;
+    let root: Component;
+    let item: Component;
+
+    const sheets = (win: any) => Array.from(win.document.head.querySelectorAll('style, link')) as Element[];
+
+    beforeEach(() => {
+        document.head.innerHTML = '<style id="s1">.a{color:red}</style><link rel="stylesheet" href="/x.css">';
+        document.documentElement.setAttribute('lang', 'tr');
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.className = 'root';
+        document.body.className = 'page';
+        app = Application.CreateBuilder().build();
+        root = new Component('div');
+        app.run(document.body.appendChild(document.createElement('div')), root);
+        item = new Component('p');
+        root.controls.add(item);
+    });
+
+    afterEach(async () => {
+        await app.dispose();
+        document.body.innerHTML = '';
+        document.head.innerHTML = '';
+        document.documentElement.removeAttribute('lang');
+        document.documentElement.removeAttribute('data-theme');
+        document.documentElement.className = '';
+        document.body.className = '';
+        delete (document as any).adoptedStyleSheets;
+    });
+
+    test('once açılışta stil sayfalarını ve kök özniteliklerini kopyalar, sonrasını izlemez', async () => {
+        const win = app.windows.attach(frameWindow(), { styles: 'once' });
+        const copied = sheets(win);
+        expect(copied.map(e => e.tagName)).toEqual(['STYLE', 'LINK']);
+        expect(copied[0].textContent).toBe('.a{color:red}');
+        expect(copied[1].getAttribute('href')).toBe('http://localhost/x.css');
+        expect(win.document.documentElement.getAttribute('lang')).toBe('tr');
+        expect(win.document.documentElement.getAttribute('data-theme')).toBe('dark');
+        expect(win.document.documentElement.className).toBe('root');
+        expect(win.document.body.className).toBe('page');
+        document.body.appendChild(document.createElement('style')).textContent = '.late{}';
+        document.documentElement.setAttribute('data-theme', 'light');
+        await tick();
+        expect(sheets(win).length).toBe(2);
+        expect(win.document.documentElement.getAttribute('data-theme')).toBe('dark');
+    });
+
+    test('live varsayılandır: eklenen, değişen ve kaldırılan stil sayfaları ile kök öznitelikleri yansır', async () => {
+        const win = app.windows.attach(frameWindow());
+        const late = document.body.appendChild(document.createElement('style'));
+        late.textContent = '.late{color:blue}';
+        await tick();
+        expect(sheets(win).map(e => e.textContent)).toContain('.late{color:blue}');
+        late.textContent = '.late{color:green}';
+        await tick();
+        expect(sheets(win).map(e => e.textContent)).toContain('.late{color:green}');
+        late.remove();
+        await tick();
+        expect(sheets(win).length).toBe(2);
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.body.className = 'page dense';
+        await tick();
+        expect(win.document.documentElement.getAttribute('data-theme')).toBe('light');
+        expect(win.document.body.className).toBe('page dense');
+        document.documentElement.removeAttribute('data-theme');
+        await tick();
+        expect(win.document.documentElement.hasAttribute('data-theme')).toBe(false);
+    });
+
+    test('son canlı pencere kapanınca gözlemciler bırakılır', async () => {
+        const disconnect = jest.spyOn(MutationObserver.prototype, 'disconnect');
+        try {
+            const first = app.windows.attach(frameWindow());
+            const second = app.windows.attach(frameWindow());
+            await first.close();
+            expect(disconnect).not.toHaveBeenCalled();
+            await second.close();
+            expect(disconnect).toHaveBeenCalledTimes(2);
+        } finally {
+            disconnect.mockRestore();
+        }
+    });
+
+    test('none hiçbir şey kopyalamaz, fonksiyon pencerenin belgesiyle çağrılır', () => {
+        const none = app.windows.attach(frameWindow(), { styles: 'none' });
+        expect(sheets(none).length).toBe(0);
+        expect(none.document.documentElement.hasAttribute('lang')).toBe(false);
+        const seen: Document[] = [];
+        const custom = app.windows.attach(frameWindow(), { styles: (doc) => { seen.push(doc); } });
+        expect(seen).toEqual([custom.document]);
+        expect(sheets(custom).length).toBe(0);
+    });
+
+    test('adoptedStyleSheets kurallarından yeniden kurulur ve syncStyles ile yenilenir', () => {
+        let rules = [{ cssText: '.x{color:red}' }];
+        Object.defineProperty(document, 'adoptedStyleSheets', { configurable: true, get: () => [{ cssRules: rules }] });
+        const win = app.windows.attach(frameWindow(), { styles: 'once' });
+        expect(sheets(win).map(e => e.textContent)).toContain('.x{color:red}');
+        rules = [{ cssText: '.x{color:red}' }, { cssText: '.y{color:blue}' }];
+        win.syncStyles();
+        expect(sheets(win).map(e => e.textContent)).toContain('.x{color:red}\n.y{color:blue}');
+        expect(sheets(win).length).toBe(3);
+    });
+
+    test('taşınan bileşenin kendi style etiketi ikinci kez kopyalanmaz', async () => {
+        const styled = new Component('section');
+        const inner = new Component('style');
+        inner.setText('.inner{}');
+        styled.controls.add(inner);
+        root.controls.add(styled);
+        const win = app.windows.attach(frameWindow());
+        win.add(styled);
+        await tick();
+        expect(Array.from(win.document.querySelectorAll('style')).filter(s => s.textContent === '.inner{}').length).toBe(1);
+    });
+});
+
 describe('app.windows ve router', () => {
     let app: Application;
     let root: Component;

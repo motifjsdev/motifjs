@@ -29,6 +29,43 @@ export type WindowClosedResult = { returned: ComponentBase[]; disposed: Componen
 
 type Origin = { parent: ComponentBase; before: ComponentBase | null };
 
+const MIRRORED_ATTRIBUTES = ['class', 'lang', 'dir'];
+
+function isStyleSource(node: Node): boolean {
+    if (node.nodeType !== 1) return false;
+    const tag = (node as Element).tagName;
+    return tag === 'STYLE' || (tag === 'LINK' && /(^|\s)stylesheet(\s|$)/i.test((node as Element).getAttribute('rel') ?? ''));
+}
+
+function touchesStyles(nodes: NodeList): boolean {
+    for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        if (isStyleSource(node)) return true;
+        if (node.nodeType === 1 && (node as Element).querySelector('style, link[rel~="stylesheet"]')) return true;
+    }
+    return false;
+}
+
+function insideStyle(node: Node | null): boolean {
+    for (let n: Node | null = node; n; n = n.parentNode) {
+        if (n.nodeType === 1 && (n as Element).tagName === 'STYLE') return true;
+    }
+    return false;
+}
+
+function mirrorAttributes(from: Element, to: Element): void {
+    const wanted = new Set<string>();
+    for (const attr of Array.from(from.attributes)) {
+        if (MIRRORED_ATTRIBUTES.includes(attr.name) || attr.name.startsWith('data-')) {
+            wanted.add(attr.name);
+            if (to.getAttribute(attr.name) !== attr.value) to.setAttribute(attr.name, attr.value);
+        }
+    }
+    for (const attr of Array.from(to.attributes)) {
+        if ((MIRRORED_ATTRIBUTES.includes(attr.name) || attr.name.startsWith('data-')) && !wanted.has(attr.name)) to.removeAttribute(attr.name);
+    }
+}
+
 export class AppWindow {
     public readonly host: Component;
     public readonly components: ComponentBase[] = [];
@@ -37,6 +74,8 @@ export class AppWindow {
     private readonly _closed: Promise<WindowClosedResult>;
     private readonly _offs: Array<() => void> = [];
     private readonly _watchers = new Map<ComponentBase, () => void>();
+    private readonly _mirrored = new Map<Node, Element>();
+    private _adopted: HTMLStyleElement | null = null;
 
     constructor(private readonly _manager: WindowManager, public readonly window: Window, public readonly kind: WindowKind | 'attached', private readonly _options: WindowOptions) {
         this._closed = new Promise(resolve => { this._resolve = resolve; });
@@ -49,6 +88,7 @@ export class AppWindow {
         window.addEventListener('pagehide', onHide);
         this._offs.push(() => { try { window.removeEventListener('pagehide', onHide); } catch { } });
         if (_options.owner) _options.owner.motif.setDisposable(() => { this.close(); });
+        this._setupStyles();
     }
 
     public get document(): Document {
@@ -95,6 +135,49 @@ export class AppWindow {
         return this._closed;
     }
 
+    public syncStyles(): void {
+        if (!this._open) return;
+        const doc = this.window.document;
+        const head = doc.head ?? doc.documentElement;
+        const sources = Array.from(dom.document.querySelectorAll('link[rel~="stylesheet"], style')) as Element[];
+        for (const [source, clone] of Array.from(this._mirrored)) {
+            if (sources.includes(source as Element)) continue;
+            clone.parentNode?.removeChild(clone);
+            this._mirrored.delete(source);
+        }
+        for (const source of sources) {
+            const clone = this._mirrored.get(source);
+            if (clone) {
+                if (source.tagName === 'STYLE' && clone.textContent !== source.textContent) clone.textContent = source.textContent;
+                continue;
+            }
+            const copy = source.cloneNode(true) as Element;
+            if (source.tagName === 'LINK') copy.setAttribute('href', (source as HTMLLinkElement).href);
+            head.appendChild(copy);
+            this._mirrored.set(source, copy);
+        }
+        const adopted: any[] = (dom.document as any).adoptedStyleSheets ?? [];
+        const text = adopted.map(sheet => { try { return Array.from(sheet.cssRules as any, (rule: any) => rule.cssText).join('\n'); } catch { return ''; } }).filter(Boolean).join('\n');
+        if (text) {
+            if (!this._adopted) {
+                this._adopted = doc.createElement('style');
+                head.appendChild(this._adopted);
+            }
+            if (this._adopted.textContent !== text) this._adopted.textContent = text;
+        } else if (this._adopted) {
+            this._adopted.remove();
+            this._adopted = null;
+        }
+    }
+
+    public _syncRoot(): void {
+        if (!this._open) return;
+        const doc = this.window.document;
+        const page = dom.document;
+        if (page.documentElement && doc.documentElement) mirrorAttributes(page.documentElement, doc.documentElement);
+        if (page.body && doc.body) mirrorAttributes(page.body, doc.body);
+    }
+
     public _track(off: () => void): void {
         this._offs.push(off);
     }
@@ -125,6 +208,18 @@ export class AppWindow {
         this.host.dispose();
         this._manager._remove(this);
         this._resolve(result);
+    }
+
+    private _setupStyles(): void {
+        const styles = this._options.styles ?? 'live';
+        if (styles === 'none') return;
+        if (typeof styles === 'function') {
+            styles(this.window.document);
+            return;
+        }
+        this.syncStyles();
+        this._syncRoot();
+        if (styles === 'live') this._manager._watchStyles(this);
     }
 
     private _forget(component: ComponentBase): void {
@@ -161,6 +256,9 @@ export class WindowManager {
     private readonly _items: AppWindow[] = [];
     private readonly _origins = new WeakMap<ComponentBase, Origin>();
     private readonly _holders = new WeakMap<ComponentBase, AppWindow>();
+    private readonly _live = new Set<AppWindow>();
+    private _nodeObserver: MutationObserver | null = null;
+    private _rootObserver: MutationObserver | null = null;
     private _seq = 0;
     private _pageHide: (() => void) | null = null;
 
@@ -238,6 +336,7 @@ export class WindowManager {
     }
 
     public _remove(handle: AppWindow): void {
+        this._unwatchStyles(handle);
         const index = this._items.indexOf(handle);
         if (index < 0) return;
         this._items.splice(index, 1);
@@ -252,6 +351,38 @@ export class WindowManager {
             try { handle.window.close(); } catch { }
         }
         this._unlistenPage();
+    }
+
+    public _watchStyles(handle: AppWindow): void {
+        this._live.add(handle);
+        if (this._nodeObserver) return;
+        const Observer: typeof MutationObserver | undefined = (dom.window as any).MutationObserver;
+        const root = dom.document?.documentElement;
+        if (typeof Observer !== 'function' || !root) return;
+        this._nodeObserver = new Observer(records => this._stylesChanged(records));
+        this._nodeObserver.observe(root, { childList: true, subtree: true, characterData: true });
+        this._rootObserver = new Observer(() => { for (const live of this._live) live._syncRoot(); });
+        this._rootObserver.observe(root, { attributes: true });
+        if (dom.document.body) this._rootObserver.observe(dom.document.body, { attributes: true });
+    }
+
+    public _unwatchStyles(handle: AppWindow): void {
+        this._live.delete(handle);
+        if (this._live.size) return;
+        try { this._nodeObserver?.disconnect(); } catch { }
+        try { this._rootObserver?.disconnect(); } catch { }
+        this._nodeObserver = null;
+        this._rootObserver = null;
+    }
+
+    private _stylesChanged(records: MutationRecord[]): void {
+        let changed = false;
+        for (const record of records) {
+            if (record.type === 'childList' && (touchesStyles(record.addedNodes) || touchesStyles(record.removedNodes) || insideStyle(record.target))) { changed = true; break; }
+            if (record.type === 'characterData' && insideStyle(record.target)) { changed = true; break; }
+        }
+        if (!changed) return;
+        for (const live of this._live) live.syncStyles();
     }
 
     private _attach(win: Window, kind: WindowKind | 'attached', options: WindowOptions): AppWindow {
