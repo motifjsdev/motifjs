@@ -27,6 +27,7 @@ export class RouterView extends Component {
     current: ComponentBase | ComponentBase[] | null = null;
     _latestNavigateId = 0;
     isBusy: boolean = false;
+    _router: { _outletDisposing(outlet: RouterView): void } | null = null;
 
     public async navigate(page: ComponentBase | ComponentBase[], keepOldControl: boolean = false) {
         await navigateHost(this, page, keepOldControl);
@@ -45,6 +46,10 @@ export class RouterView extends Component {
                 p = p.parent;
             }
         } catch { /* ignore */ }
+    }
+
+    public override onDisposing() {
+        this._router?._outletDisposing(this);
     }
 
     public override onDisposed() {

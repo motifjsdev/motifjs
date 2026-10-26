@@ -298,6 +298,22 @@ export class NavigationStack {
         entry.saved = null;
     }
 
+    public release(entry: RetainedEntry): void {
+        const top = entry.top;
+        if (top.isDisposed) return;
+        this.reveal(entry);
+        try { top.parent?.controls.silentDetach(top); } catch { }
+        entry.attached = false;
+        entry.pendingDetach = false;
+        entry.outlet = null;
+    }
+
+    public releaseOutlet(outlet: any): void {
+        for (const entry of this.entries.values()) {
+            if (entry.top.parent === outlet) this.release(entry);
+        }
+    }
+
     public restoreScroll(entry: RetainedEntry): void {
         restoreScroll(entry.scroll);
     }

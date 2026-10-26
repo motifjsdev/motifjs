@@ -37,6 +37,12 @@ export class RoutingEngine {
     private _handover: RouterHandover | null = null;
     private _retiredEngines: RoutingEngine[] = [];
     private _retiredStack: NavigationStack | null = null;
+    private _busy = 0;
+    private _dirty = false;
+    private _reconcileQueued = false;
+    private _shownRoute: RouteSnapshot | undefined;
+    private _scopedPages: WeakSet<ComponentBase> = new WeakSet();
+    private _outletBuilt = () => this._requestReconcile();
 
     private root!: ComponentBase;
     private application!: Application;
@@ -45,9 +51,15 @@ export class RoutingEngine {
     private _previousInstances: ComponentBase[] = [];
 
     public register(mainApp: ComponentBase, application: Application, routingModule: UrlRoutingModule) {
+        this._unlisten();
         this.root = mainApp;
         this.application = application;
         this.routingModule = routingModule;
+        mainApp.motif.on(RouterViewBuilt as any, this._outletBuilt);
+    }
+
+    private _unlisten(): void {
+        try { (this.root as any)?.motif?.off?.(RouterViewBuilt as any, this._outletBuilt); } catch { }
     }
 
     private controlCache: Map<RouteItem, any> = new Map();
@@ -80,6 +92,8 @@ export class RoutingEngine {
     public async dispose(): Promise<void> {
         this._navVersion++;
         this._closed = true;
+        this._unlisten();
+        this._shownRoute = undefined;
         this._previousPath = null;
         this._previousInstances = [];
         this._revealed.clear();
@@ -112,6 +126,8 @@ export class RoutingEngine {
     public retire(): RouterHandover {
         this._navVersion++;
         this._closed = true;
+        this._unlisten();
+        this._shownRoute = undefined;
         const inherited = this._handover;
         this._handover = null;
         const handover: RouterHandover = inherited && !this._previousInstances.length
@@ -309,12 +325,98 @@ export class RoutingEngine {
         };
         const provider = this._rootProvider();
         const run: NavigationRun = { provider, scope: provider?._beginNavigation(), route, committed: false, suppressed: [], created: [] };
+        this._busy++;
         try {
             await this._execute(path, nav, run);
         } finally {
             if (!run.committed && run.scope) provider!._abandonNavigation(run.scope);
             for (const inst of run.suppressed) if (!inst.isDisposed) inst.motif.options.transition._suppressEnter = false;
+            this._idle();
         }
+    }
+
+    private _idle(): void {
+        if (--this._busy > 0 || !this._dirty) return;
+        this._dirty = false;
+        this._requestReconcile();
+    }
+
+    private _requestReconcile(): void {
+        if (this._closed) return;
+        if (this._busy) {
+            this._dirty = true;
+            return;
+        }
+        if (this._reconcileQueued) return;
+        this._reconcileQueued = true;
+        queueMicrotask(() => {
+            this._reconcileQueued = false;
+            void this._reconcile();
+        });
+    }
+
+    private async _reconcile(): Promise<void> {
+        if (this._closed || !this._previousPath) return;
+        if (this._busy) {
+            this._dirty = true;
+            return;
+        }
+        const chain = this._previousPath.chain;
+        const instances = this._previousInstances;
+        let container: ComponentBase = this.root;
+        for (let index = 0; index < chain.length; index++) {
+            const inst = instances[index];
+            if (this._settled(inst)) {
+                container = inst;
+                continue;
+            }
+            if (!container || container.isDisposed || !container.isBuilt || !this._outletIn(container, chain[index])) return;
+            try {
+                await this.mountChain(instances, chain, container, this._navVersion, index);
+            } catch (error) {
+                await this.routingModule._pageFailed(error);
+            }
+            return;
+        }
+    }
+
+    private _settled(inst: ComponentBase | undefined): inst is ComponentBase {
+        if (!inst || inst.isDisposed) return false;
+        const outlet = inst.parent as any;
+        return !!outlet && !!outlet.__isRouterView && !this._dying(outlet);
+    }
+
+    private _dying(node: ComponentBase | null | undefined): boolean {
+        for (let n: any = node; n; n = n.parent) {
+            if (n.isDisposed || n._disposing) return true;
+        }
+        return false;
+    }
+
+    private _keepsPage(item: RouteItem | undefined, inst: ComponentBase): boolean {
+        return this._keepsInstance(item) || this._scopedPages.has(inst);
+    }
+
+    private _takeFromOutlet(inst: ComponentBase): void {
+        const outlet = inst.parent as any;
+        cancelAnimationsDeep(inst);
+        if (outlet && outlet.current === inst) {
+            outlet.current = null;
+            outlet.previouspage = null;
+        }
+        try { outlet?.controls.silentDetach(inst); } catch (error) { reportError('MJX307', error); }
+        this._pendingActivate.add(inst);
+    }
+
+    public _outletDisposing(outlet: RouterView): void {
+        if (this._closed) return;
+        this.stack?.releaseOutlet(outlet);
+        const page = outlet.current;
+        if (!(page instanceof ComponentBase) || page.isDisposed) return;
+        const index = this._previousInstances.indexOf(page);
+        if (index < 0) return;
+        if (this._keepsPage(this._previousPath?.chain[index], page)) this._takeFromOutlet(page);
+        this._requestReconcile();
     }
 
     private _uncommitted: WeakSet<ComponentBase> = new WeakSet();
@@ -342,6 +444,7 @@ export class RoutingEngine {
         run.committed = true;
         for (const [, inst] of run.created) this._uncommitted.delete(inst);
         if (run.scope) run.provider!._commitNavigation(run.scope);
+        this._shownRoute = run.route;
         this.application?._routerState.commit(run.route);
     }
 
@@ -486,6 +589,9 @@ export class RoutingEngine {
             leave = await this._stackLeave(path.chain, controlList, nav!, stack, motion);
             if (restored) {
                 const top = restored.top;
+                if (!top.isDisposed && top.parent && this._dying(top.parent)) {
+                    stack.release(restored);
+                }
                 if (!top.isDisposed && restored.outlet && top.parent === restored.outlet) {
                     stack.reveal(restored);
                     restored.outlet.current = top;
@@ -759,6 +865,7 @@ export class RoutingEngine {
         if (desc.lifetime === 'scoped') {
             const page = getInScope(provider, token);
             if (page && typeof page === 'object') keepOnDispose(page);
+            if (page instanceof ComponentBase) this._scopedPages.add(page);
             return page;
         }
         return provider.get(token);
@@ -815,42 +922,76 @@ export class RoutingEngine {
     private pendingListeners = new WeakMap<ComponentBase, Function>(); 
     private static readonly OUTLET_WARN_MS = 3000;
  
-    private async mountChain(instances: any[], chain: any[], container: ComponentBase, navVersion: number): Promise<void> { 
-        for (let index = 0; index < instances.length;) { 
-            if (navVersion !== this._navVersion) return;
+    private async mountChain(instances: any[], chain: any[], container: ComponentBase, navVersion: number, start: number = 0): Promise<void> {
+        this._busy++;
+        try {
+            for (let index = start; index < instances.length;) {
+                if (navVersion !== this._navVersion) return;
 
-            let inst = instances[index] as ComponentBase; 
-            if (inst?.isDisposed) {
-                inst = await this.createInstance(chain[index], this._rootProvider()?._currentScope());
-                instances[index] = inst;
-            }
-            const outletName = (chain[index] && chain[index].extend && chain[index].extend.targetOutlet) || 'default';
- 
-            const outlet = this.findRouterView(container, outletName);
- 
-            if (!outlet || !container.isBuilt) {
-                this._waitForOutlet(container, instances.slice(index), chain.slice(index), navVersion, outletName);
-                return;
-            }
+                let inst = this._pageAt(instances, chain, index);
+                if (!inst) {
+                    inst = await this._rebuildPage(instances, chain, index, navVersion);
+                    if (!inst) return;
+                }
+                const outletName = (chain[index] && chain[index].extend && chain[index].extend.targetOutlet) || 'default';
 
-            const revealed = this._revealed.delete(inst);
-            const alreadyShown = outlet.current === inst && !revealed;
-            const activating = this._pendingActivate.delete(inst);
-            if (activating) unpinServiceOwner(inst);
-            await outlet.navigate(inst);
-            if (activating) {
-                notifyActivated(inst);
+                const outlet = this.findRouterView(container, outletName);
+
+                if (!outlet || !container.isBuilt) {
+                    this._waitForOutlet(container, instances, chain, index, navVersion, outletName);
+                    return;
+                }
+                outlet._router = this;
+
+                const revealed = this._revealed.delete(inst);
+                const alreadyShown = outlet.current === inst && !revealed;
+                const activating = this._pendingActivate.delete(inst);
+                if (activating) unpinServiceOwner(inst);
+                await outlet.navigate(inst);
+                if (activating) {
+                    notifyActivated(inst);
+                }
+                const showHook = (chain[index] as RouteItem | undefined)?.onShow;
+                if (showHook && !alreadyShown && outlet.current === inst && navVersion === this._navVersion) {
+                    callReported(() => showHook(inst), 'MJX306', 'onShow');
+                }
+                container = inst;
+                index++;
             }
-            const showHook = (chain[index] as RouteItem | undefined)?.onShow;
-            if (showHook && !alreadyShown && outlet.current === inst && navVersion === this._navVersion) {
-                callReported(() => showHook(inst), 'MJX306', 'onShow');
-            }
-            container = inst;
-            index++;
+        } finally {
+            this._idle();
         }
     }
- 
-    private _waitForOutlet(container: ComponentBase, instances: any[], chain: any[], navVersion: number, outletName: string): void {
+
+    private _pageAt(instances: any[], chain: any[], index: number): ComponentBase | null {
+        const inst = instances[index] as ComponentBase | undefined;
+        if (!inst || inst.isDisposed) return null;
+        const outlet = inst.parent as any;
+        if (!outlet || !outlet.__isRouterView || !this._dying(outlet)) return inst;
+        if (this._keepsPage(chain[index], inst)) {
+            this._takeFromOutlet(inst);
+            return inst;
+        }
+        pinServiceOwner(inst);
+        pauseBeforeDispose(inst);
+        return null;
+    }
+
+    private async _rebuildPage(instances: any[], chain: any[], index: number, navVersion: number): Promise<ComponentBase | null> {
+        const item = chain[index] as RouteItem;
+        const created = await this.createInstance(item, this._rootProvider()?._currentScope(), this._shownRoute) as ComponentBase;
+        if (navVersion !== this._navVersion) {
+            if (created instanceof ComponentBase && !created.isDisposed && !this._keepsInstance(item) && !created.parent) void this._depart(created, null, true);
+            return null;
+        }
+        instances[index] = created;
+        if (this._previousPath?.chain === chain) this._previousInstances[index] = created;
+        this.controlCache.set(item, created);
+        this._noteGivenInactive(item, created);
+        return created;
+    }
+
+    private _waitForOutlet(container: ComponentBase, instances: any[], chain: any[], start: number, navVersion: number, outletName: string): void {
   
         const oldCleanup = this.pendingListeners.get(container);
         if (oldCleanup) {
@@ -865,7 +1006,11 @@ export class RoutingEngine {
             if (done) return;
             cleanup(); 
             if (navVersion !== this._navVersion) return;
-            await this.mountChain(instances, chain, container, navVersion);
+            try {
+                await this.mountChain(instances, chain, container, navVersion, start);
+            } catch (error) {
+                await this.routingModule._pageFailed(error);
+            }
         };
 
         const cleanup = () => {

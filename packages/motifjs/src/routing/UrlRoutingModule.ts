@@ -906,6 +906,19 @@ export class UrlRoutingModule {
         } catch { }
     }
 
+    public async _pageFailed(error: unknown): Promise<void> {
+        if (this._closed) return;
+        reportError('MJX304', error);
+        const uri = this._currentUri;
+        const shown = this.application._routerState.read();
+        const target = this._buildFallbackResult(uri, 'error', { path: uri, error });
+        try {
+            await this.routingEngine.execute(target, undefined, { target, chain: this.chainOf(target), direction: shown?.direction, state: shown?.state });
+        } catch (e2) {
+            reportError('MJX305', e2);
+        }
+    }
+
     public retire(): RouterHandover {
         this._closed = 'restart';
         try { this._scroll?.dispose(); } catch { }
