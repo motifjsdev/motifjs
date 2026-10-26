@@ -20,7 +20,6 @@ export type ScrollMemoryOptions = {
     top?: boolean;
     anchor?: boolean;
     settleMs?: number;
-    persist?: boolean;
     limit?: number;
     key?: (path: string) => string;
     container?: string | HTMLElement | (() => HTMLElement | null | undefined);
@@ -103,6 +102,9 @@ export type Router = {
     resolve: (uri: string) => RouteResolution;
     href: (name: string, params?: Record<string, any>) => string;
     readonly routes: RouteInfo[];
+    scrollPositions: () => Record<string, number>;
+    restoreScrollPositions: (positions: Record<string, number>) => void;
+    saveScrollPositions: (save: (positions: Record<string, number>) => void) => () => void;
 }
 
 export type RouteInfo = {

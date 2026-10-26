@@ -46,7 +46,7 @@ export class UrlRoutingModule {
 
         const scrollMemory = options.scrollMemory;
         if (scrollMemory) {
-            this._scroll = new ScrollMemory(scrollMemory === true ? {} : scrollMemory);
+            this._scroll = new ScrollMemory(scrollMemory === true ? {} : scrollMemory, undefined, positions => this._saveScroll(positions));
             this._scroll.locationAnchor = this._addressMode() === 'history';
         }
 
@@ -67,6 +67,7 @@ export class UrlRoutingModule {
         this.mainApp = mainApp;
         this.routingEngine.register(this.mainApp, this.application, this);
         this.routingEngine.adopt(handover);
+        this._scroll?.adopt(handover?.scroll);
         const current = this._routerOptions.mode === 'shell' ? '/' : this._getCurrentUri();
         this._seedHistoryIndex();
         this._suppressMiddlewaresOnce = true;
@@ -923,12 +924,27 @@ export class UrlRoutingModule {
         }
     }
 
+    private _saveScroll(positions: Record<string, number>): void {
+        for (const save of Array.from(this.application._routerState.scrollSavers)) {
+            try { save(positions); } catch (error) { reportError('MJX306', error, 'saveScrollPositions'); }
+        }
+    }
+
+    public scrollPositions(): Record<string, number> {
+        return this._scroll?.snapshot() ?? {};
+    }
+
+    public restoreScrollPositions(positions: Record<string, number>): void {
+        this._scroll?.adopt(positions);
+    }
+
     public retire(): RouterHandover {
         this._closed = 'restart';
+        const scroll = this._scroll?.snapshot();
         try { this._scroll?.dispose(); } catch { }
         this._scroll = null;
         this._historyStamp = null;
-        const handover = this.routingEngine.retire();
+        const handover: RouterHandover = { ...this.routingEngine.retire(), scroll };
         if (this._navHandler) {
             try { document.removeEventListener('click', this._navHandler); } catch { }
             this._navHandler = null;
@@ -943,7 +959,7 @@ export class UrlRoutingModule {
 
     public dispose(): Promise<void> {
         this._closed = 'dispose';
-        try { this._scroll?.dispose(); } catch { }
+        try { this._scroll?.dispose(true); } catch { }
         this._scroll = null;
         this._historyStamp = null;
         let done: Promise<void> = Promise.resolve();

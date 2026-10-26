@@ -14,6 +14,7 @@ export type RouteSnapshot = {
 
 export class RouterState {
     readonly version = new Signal(0);
+    readonly scrollSavers = new Set<(positions: Record<string, number>) => void>();
     private _current: RouteSnapshot | null = null;
     private _constructing: RouteSnapshot | null = null;
 
@@ -94,5 +95,11 @@ export function createRouter(state: RouterState, module: () => UrlRoutingModule 
             return { chain: current.chainOf(result), result };
         },
         href: (name: string, params?: Record<string, any>) => required().href(name, params),
+        scrollPositions: () => required().scrollPositions(),
+        restoreScrollPositions: (positions: Record<string, number>) => { required().restoreScrollPositions(positions); },
+        saveScrollPositions: (save: (positions: Record<string, number>) => void) => {
+            state.scrollSavers.add(save);
+            return () => { state.scrollSavers.delete(save); };
+        },
     };
 }

@@ -28,7 +28,7 @@ describe('navigate(…, { scroll }) with a scroll memory container', () => {
         ['instant', { top: 0, behavior: 'instant' }],
         [{ top: 40, left: 10, behavior: 'smooth' }, { top: 40, left: 10, behavior: 'smooth' }],
     ])('scroll: %j scrolls the container, not the window', async (option, want) => {
-        const t = setup({ container: '#content', persist: false });
+        const t = setup({ container: '#content' });
         await tick();
         await t.app.navigate('/a');
         t.box.scrollTop = 500;
@@ -41,7 +41,7 @@ describe('navigate(…, { scroll }) with a scroll memory container', () => {
     });
 
     test('the page reached with a scroll option owns the position saved when leaving it', async () => {
-        const t = setup({ container: '#content', persist: false });
+        const t = setup({ container: '#content' });
         await tick();
         await t.app.navigate('/a');
         await t.app.navigate('/b', { scroll: 'top' });
@@ -55,7 +55,7 @@ describe('navigate(…, { scroll }) with a scroll memory container', () => {
     });
 
     test('without a container the memory scrolls the window and still records the page', async () => {
-        const t = setup({ persist: false });
+        const t = setup({});
         await tick();
         await t.app.navigate('/a');
         t.windowCalls.length = 0;

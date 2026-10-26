@@ -7,7 +7,6 @@ export interface ScrollViewport {
     scrollToAnchor(id: string, follow?: boolean): boolean;
 }
 
-const STORAGE_KEY = 'motifjs:scroll';
 const DEFAULT_LIMIT = 60;
 const DEFAULT_SETTLE_MS = 1200;
 
@@ -29,10 +28,12 @@ export class ScrollMemory {
 
     public locationAnchor = true;
 
-    constructor(options: ScrollMemoryOptions = {}, viewport?: ScrollViewport) {
+    private readonly onSave: ((positions: Record<string, number>) => void) | null;
+
+    constructor(options: ScrollMemoryOptions = {}, viewport?: ScrollViewport, onSave?: (positions: Record<string, number>) => void) {
         this.options = options;
         this.viewport = viewport ?? (options.container ? containerViewport(options.container) : windowViewport());
-        this.load();
+        this.onSave = onSave ?? null;
 
         try {
             if (typeof history !== 'undefined' && 'scrollRestoration' in history) {
@@ -41,9 +42,9 @@ export class ScrollMemory {
         } catch { /* salt okunur bırakan gömülü tarayıcılar  */ }
 
         if (typeof window !== 'undefined') {
-            this.offs.push(listen(window, 'pagehide', () => this.persistNow()));
+            this.offs.push(listen(window, 'pagehide', () => this.save()));
             this.offs.push(listen(document, 'visibilitychange', () => {
-                if (document.visibilityState === 'hidden') this.persistNow();
+                if (document.visibilityState === 'hidden') this.save();
             }));
         }
     }
@@ -52,7 +53,27 @@ export class ScrollMemory {
         this.cancelRestore();
         if (!this.visited) return;
         this.remember(this.currentKey, this.viewport.scrollTop());
-        this.persist();
+        this.onSave?.(this.snapshot());
+    }
+
+    public save(): void {
+        this.rememberCurrent();
+        this.onSave?.(this.snapshot());
+    }
+
+    public snapshot(): Record<string, number> {
+        this.rememberCurrent();
+        const out: Record<string, number> = {};
+        for (const [key, top] of this.positions) if (top > 0) out[key] = top;
+        return out;
+    }
+
+    public adopt(positions: Record<string, number> | null | undefined): void {
+        if (!positions || typeof positions !== 'object') return;
+        for (const key of Object.keys(positions)) {
+            const top = Number(positions[key]);
+            if (Number.isFinite(top) && top > 0) this.remember(key, top);
+        }
     }
 
     public arrived(uri: string, direction?: NavigationDirection, restore: boolean = true): void {
@@ -74,9 +95,9 @@ export class ScrollMemory {
         return this.positions.get(this.keyOf(splitUri(key).path)) ?? 0;
     }
 
-    public dispose(): void {
+    public dispose(save: boolean = false): void {
         this.cancelRestore();
-        this.persistNow();
+        if (save) this.save();
         for (const off of this.offs.splice(0)) off();
         this.positions.clear();
     }
@@ -145,45 +166,9 @@ export class ScrollMemory {
         this.disarmAbort = null;
         this.restoring = false;
     }
-    private persistNow(): void {
+    private rememberCurrent(): void {
         if (this.visited && !this.restoring) {
             this.remember(this.currentKey, this.viewport.scrollTop());
-        }
-        this.persist();
-    }
-
-    private get storage(): Storage | null {
-        if (this.options.persist === false) return null;
-        try {
-            return typeof sessionStorage === 'undefined' ? null : sessionStorage;
-        } catch {
-            return null;
-        }
-    }
-
-    private persist(): void {
-        const storage = this.storage;
-        if (!storage) return;
-        try {
-            storage.setItem(STORAGE_KEY, JSON.stringify([...this.positions]));
-        } catch {
-        }
-    }
-
-    private load(): void {
-        const storage = this.storage;
-        if (!storage) return;
-        try {
-            const raw = storage.getItem(STORAGE_KEY);
-            if (!raw) return;
-            const parsed: unknown = JSON.parse(raw);
-            if (!Array.isArray(parsed)) return;
-            for (const pair of parsed) {
-                if (!Array.isArray(pair) || typeof pair[0] !== 'string') continue;
-                const top = Number(pair[1]);
-                if (Number.isFinite(top) && top > 0) this.positions.set(pair[0], top);
-            }
-        } catch {
         }
     }
 }

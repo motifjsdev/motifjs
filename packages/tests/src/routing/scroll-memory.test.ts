@@ -250,7 +250,7 @@ describe('Scroll memory', () => {
         expect(view.state.top).toBe(900);
     });
 
-    it('konumlar oturum deposuna yazılır (yenilemede hatırlanır)', async () => {
+    it('konumlar bellekte tutulur, depoya yazılmaz', async () => {
         app.useRouter({ routes: routes(), mode: 'history', scrollMemory: true });
         run();
 
@@ -258,16 +258,15 @@ describe('Scroll memory', () => {
         view.state.top = 800;
         await app.router.navigate('/kisa');
 
-        const raw = sessionStorage.getItem('motifjs:scroll');
-        expect(raw).toBeTruthy();
-        expect(JSON.parse(raw!)).toEqual(expect.arrayContaining([['/uzun', 800]]));
+        expect(sessionStorage.getItem('motifjs:scroll')).toBeNull();
+        expect(app.router.scrollPositions()).toEqual({ '/uzun': 800 });
     });
 
-    it('açılış navigasyonu depodaki konumu ezmez', async () => {
-        sessionStorage.setItem('motifjs:scroll', JSON.stringify([['/uzun', 900]]));
+    it('açılış navigasyonu geri yüklenen konumu ezmez', async () => {
         history.replaceState({}, '', '/uzun');
 
         app.useRouter({ routes: routes(), mode: 'history', scrollMemory: true });
+        app.router.restoreScrollPositions({ '/uzun': 900 });
         run();
         await Promise.resolve();
         await new Promise((resolve) => setTimeout(resolve, 0));

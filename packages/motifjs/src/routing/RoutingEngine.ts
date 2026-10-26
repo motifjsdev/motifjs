@@ -19,7 +19,7 @@ import type { RouteSnapshot } from "./routerState";
 type StackLeave = { top: ComponentBase | null; retained: RetainedEntry | null; disposeAfter: ComponentBase[] };
 type StackMotion = { animate: boolean; pages: boolean; direction: NavigationDirection };
 type NavigationRun = { provider?: ServiceProvider; scope?: ServiceProvider; route: RouteSnapshot; committed: boolean; suppressed: ComponentBase[]; created: Array<[RouteItem, ComponentBase]> };
-export type RouterHandover = { chain: RouteItem[]; instances: ComponentBase[]; given: (item: RouteItem | undefined) => boolean; engines: RoutingEngine[] };
+export type RouterHandover = { chain: RouteItem[]; instances: ComponentBase[]; given: (item: RouteItem | undefined) => boolean; engines: RoutingEngine[]; scroll?: Record<string, number> };
 type LeavingLink = { index: number; inst: ComponentBase; outlet: RouterView | null; keep: boolean };
 
 const leavingUnits: WeakMap<ComponentBase, Promise<void>> = new WeakMap();
