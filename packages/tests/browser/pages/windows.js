@@ -99,6 +99,12 @@ async function main() {
     }
 
     record('attach hazır pencereyi bağlar, MJX421 pencere olmayanı reddeder', (await failure(() => app.windows.attach({}))) === 'MJX421');
+    const foreign = document.createElement('iframe');
+    await new Promise(r => { foreign.onload = r; foreign.src = `http://127.0.0.1:${location.port}/pages/blank.html`; document.body.appendChild(foreign); });
+    let foreignError = null;
+    try { app.windows.attach(foreign.contentWindow); } catch (e) { foreignError = e; }
+    record("attach başka origin'in penceresini MJX421 ile reddeder", foreignError instanceof MotifError && foreignError.code === 'MJX421' && /another origin/.test(foreignError.message), foreignError && foreignError.message);
+    foreign.remove();
     await app.dispose();
     record('app.dispose sonrası pencere kalmaz', app.windows.list.length === 0);
 }

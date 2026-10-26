@@ -292,6 +292,10 @@ describe('app.windows', () => {
             open.mockRestore();
         }
         expect(await failure(() => app.windows.attach({} as any))).toBe('MJX421');
+        expect(() => app.windows.attach({} as any)).toThrow(/not a window/);
+        const foreign = { get document(): Document { throw new DOMException('Blocked a frame with origin', 'SecurityError'); } };
+        expect(await failure(() => app.windows.attach(foreign as any))).toBe('MJX421');
+        expect(() => app.windows.attach(foreign as any)).toThrow(/another origin/);
         const win = app.windows.attach(frameWindow());
         const dead = new Component('li');
         await dead.dispose();

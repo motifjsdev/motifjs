@@ -88,7 +88,7 @@ export const motifMessages = {
     MJX418: () => `Application.windows: the browser did not open the window; open it from a user gesture and check the popup blocker.`,
     MJX419: () => `Application.windows: Picture-in-Picture is not available in this browser or the request was refused.`,
     MJX420: () => `Application.windows: the window is closed.`,
-    MJX421: () => `Application.windows: the value given to attach is not a window.`,
+    MJX421: (reason: string) => `Application.windows: ${reason}.`,
     MJX422: () => `Application.windows: a disposed component cannot be placed in a window.`,
 
     MJX501: () => `Disposable already disposed.`,

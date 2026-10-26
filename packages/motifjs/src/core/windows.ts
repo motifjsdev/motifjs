@@ -291,7 +291,10 @@ export class WindowManager {
     }
 
     public attach(win: Window, options: WindowOptions = {}): AppWindow {
-        if (!win || typeof win !== 'object' || (win as any).document?.nodeType !== 9) throw motifError('MJX421');
+        if (!win || typeof win !== 'object') throw motifError('MJX421', 'the value given to attach is not a window');
+        let doc: any;
+        try { doc = (win as any).document; } catch { throw motifError('MJX421', 'the window given to attach belongs to another origin and cannot be used'); }
+        if (doc?.nodeType !== 9) throw motifError('MJX421', 'the value given to attach is not a window');
         return this._attach(win, 'attached', options);
     }
 
