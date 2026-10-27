@@ -201,7 +201,7 @@ export class Application {
     public layerOf(target?: ComponentBase | Node | null, ...components: ComponentBase[]): Component {
         let anchor: Node | null = null;
         if (target instanceof ComponentBase) {
-            if (target.parent || this._isRoot(target)) anchor = target.element as Node | null;
+            if (target.parent || this._isRoot(target) || (target.element as Node | null)?.isConnected) anchor = target.element as Node | null;
             else components.unshift(target);
         } else if (isDomNode(target)) {
             anchor = target;

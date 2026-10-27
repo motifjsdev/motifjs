@@ -141,6 +141,29 @@ describe('app.layer', () => {
         try { app.layerOf('x' as any); } catch (error) { expect((error as MotifError).code).toBe('MJX424'); }
     });
 
+    test('a parentless component whose element is in a document is a target and stays where it is', async () => {
+        const div = document.body.appendChild(document.createElement('div'));
+        const own = new Component<HTMLDivElement>(div);
+        own.build();
+        const toast = new Toast();
+        expect(app.layerOf(own, toast)).toBe(app.layer);
+        expect(own.parent).toBeNull();
+        expect(div.parentElement).toBe(document.body);
+        expect(toast.parent).toBe(app.layer);
+        const detached = new Component('p');
+        detached.build();
+        expect(app.layerOf(detached)).toBe(app.layer);
+        expect(detached.parent).toBe(app.layer);
+        const frameDocument = frameWindow().document;
+        const body = new Component<HTMLElement>(frameDocument.body);
+        body.build();
+        expect(app.layerOf(body, new Toast())).toBe(app.layer);
+        expect(body.parent).toBeNull();
+        await app.dispose();
+        expect(frameDocument.body).not.toBeNull();
+        expect(document.body.contains(div)).toBe(true);
+    });
+
     test('a component reaches the layer through its context and useApplication', () => {
         const view = new Component('section');
         root.controls.add(view);
