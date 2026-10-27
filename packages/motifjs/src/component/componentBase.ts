@@ -1342,6 +1342,7 @@ class EventRecord {
                                 safeCall(() => { owner.element.removeEventListener(rec.type, rec, (flags & EV_CAPTURE) !== 0); }, 'once.removeEventListener');
                         }
                 }
+
         }
 }
 
@@ -2115,9 +2116,11 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 } else {
                         /** A*/
                         const placeholderParent = (this.motif.options.placeholder as Node)?.parentElement;
-                        const expectedParent = findAppendableComponent(this.parent!)?.element;
+                        const expectedParent = findAppendableComponent(this.parent!)?.element as unknown as Node | undefined;
+                        const traceHolder = (this.motif.options as any).traceHolder as Node | undefined;
+                        const stale = traceHolder !== undefined && !!placeholderParent && !placeholderParent.isConnected && expectedParent?.isConnected === true;
 
-                        if (this.motif.options.placeholder && placeholderParent && placeholderParent !== expectedParent) {
+                        if (this.motif.options.placeholder && placeholderParent && (placeholderParent !== (traceHolder ?? expectedParent) || stale)) {
                                 reportWarning('MJX106', []);
                                 ComponentHelper.callVisibilityChanged(this, true);
                                 if (this.isDisposed) { return; }
@@ -2146,6 +2149,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         var parent = (this.motif.options.placeholder as Node)?.parentElement;
                         if (parent) {
                                 parent.replaceChild(this.element as Node, this.motif.options.placeholder!);
+                                (this.motif.options as any).traceHolder = undefined;
                                 this.isVisible = true;
                                 placed(this);
                                 ComponentHelper.activateTree(this);
@@ -2197,6 +2201,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 if (parent) {
                                         if (!this.motif.options.placeholder) this.motif.options.placeholder = dom.createComment("h");
                                         parent.replaceChild(this.motif.options.placeholder!, this.element as Node);
+                                        (this.motif.options as any).traceHolder = parent;
 
                                 }
                                 this._base._leaveRun = null;
@@ -2238,6 +2243,7 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                         if (parent) {
                                 if (!this.motif.options.placeholder) this.motif.options.placeholder = dom.createComment("h");
                                 parent.replaceChild(this.motif.options.placeholder!, this.element as Node);
+                                (this.motif.options as any).traceHolder = parent;
                         }
                         return;
                 };

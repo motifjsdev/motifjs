@@ -90,6 +90,19 @@ async function main() {
     record('kullanıcı kapatınca onClosing içerik penceredeyken çalışır, dışarı alınan dönmez', hooked && closing.join() === 'user:1:true' && order() === 'a' && shelf.controls.items.includes(b) && b.element.ownerDocument === document && !b.isDisposed, `${closing.join()} order=${order()}`);
     strip.controls.add(1, b);
 
+    const moved = new Panel('q');
+    strip.controls.add(moved);
+    const bare = await app.windows.create({ width: 300, height: 200 });
+    const corner = bare.document.createElement('aside');
+    bare.document.body.appendChild(corner);
+    corner.appendChild(moved.element);
+    await moved.motif.hide();
+    const hiddenAway = !corner.contains(moved.element) && corner.childNodes.length === 1 && corner.firstChild.nodeType === 8;
+    await moved.motif.show();
+    record('başka belgeye taşınan bileşen gizlenip gösterilince orada kalır', hiddenAway && corner.contains(moved.element) && moved.element.ownerDocument === bare.document && !strip.element.contains(moved.element), `ownerDocument=${moved.element.ownerDocument === bare.document ? 'pencere' : 'sayfa'}`);
+    await moved.dispose();
+    await bare.close();
+
     const sixth = await app.windows.open(b, { width: 300, height: 200, returnOnClose: false, orphans: 'keep' });
     const sixthResult = await sixth.close();
     record('returnOnClose false ile içerik kökenine dönmez, orphans karar verir', sixthResult.kept.includes(b) && !b.isDisposed && b.parent === null && order() === 'a', `kept=${sixthResult.kept.length} order=${order()}`);
