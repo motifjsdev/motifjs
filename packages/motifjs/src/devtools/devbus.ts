@@ -46,7 +46,7 @@ export function setDevtoolsEnabled(enabled: boolean) {
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 1, coreVersion: __MOTIF_VERSION__, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getScopes, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readValue, readStore, readService, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
+            state.exposed = { version: 2, coreVersion: __MOTIF_VERSION__, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getScopes, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readValue, readStore, readService, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
         } else {
             if (state.exposed !== null && g.__MOTIF_DEVTOOLS__ === state.exposed) delete g.__MOTIF_DEVTOOLS__;

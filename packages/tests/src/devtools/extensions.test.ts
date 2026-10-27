@@ -51,8 +51,8 @@ describe('devtools extensions', () => {
         register('sortable', { inspect: (c: object) => c === known ? { items: 3 } : undefined });
         app.useDevelopment(true);
         run(known, other);
-        expect(hook().inspect([0, 0]).extensions).toEqual({ sortable: { items: 3 } });
-        expect(hook().inspect([0, 1]).extensions).toEqual({});
+        expect(hook().inspect([0, 0, 0]).extensions).toEqual({ sortable: { items: 3 } });
+        expect(hook().inspect([0, 0, 1]).extensions).toEqual({});
     });
 
     test('an extension that throws gives an error entry and does not disturb the rest', () => {
@@ -61,7 +61,7 @@ describe('devtools extensions', () => {
         app.useDevelopment(true);
         run(new Component('div'));
         expect(hook().readExtension('broken')).toEqual({ error: 'nope' });
-        expect(hook().inspect([0, 0]).extensions).toEqual({ broken: { error: 'bad' }, fine: 1 });
+        expect(hook().inspect([0, 0, 0]).extensions).toEqual({ broken: { error: 'bad' }, fine: 1 });
     });
 
     test('emit publishes a namespaced event only while devtools are on', () => {
@@ -80,7 +80,7 @@ describe('devtools extensions', () => {
         const c = new Component('canvas');
         app.useDevelopment(true);
         run(new Component('header'), c);
-        expect(h.pathOf(c)).toEqual([0, 1]);
+        expect(h.pathOf(c)).toEqual([0, 0, 1]);
     });
 
     test('dispose removes the registration but not a newer one under the same name', () => {

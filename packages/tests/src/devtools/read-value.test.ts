@@ -43,7 +43,7 @@ describe('devtools readValue', () => {
     test('reads one level of a nested object, array, Map and Set', () => {
         const stat = { title: 'Orders', tags: ['a', 'b'], byId: new Map([[1, { n: 1 }]]), seen: new Set(['x']), nested: { deep: { v: 1 } } };
         mount(h(Card, { stat }));
-        const read = (keys: string[]) => hook().readValue([0, 0], 'functionProps', keys);
+        const read = (keys: string[]) => hook().readValue([0, 0, 0], 'functionProps', keys);
         expect(read(['stat'])).toEqual({
             ok: true,
             value: {
@@ -72,7 +72,7 @@ describe('devtools readValue', () => {
         Object.defineProperty(data, 'lazy', { enumerable: true, get: () => { calls++; return { x: 1 }; } });
         const format = () => { calls++; return 'x'; };
         mount(h(Card, { data, format }));
-        const read = (keys: string[]) => hook().readValue([0, 0], 'functionProps', keys);
+        const read = (keys: string[]) => hook().readValue([0, 0, 0], 'functionProps', keys);
         expect(read(['data']).value.entries).toEqual([{ key: 'plain', value: 1 }, { key: 'lazy', value: null, getter: true }]);
         expect(read(['data', 'lazy'])).toEqual({ ok: false, error: 'getter' });
         expect(read(['format'])).toEqual({ ok: true, value: { value: { kind: 'function', name: 'format' }, entries: [], total: 0 } });
@@ -82,24 +82,24 @@ describe('devtools readValue', () => {
     test('rejects blocked keys, missing keys and paths', () => {
         mount(h(Card, { stat: { a: 1 } }));
         const read = (path: number[], keys: string[]) => hook().readValue(path, 'functionProps', keys);
-        expect(read([0, 0], ['__proto__'])).toEqual({ ok: false, error: 'invalid key' });
-        expect(read([0, 0], ['stat', 'constructor'])).toEqual({ ok: false, error: 'invalid key' });
-        expect(read([0, 0], ['nope'])).toEqual({ ok: false, error: 'missing key' });
-        expect(read([0, 0], ['stat', 'a', 'b'])).toEqual({ ok: false, error: 'not an object' });
-        expect(read([0, 9], ['stat'])).toEqual({ ok: false, error: 'no component at path' });
+        expect(read([0, 0, 0], ['__proto__'])).toEqual({ ok: false, error: 'invalid key' });
+        expect(read([0, 0, 0], ['stat', 'constructor'])).toEqual({ ok: false, error: 'invalid key' });
+        expect(read([0, 0, 0], ['nope'])).toEqual({ ok: false, error: 'missing key' });
+        expect(read([0, 0, 0], ['stat', 'a', 'b'])).toEqual({ ok: false, error: 'not an object' });
+        expect(read([0, 0, 9], ['stat'])).toEqual({ ok: false, error: 'no component at path' });
     });
 
     test('cuts long values at 100 entries and reports the total', () => {
         mount(h(Card, { list: Array.from({ length: 150 }, (_, i) => i) }));
-        const r = hook().readValue([0, 0], 'functionProps', ['list']);
+        const r = hook().readValue([0, 0, 0], 'functionProps', ['list']);
         expect(r.value.entries).toHaveLength(100);
         expect(r.value.total).toBe(150);
     });
 
     test('reads class component props, and functionProps only on function components', () => {
         mount(h(Panel, { info: { a: 1 } }), h(Card, { b: 2 }));
-        expect(hook().readValue([0, 0], 'props', ['info']).value.entries).toEqual([{ key: 'a', value: 1 }]);
-        expect(hook().readValue([0, 0], 'functionProps', [])).toEqual({ ok: false, error: 'no functionProps' });
-        expect(hook().readValue([0, 1], 'functionProps', []).value.entries).toEqual([{ key: 'b', value: 2 }]);
+        expect(hook().readValue([0, 0, 0], 'props', ['info']).value.entries).toEqual([{ key: 'a', value: 1 }]);
+        expect(hook().readValue([0, 0, 0], 'functionProps', [])).toEqual({ ok: false, error: 'no functionProps' });
+        expect(hook().readValue([0, 0, 1], 'functionProps', []).value.entries).toEqual([{ key: 'b', value: 2 }]);
     });
 });

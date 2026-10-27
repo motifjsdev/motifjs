@@ -25,7 +25,7 @@ describe('devtools switch', () => {
         const app = Application.CreateBuilder().build();
         app.useDevelopment(true);
         app.useRouter({ routes });
-        expect(hook()?.version).toBe(1);
+        expect(hook()?.version).toBe(2);
         expect(typeof hook()?.getWarnings).toBe('function');
         expect(typeof hook()?.on).toBe('function');
         expect(hook()?.isEnabled()).toBe(true);

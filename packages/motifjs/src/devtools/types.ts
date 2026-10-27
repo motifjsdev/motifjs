@@ -30,14 +30,14 @@ export type DevtoolsStoreHolder =
     | { kind: 'service'; token: string; lifetime: string; field: string | null };
 
 export interface MotifDevtools {
-    readonly version: 1;
+    readonly version: 2;
     readonly coreVersion: string;
     on(listener: (event: DevtoolsEvent) => void): () => void;
     isEnabled(): boolean;
     getTree(path?: DevtoolsPath, depth?: number): DevtoolsTreeNode | null;
     getElement(path: DevtoolsPath): Node | null;
     pathOfElement(node: Node | null): DevtoolsPath | null;
-    inspect(path: DevtoolsPath): (Omit<DevtoolsTreeNode, 'children'> & { props: Record<string, unknown>; fields: Record<string, unknown>; functionProps?: Record<string, unknown>; bindings: unknown[]; events: unknown[]; hooks: unknown[]; classes: { static: string[]; reactive: { id: string; classes: string[] }[] }; attributes: unknown[]; services: unknown; effects: unknown[]; extensions: Record<string, unknown> }) | null;
+    inspect(path: DevtoolsPath): (Omit<DevtoolsTreeNode, 'children'> & { props: Record<string, unknown>; fields: Record<string, unknown>; functionProps?: Record<string, unknown>; bindings: unknown[]; events: unknown[]; hooks: unknown[]; classes: { static: string[]; reactive: { id: string; classes: string[] }[] }; attributes: unknown[]; services: unknown; effects: unknown[]; extensions: Record<string, unknown>; window?: { kind: string; title: string; open: boolean; components: number } }) | null;
     getServices(): { token: string; lifetime: string; created: boolean }[];
     getScopes(): { id: number; kind: 'root' | 'navigation' | 'user'; name: string | null; parent: number | null; current: boolean; pending: boolean; pins: number; services: { token: string; lifetime: string; instance: unknown; creating?: true }[]; transients: unknown[] }[];
     getCounters(): { components: { live: number; inTree: number; notInTree: number; byType: Record<string, number> }; bindings: number; listeners: { dom: number; component: number }; effects: { live: number; owned: number }; reactivity: { runs: number; flushes: number; flushRuns: number; lastFlushDuration: number; maxFlushDuration: number } };

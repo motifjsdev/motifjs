@@ -1,4 +1,4 @@
-import { componentAt } from './inspect';
+import { componentAt, treeRoots } from './inspect';
 
 export type WriteResult = { ok: true; value?: unknown } | { ok: false; error: string };
 
@@ -67,7 +67,7 @@ export function setProp(path: number[], keys: string[], value: unknown): WriteRe
 }
 
 export async function navigate(uri: string): Promise<WriteResult> {
-    const router = componentAt([])?.application?.router;
+    const router = treeRoots()[0]?.application?.router;
     if (!router) return fail('no router');
     try {
         const r = await router.navigate(uri);

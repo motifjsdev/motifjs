@@ -41,29 +41,29 @@ describe('devtools writes', () => {
     test('setClass adds and removes a class', () => {
         const c = new Component('div');
         run(c);
-        expect(hook().setClass([0, 0], 'hot', true)).toEqual({ ok: true, value: true });
+        expect(hook().setClass([0, 0, 0], 'hot', true)).toEqual({ ok: true, value: true });
         expect(el(c).classList.contains('hot')).toBe(true);
-        expect(hook().setClass([0, 0], 'hot', false)).toEqual({ ok: true, value: false });
+        expect(hook().setClass([0, 0, 0], 'hot', false)).toEqual({ ok: true, value: false });
         expect(el(c).classList.contains('hot')).toBe(false);
     });
 
     test('setAttribute writes and removes an attribute and refuses event attributes', () => {
         const c = new Component('div');
         run(c);
-        expect(hook().setAttribute([0, 0], 'title', 'hello')).toEqual({ ok: true });
+        expect(hook().setAttribute([0, 0, 0], 'title', 'hello')).toEqual({ ok: true });
         expect(el(c).getAttribute('title')).toBe('hello');
-        expect(hook().setAttribute([0, 0], 'title', null)).toEqual({ ok: true });
+        expect(hook().setAttribute([0, 0, 0], 'title', null)).toEqual({ ok: true });
         expect(el(c).hasAttribute('title')).toBe(false);
-        expect(hook().setAttribute([0, 0], 'onclick', 'alert(1)').ok).toBe(false);
+        expect(hook().setAttribute([0, 0, 0], 'onclick', 'alert(1)').ok).toBe(false);
         expect(el(c).hasAttribute('onclick')).toBe(false);
     });
 
     test('setVisible hides and shows a component', async () => {
         const c = new Component('div');
         run(c);
-        expect(await hook().setVisible([0, 0], false)).toEqual({ ok: true, value: false });
+        expect(await hook().setVisible([0, 0, 0], false)).toEqual({ ok: true, value: false });
         expect(el(c).isConnected).toBe(false);
-        expect(await hook().setVisible([0, 0], true)).toEqual({ ok: true, value: true });
+        expect(await hook().setVisible([0, 0, 0], true)).toEqual({ ok: true, value: true });
         expect(el(c).isConnected).toBe(true);
     });
 
@@ -73,9 +73,9 @@ describe('devtools writes', () => {
         input.bindings.model(state, 'name');
         const bare = new Component('div');
         run(input, bare);
-        expect(hook().writeModel([0, 0], 'b')).toEqual({ ok: true });
+        expect(hook().writeModel([0, 0, 0], 'b')).toEqual({ ok: true });
         expect(state.name).toBe('b');
-        expect(hook().writeModel([0, 1], 'x').ok).toBe(false);
+        expect(hook().writeModel([0, 0, 1], 'x').ok).toBe(false);
         expect((bare as any)._bindings).toBeUndefined();
     });
 
@@ -84,7 +84,7 @@ describe('devtools writes', () => {
         t.bindings.text(() => String((t.props as any).label));
         run(t);
         expect(el(t).textContent).toBe('a');
-        expect(hook().setProp([0, 0], ['label'], 'b').ok).toBe(true);
+        expect(hook().setProp([0, 0, 0], ['label'], 'b').ok).toBe(true);
         await settle();
         expect(el(t).textContent).toBe('b');
     });
@@ -93,10 +93,10 @@ describe('devtools writes', () => {
         const t = new Tag(reactive({ data: { label: 'a' } }));
         t.bindings.text(() => String((t.props as any).data.label));
         run(t);
-        expect(hook().setProp([0, 0], ['data', 'label'], 'z').ok).toBe(true);
+        expect(hook().setProp([0, 0, 0], ['data', 'label'], 'z').ok).toBe(true);
         await settle();
         expect(el(t).textContent).toBe('z');
-        expect(hook().setProp([0, 0], ['__proto__', 'x'], 1).ok).toBe(false);
+        expect(hook().setProp([0, 0, 0], ['__proto__', 'x'], 1).ok).toBe(false);
     });
 
     test('navigate changes the route', async () => {
@@ -161,6 +161,6 @@ describe('devtools writes', () => {
         run(c);
         expect(hook().setClass([9], 'x', true).ok).toBe(false);
         await c.dispose();
-        expect(hook().setClass([0, 0], 'x', true).ok).toBe(false);
+        expect(hook().setClass([0, 0, 0], 'x', true).ok).toBe(false);
     });
 });

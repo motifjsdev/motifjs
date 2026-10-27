@@ -54,8 +54,8 @@ describe('devtools function component names', () => {
         const root = new Component('main');
         root.controls.add(h(StatCard, { title: 'a' }), new Dashboard());
         app.run(host, root);
-        expect(hook().getTree([0, 0])).toMatchObject({ type: 'StatCard', tag: 'article' });
-        expect(hook().getTree([0, 1])).toMatchObject({ type: 'Dashboard', tag: 'section' });
+        expect(hook().getTree([0, 0, 0])).toMatchObject({ type: 'StatCard', tag: 'article' });
+        expect(hook().getTree([0, 0, 1])).toMatchObject({ type: 'Dashboard', tag: 'section' });
     });
 
     test('list rows and controls.add factories carry the function name', () => {
@@ -75,7 +75,7 @@ describe('devtools function component names', () => {
         const root = new Component('main');
         root.controls.add(h(Outer, {}));
         app.run(host, root);
-        expect(hook().getTree([0, 0])).toMatchObject({ type: 'Outer', tag: 'article' });
+        expect(hook().getTree([0, 0, 0])).toMatchObject({ type: 'Outer', tag: 'article' });
     });
 
     test('inspect and component:built use the same name', () => {
@@ -85,7 +85,7 @@ describe('devtools function component names', () => {
         root.controls.add(h(StatCard, { title: 'a' }));
         app.run(host, root);
         off();
-        expect(hook().inspect([0, 0])).toMatchObject({ type: 'StatCard' });
+        expect(hook().inspect([0, 0, 0])).toMatchObject({ type: 'StatCard' });
         expect(built.some((p) => p.type === 'StatCard' && p.tag === 'article')).toBe(true);
     });
 
@@ -106,22 +106,22 @@ describe('devtools function component names', () => {
         const root = new Component('main');
         root.controls.add(card);
         app.run(host, root);
-        expect(hook().getTree([0, 0])).toMatchObject({ type: 'Component', tag: 'article' });
-        expect(hook().inspect([0, 0]).functionProps).toBeUndefined();
+        expect(hook().getTree([0, 0, 0])).toMatchObject({ type: 'Component', tag: 'article' });
+        expect(hook().inspect([0, 0, 0]).functionProps).toBeUndefined();
     });
 
     test('inspect shows the props given to a function component', () => {
         const root = new Component('main');
         root.controls.add(h(StatCard, { title: 'a', count: 2, onPick: function pick() {} }), new Dashboard());
         app.run(host, root);
-        expect(hook().inspect([0, 0]).functionProps).toEqual({ title: 'a', count: 2, onPick: { kind: 'function', name: 'pick' } });
-        expect(hook().inspect([0, 1]).functionProps).toBeUndefined();
+        expect(hook().inspect([0, 0, 0]).functionProps).toEqual({ title: 'a', count: 2, onPick: { kind: 'function', name: 'pick' } });
+        expect(hook().inspect([0, 0, 1]).functionProps).toBeUndefined();
     });
 
     test('the outer function props are shown when a function returns another function component', () => {
         const root = new Component('main');
         root.controls.add(h(Outer, { level: 1 }));
         app.run(host, root);
-        expect(hook().inspect([0, 0]).functionProps).toEqual({ level: 1 });
+        expect(hook().inspect([0, 0, 0]).functionProps).toEqual({ level: 1 });
     });
 });

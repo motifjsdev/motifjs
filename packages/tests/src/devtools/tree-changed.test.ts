@@ -32,8 +32,7 @@ describe('devtools tree:changed', () => {
         const root = new Component('div');
         const list = new Component('ul');
         root.controls.add(new Component('header'), list);
-        root.build();
-        host.appendChild(root.element as Node);
+        app.run(host, root);
         return { root, list };
     }
 
@@ -47,7 +46,7 @@ describe('devtools tree:changed', () => {
         await settle();
         for (let i = 0; i < 100; i++) list.controls.add(new Component('li'));
         await tick();
-        expect(events).toEqual([[[1]]]);
+        expect(events).toEqual([[[0, 0, 1]]]);
     });
 
     test.each<[string, (list: ComponentBase, a: ComponentBase, b: ComponentBase) => void]>([
@@ -69,7 +68,7 @@ describe('devtools tree:changed', () => {
         await settle();
         act(list, a, b);
         await tick();
-        expect(events.flat()).toContainEqual([1]);
+        expect(events.flat()).toContainEqual([0, 0, 1]);
     });
 
     test('a transport into an index publishes both parents with their paths after the change', async () => {
@@ -81,8 +80,8 @@ describe('devtools tree:changed', () => {
         await tick();
         expect(root.controls.items[2]).toBe(list);
         const all = events.flat();
-        expect(all).toContainEqual([]);
-        expect(all).toContainEqual([2]);
+        expect(all).toContainEqual([0, 0]);
+        expect(all).toContainEqual([0, 0, 2]);
     });
 
     test('after useDevelopment(false) nothing is published', async () => {

@@ -58,7 +58,7 @@ describe('devtools list names', () => {
 
     test('a list from JSX shows as List holding ListItems holding the items', () => {
         run(() => new Board());
-        expect(shape([0], 3)).toEqual([
+        expect(shape([0, 0], 3)).toEqual([
             'Board <section>',
             '  List <#fragment>',
             '    ListItems <#fragment>',
@@ -69,7 +69,7 @@ describe('devtools list names', () => {
 
     test('a component that builds its own list keeps its name', () => {
         run(() => new OwnList());
-        expect(shape([0], 2)).toEqual([
+        expect(shape([0, 0], 2)).toEqual([
             'OwnList <ul>',
             '  ListItems <#fragment>',
             '    Component <li>',
@@ -80,7 +80,7 @@ describe('devtools list names', () => {
     test('lists are not named while devtools is off', () => {
         run(() => new Board(), false);
         app.useDevelopment(true);
-        expect(shape([0], 1)).toEqual(['Board <section>', '  Component <#fragment>']);
+        expect(shape([0, 0], 1)).toEqual(['Board <section>', '  Component <#fragment>']);
     });
 
     test('the counters count lists by their names', () => {

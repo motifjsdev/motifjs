@@ -4,7 +4,7 @@ import { ServiceProvider, keepOnDispose } from "./dependencyInjection/ServicePro
 import { Component } from "./component/Component";
 import { RouteItem } from "./routing/RouteItem";
 import { setRoutes, setDevtoolsEnabled } from "./devtools/devbus";
-import { setTreeRoot, clearTreeRoot } from "./devtools/inspect";
+import { setTreeRoot, clearTreeRoot, setWindowsResolver } from "./devtools/inspect";
 import { lintRoutes } from "./devtools/routeLinter";
 import { RouterView } from "./routing/RouterView";
 import { UrlRoutingModule } from "./routing/UrlRoutingModule";
@@ -149,6 +149,7 @@ export class Application {
         const AppShell = new Component(target);
         this.appShell = AppShell;
         /* @DEV-ONLY */ setTreeRoot(AppShell);
+        /* @DEV-ONLY */ setWindowsResolver(() => this.windows._handles());
         safeCallSilent(() => {
             (AppShell as any)._keepElementOnDispose = true;
             if (anchor) (AppShell as any)._mountAnchor = anchor;

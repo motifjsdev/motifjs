@@ -42,8 +42,19 @@ export function serviceRequested(owner: object, token: any): void {
     recordService(owner, token);
 }
 
+const FOREST = {};
 const dirty = new Set<any>();
 let scheduled = false;
+
+export function windowOpened(handle: any): void {
+    if (devtools() === undefined) return;
+    rename(handle.host, 'Window');
+    treeChanged(FOREST);
+}
+
+export function windowClosed(): void {
+    treeChanged(FOREST);
+}
 
 export function treeChanged(owner: any): void {
     if (devtools() === undefined) return;
@@ -61,6 +72,7 @@ function flushTree(): void {
     if (emit === undefined) return;
     const parents: number[][] = [];
     for (const o of owners) {
+        if (o === FOREST) { parents.push([]); continue; }
         if (o.isDisposed) continue;
         const p = pathOf(o);
         if (p !== null) parents.push(p);

@@ -5,6 +5,7 @@ import { callReported, motifError } from "../common/diagnostics";
 import { reactive } from "../store";
 import { dom } from "./dom";
 import { connectDocument } from "./documents";
+import { windowOpened, windowClosed } from "../devtools/tree";
 
 export type WindowKind = 'popup' | 'pip';
 export type WindowCloseReason = 'user' | 'code' | 'owner' | 'empty' | 'navigate' | 'page';
@@ -314,6 +315,10 @@ export class WindowManager {
         return this._holders.get(component) ?? null;
     }
 
+    public _handles(): AppWindow[] {
+        return this._items;
+    }
+
     public closeAll(): Promise<void> {
         return Promise.all(this._items.slice().map(handle => handle.close())).then(() => undefined);
     }
@@ -359,6 +364,7 @@ export class WindowManager {
         if (index < 0) return;
         this._items.splice(index, 1);
         this._state.version++;
+        /* @DEV-ONLY */ windowClosed();
         if (!this._items.length) this._unlistenPage();
         this._app.fire('window-closed', { window: handle });
     }
@@ -419,6 +425,7 @@ export class WindowManager {
         const handle = new AppWindow(this, win, kind, options);
         this._items.push(handle);
         this._state.version++;
+        /* @DEV-ONLY */ windowOpened(handle);
         this._listenPage();
         if (options.closeOnNavigate) handle._track(this._app.onRouterChanged(() => { handle._close('navigate'); }));
         this._app.fire('window-opened', { window: handle });

@@ -24,7 +24,7 @@ describe('devtools contract type', () => {
         app.useDevelopment(true);
         const hook = (globalThis as any).__MOTIF_DEVTOOLS__ as MotifDevtools;
         expect(Object.keys(hook).sort()).toEqual([...KEYS].sort());
-        expect(hook.version).toBe(1);
+        expect(hook.version).toBe(2);
         const seen: DevtoolsEvent['type'][] = [];
         const off = hook.on(ev => { seen.push(ev.type); });
         off();

@@ -1,7 +1,29 @@
 let root: any = null;
+let windows: () => any[] = () => [];
 
 export function setTreeRoot(c: any): void { root = c; }
 export function clearTreeRoot(c: any): void { if (root === c) root = null; }
+export function setWindowsResolver(fn: () => any[]): void { windows = fn; }
+
+export function treeRoots(): any[] {
+    if (root === null) return [];
+    const out = [root];
+    for (const w of windows()) out.push(w.host);
+    return out;
+}
+
+function rootIndexOf(top: any): number {
+    if (root === null) return -1;
+    if (top === root) return 0;
+    const list = windows();
+    for (let i = 0; i < list.length; i++) if (list[i].host === top) return i + 1;
+    return -1;
+}
+
+export function windowHandleOf(c: any): any | null {
+    for (const w of windows()) if (w.host === c) return w;
+    return null;
+}
 
 export type TreeNode = {
     path: number[]; type: string; tag: string;
@@ -37,14 +59,18 @@ export function pathOf(c: any): number[] | null {
         path.push(i);
         cur = cur.parent;
     }
+    const r = rootIndexOf(cur);
+    if (r < 0) return null;
+    path.push(r);
     return path.reverse();
 }
 
 export function componentAt(path: number[]): any | null {
-    let cur = root;
-    for (const i of path) {
+    if (path.length === 0) return null;
+    let cur: any = treeRoots()[path[0]] ?? null;
+    for (let i = 1; i < path.length; i++) {
         if (cur === null) return null;
-        cur = cur._controls?.items[i] ?? null;
+        cur = cur._controls?.items[path[i]] ?? null;
     }
     return cur;
 }
@@ -62,6 +88,13 @@ function nodeOf(c: any, path: number[], depth: number): TreeNode {
 }
 
 export function getTree(path: number[] = [], depth: number = Infinity): TreeNode | null {
+    if (path.length === 0) {
+        if (root === null) return null;
+        const list = treeRoots();
+        const out: TreeNode = { path: [], type: 'Application', tag: '#roots', built: true, visible: true, waiting: false, disposed: false, connected: true, childCount: list.length };
+        if (depth > 0) out.children = list.map((c, i) => nodeOf(c, [i], depth - 1));
+        return out;
+    }
     const c = componentAt(path);
     return c === null ? null : nodeOf(c, path.slice(), depth);
 }
@@ -244,6 +277,12 @@ export function inspect(path: number[]): any | null {
         result.functionProps = {};
         for (const k of Object.keys(given)) result.functionProps[k] = preview(given[k]);
     }
+    const handle = windowHandleOf(c);
+    if (handle !== null) {
+        let title = '';
+        try { title = String(handle.document.title ?? ''); } catch { }
+        result.window = { kind: handle.kind, title, open: !!handle.isOpen, components: handle.components.length };
+    }
     return result;
 }
 
@@ -283,7 +322,7 @@ export function holdersOf(idOf: (v: object) => number | undefined): Map<number, 
         const items: any[] = c._controls?.items ?? [];
         for (let i = 0; i < items.length; i++) walk(items[i], [...path, i]);
     };
-    if (root !== null) walk(root, []);
+    treeRoots().forEach((c, i) => walk(c, [i]));
     const sp = root?.provider;
     for (const s of sp?._navigation?.scopes ?? []) providers.add(s);
     const descriptors: Map<any, any> | undefined = sp?.services?.descriptors;
@@ -315,7 +354,7 @@ export function pathOfElement(node: Node | null): number[] | null {
         const items: any[] = c._controls?.items ?? [];
         for (let i = 0; i < items.length; i++) walk(items[i], [...path, i]);
     };
-    walk(root, []);
+    treeRoots().forEach((c, i) => walk(c, [i]));
     for (let n: Node | null = node; n; n = n.parentNode) {
         const p = byNode.get(n);
         if (p) return p;

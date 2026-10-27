@@ -43,25 +43,25 @@ describe('devtools signal previews', () => {
     });
 
     test('a signal field shows its value', () => {
-        const fields = hook().inspect([0]).fields;
+        const fields = hook().inspect([0, 0]).fields;
         expect(fields.theme).toEqual({ kind: 'signal', type: 'signal', value: 'dark' });
         expect(fields.user).toEqual({ kind: 'signal', type: 'signal', value: { kind: 'object', type: 'Object', keys: 2 } });
     });
 
     test('a computed shows its value, and one not computed yet is stale without running the getter', () => {
-        const fields = hook().inspect([0]).fields;
+        const fields = hook().inspect([0, 0]).fields;
         expect(fields.double).toEqual({ kind: 'signal', type: 'computed', value: 4 });
         expect(fields.later).toMatchObject({ kind: 'signal', type: 'computed', stale: true });
-        expect(hook().readValue([0], 'fields', ['later']).ok).toBe(true);
+        expect(hook().readValue([0, 0], 'fields', ['later']).ok).toBe(true);
         expect(getterRuns).toBe(0);
     });
 
     test('reading through a signal opens its value', () => {
-        const opened = hook().readValue([0], 'fields', ['user']);
+        const opened = hook().readValue([0, 0], 'fields', ['user']);
         expect(opened.value.value).toEqual({ kind: 'signal', type: 'signal', value: { kind: 'object', type: 'Object', keys: 2 } });
         expect(opened.value.entries).toEqual([{ key: 'name', value: 'Ada' }, { key: 'tags', value: { kind: 'array', length: 2 } }]);
-        expect(hook().readValue([0], 'fields', ['user', 'tags']).value.entries).toEqual([{ key: '0', value: 'a' }, { key: '1', value: 'b' }]);
-        expect(hook().readValue([0], 'fields', ['theme']).value).toEqual({ value: { kind: 'signal', type: 'signal', value: 'dark' }, entries: [], total: 0 });
+        expect(hook().readValue([0, 0], 'fields', ['user', 'tags']).value.entries).toEqual([{ key: '0', value: 'a' }, { key: '1', value: 'b' }]);
+        expect(hook().readValue([0, 0], 'fields', ['theme']).value).toEqual({ value: { kind: 'signal', type: 'signal', value: 'dark' }, entries: [], total: 0 });
     });
 
     test('a service field holding a signal opens to its value', () => {

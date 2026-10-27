@@ -1,4 +1,4 @@
-import { componentAt, typeOf } from './inspect';
+import { treeRoots, typeOf } from './inspect';
 
 const live = new Map<string, number>();
 let counted = new WeakSet<object>();
@@ -71,8 +71,7 @@ export function getCounters() {
         }
         for (const ch of c._controls?.items ?? []) visit(ch);
     };
-    const root = componentAt([]);
-    if (root !== null) visit(root);
+    for (const r of treeRoots()) visit(r);
     let total = 0;
     const byType: Record<string, number> = {};
     for (const [t, n] of live) { byType[t] = n; total += n; }

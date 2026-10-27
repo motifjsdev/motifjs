@@ -54,7 +54,7 @@ describe('devtools events', () => {
         events.length = 0;
         const index = await mountAndDispose();
         expect(types()).not.toContain('component:mounted');
-        expect(events).toContainEqual({ type: 'component:disposed', payload: expect.objectContaining({ path: [index], type: 'Component', tag: 'section' }) });
+        expect(events).toContainEqual({ type: 'component:disposed', payload: expect.objectContaining({ path: [0, index], type: 'Component', tag: 'section' }) });
     });
 
     test('a navigation publishes start and end', async () => {

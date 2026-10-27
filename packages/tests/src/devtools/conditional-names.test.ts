@@ -45,7 +45,7 @@ describe('devtools conditional names', () => {
             out.push(`${'  '.repeat(d)}${n.type}`);
             for (const c of n.children ?? []) walk(c, d + 1);
         };
-        for (const c of hook().getTree([0], 2).children) walk(c, 0);
+        for (const c of hook().getTree([0, 0], 2).children) walk(c, 0);
         return out;
     };
 

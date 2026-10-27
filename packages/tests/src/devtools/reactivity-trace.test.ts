@@ -44,7 +44,7 @@ describe('devtools reactivity trace', () => {
         const c = new Component('span');
         c.bindings.text(() => String(s.total));
         run(c);
-        const effects = hook().inspect([0, 0]).effects;
+        const effects = hook().inspect([0, 0, 0]).effects;
         expect(effects.length).toBe(1);
         expect(effects[0]).toMatchObject({ kind: 'binding:textContent', runs: 1, lastTrigger: null });
         expect(effects[0].deps).toContainEqual({ target: { kind: 'object', type: 'Cart', keys: 2 }, key: 'total' });
@@ -58,7 +58,7 @@ describe('devtools reactivity trace', () => {
         run(c);
         s.total = 2;
         await settle();
-        const [e] = hook().inspect([0, 0]).effects;
+        const [e] = hook().inspect([0, 0, 0]).effects;
         expect(e.runs).toBe(2);
         const store = { id: hook().getStores().find((x: any) => x.value === s).id, path: [] };
         expect(e.lastTrigger).toEqual({ target: { kind: 'object', type: 'Cart', keys: 2 }, key: 'total', store });
@@ -83,8 +83,8 @@ describe('devtools reactivity trace', () => {
         const store = { id: hook().getStores().find((x: any) => x.value === s).id, path: [] };
         expect(f.triggers).toContainEqual({ target: { kind: 'object', type: 'Cart', keys: 2 }, key: 'total', count: 2, store });
         expect(f.triggers).toContainEqual({ target: { kind: 'object', type: 'Cart', keys: 2 }, key: 'name', count: 1, store });
-        expect(f.effects).toContainEqual({ path: [0, 0], type: 'Component', tag: 'span', kind: 'binding:textContent', runs: 1 });
-        expect(f.effects).toContainEqual({ path: [0, 1], type: 'Component', tag: 'b', kind: 'binding:textContent', runs: 1 });
+        expect(f.effects).toContainEqual({ path: [0, 0, 0], type: 'Component', tag: 'span', kind: 'binding:textContent', runs: 1 });
+        expect(f.effects).toContainEqual({ path: [0, 0, 1], type: 'Component', tag: 'b', kind: 'binding:textContent', runs: 1 });
     });
 
     test('class, attribute, style and list effects carry their kinds', () => {
@@ -95,7 +95,7 @@ describe('devtools reactivity trace', () => {
         c.style(() => ({ width: s.w + 'px' }));
         c.bindings.list(() => s.items, () => new Component('i'));
         run(c);
-        const kinds = hook().inspect([0, 0]).effects.map((e: any) => e.kind);
+        const kinds = hook().inspect([0, 0, 0]).effects.map((e: any) => e.kind);
         expect(kinds).toEqual(expect.arrayContaining(['class', 'attr:title', 'style', 'list']));
     });
 
@@ -107,11 +107,11 @@ describe('devtools reactivity trace', () => {
         const inner = new Component('em');
         inner.bindings.text(() => s.name);
         c.controls.add(inner);
-        expect(hook().inspect([0, 0, 0]).effects.length).toBe(1);
+        expect(hook().inspect([0, 0, 0, 0]).effects.length).toBe(1);
         await inner.dispose();
         const replacement = new Component('em');
         c.controls.add(replacement);
-        expect(hook().inspect([0, 0, 0]).effects).toEqual([]);
+        expect(hook().inspect([0, 0, 0, 0]).effects).toEqual([]);
     });
 
     test('a free effect is counted in the flush without an owner', async () => {
@@ -136,6 +136,6 @@ describe('devtools reactivity trace', () => {
         app.useDevelopment(true);
         off = hook().on((ev: any) => { if (ev.type === 'reactivity:flush') flushes.push(ev.payload); });
         expect(flushes).toEqual([]);
-        expect(hook().inspect([0, 0]).effects).toEqual([]);
+        expect(hook().inspect([0, 0, 0]).effects).toEqual([]);
     });
 });
