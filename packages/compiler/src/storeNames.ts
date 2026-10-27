@@ -6,7 +6,7 @@ export const STORE_FACTORY_PATTERN = /\b(?:reactive|useModel|createSignal|create
 
 const NAME_LOCAL = '_motifName';
 
-function isCoreFactory(call: t.Node | null | undefined, scope: NodePath['scope']): boolean {
+export function isCoreFactory(call: t.Node | null | undefined, scope: NodePath['scope']): boolean {
     if (!t.isCallExpression(call) || !t.isIdentifier(call.callee)) return false;
     const binding = scope.getBinding(call.callee.name);
     if (!binding || binding.kind !== 'module' || !binding.path.isImportSpecifier()) return false;

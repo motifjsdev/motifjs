@@ -116,42 +116,6 @@ function hookKey(name: string): string {
     return name;
 }
 
-/** `.some/.every/.find/...` gibi KISA DEVRE yapan dizi yüklemleri (MJX004). */
-const SHORT_CIRCUIT_ARRAY_METHODS = new Set(['some', 'every', 'find', 'findindex', 'findlast', 'findlastindex']);
-
-/** Bir üye zincirinin kökü `this` mi? (`this.state.rows.some(...)` → evet) */
-function isThisRooted(node: t.Node | null | undefined): boolean {
-    let cur: any = node;
-    while (cur) {
-        if (t.isThisExpression(cur)) return true;
-        if (t.isMemberExpression(cur)) { cur = cur.object; continue; }
-        if (t.isCallExpression(cur)) { cur = cur.callee; continue; }
-        return false;
-    }
-    return false;
-}
-
-function findShortCircuitPredicate(node: t.Node | null | undefined): string | null {
-    let found: string | null = null;
-    const visit = (n: any): void => {
-        if (found !== null || n === null || typeof n !== 'object') return;
-        if (t.isCallExpression(n) && t.isMemberExpression(n.callee) && t.isIdentifier(n.callee.property)) {
-            if (SHORT_CIRCUIT_ARRAY_METHODS.has(n.callee.property.name.toLowerCase()) && isThisRooted(n.callee.object)) {
-                found = n.callee.property.name;
-                return;
-            }
-        }
-        for (const key of Object.keys(n)) {
-            if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
-            const v = (n as any)[key];
-            if (Array.isArray(v)) { v.forEach(visit); }
-            else if (v && typeof v === 'object' && typeof v.type === 'string') { visit(v); }
-        }
-    };
-    visit(node);
-    return found;
-}
-
 function missingListKey(mapper: t.Node | null | undefined): boolean {
     if (!mapper) return false;
     if (!t.isArrowFunctionExpression(mapper) && !t.isFunctionExpression(mapper)) return false;
@@ -1001,17 +965,6 @@ export const getChildren = (
                 }
                 return current || expr;
             };
-
-            if (t.isArrowFunctionExpression(expression) || t.isFunctionExpression(expression)) {
-                const hit = findShortCircuitPredicate(expression.body);
-                if (hit !== null) {
-                    diagWarn(
-                        'MJX004',
-                        `"${hit}()" short-circuits inside a reactive getter: the predicate stops at the first match, so the rest of the array is not tracked as a dependency and the binding does not update when those items change. Keep the result in a computed value or field and read that, or traverse the whole array first (e.g. "arr.filter(...).length > 0").`,
-                        path, String(state.get('filename') ?? ''),
-                    );
-                }
-            }
 
             expression = unwrapConditionalFromFunction(expression);
 

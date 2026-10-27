@@ -15,6 +15,7 @@ import { DECLARED_ELEMENT_PATTERN, resolveElementType } from "./elementTags";
 import { beginCollect, endCollect, type MotifDiagnostic } from "./diagnostics";
 import { beginExplain, endExplain, isExplaining, captureOrigin, noteOriginRaw, type MotifExplanation } from "./explain";
 import { storeNamesPlugin } from "./storeNames";
+import { reactiveLintPlugin } from "./reactiveLint";
 import { generatedNamesPlugin } from "./generatedNames";
 
 
@@ -359,6 +360,7 @@ export default class Compiler {
                 }]
             ],
             plugins: [
+                reactiveLintPlugin,
                 ...this.namingPlugins(),
                 elementTagPlugin,
                 [proposal_decorators, { "version": "2023-11" }],
