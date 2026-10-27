@@ -3,7 +3,7 @@ import { LeakMonitor } from "../common/LeakMonitor";
 import { reportError, reportWarning } from "../common/diagnostics";
 import { getRaw, followTracking } from "./common";
 import { pushTight } from "../common/pushTight";
-import { effectCreated, effectStopped, runStarting, runFinished, triggered, flushStarting, flushFinished } from "../devtools/reactivity";
+import { effectCreated, effectStopped, effectOwnerLabel, runStarting, runFinished, triggered, flushStarting, flushFinished } from "../devtools/reactivity";
 
 export type EffectFn = () => void;
 
@@ -14,6 +14,7 @@ class Effect {
     active = true;
     running = false;
     runs = 0;
+    warned = false;
     scheduler?: () => void;
     constructor(public fn: EffectFn, private callback?: (value: unknown) => void) { }
     run() {
@@ -31,6 +32,7 @@ class Effect {
             effectStack.pop();
             this.running = false;
             sweep(this);
+            /* @DEV-ONLY */ checkDependencies(this);
             /* @DEV-ONLY */ runFinished(this, devAt);
             if (ok && this.callback) {
                 this.callback(value);
@@ -49,11 +51,19 @@ const effectStack: Effect[] = [];
 const effectQueue = new Set<Effect>();
 let isFlushing = false;
 
+let dependencyLimit = 1000;
+let dependencyWarnings = 0;
+const MAX_DEPENDENCY_WARNINGS = 10;
 let leakEnabled = false;
 let leakThreshold = -1;
 let leakMonitor: LeakMonitor | undefined;
 const leakCleanups = new WeakMap<Dep, Map<Effect, () => void>>();
-export function configureReactivityLeakMonitor(opts: { enabled?: boolean; threshold?: number; name?: string } = {}) {
+export function configureReactivityLeakMonitor(opts: { enabled?: boolean; threshold?: number; name?: string; dependencies?: number } = {}) {
+    if (typeof opts.dependencies === 'number') {
+        dependencyLimit = opts.dependencies;
+        dependencyWarnings = 0;
+    }
+    if (opts.enabled === undefined && opts.threshold === undefined && opts.name === undefined) return;
     leakEnabled = !!opts.enabled;
     leakThreshold = typeof opts.threshold === 'number' ? opts.threshold : (leakEnabled ? 200 : -1);
     leakMonitor = leakEnabled && leakThreshold > 0 ? new LeakMonitor(leakThreshold, opts.name ?? 'reactivity-core') : undefined;
@@ -144,6 +154,14 @@ function flushEffects() {
             /* @DEV-ONLY */ flushFinished();
         }
     });
+}
+
+function checkDependencies(effect: Effect) {
+    if (effect.warned || dependencyLimit <= 0 || effect.deps.length < dependencyLimit || dependencyWarnings >= MAX_DEPENDENCY_WARNINGS) return;
+    effect.warned = true;
+    dependencyWarnings++;
+    const count = effect.deps.length;
+    queueMicrotask(() => reportWarning('MJX209', [count, dependencyLimit, effectOwnerLabel(effect)], { fn: String(effect.fn).slice(0, 200) }));
 }
 
 function release(effect: Effect, target: object, key: string | symbol) {

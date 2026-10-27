@@ -46,6 +46,7 @@ export const motifMessages = {
     MJX206: () => `Virtualization: autoRefresh stopped; dataRequest may be changing the reactive data it reads on every refresh.`,
     MJX207: () => `Virtualization: loading data failed.`,
     MJX208: () => `An effect threw.`,
+    MJX209: (count: number, limit: number, owner: string) => `An effect tracked ${count} dependencies in one run (limit ${limit})${owner ? ', owner ' + owner : ''}. It reads many values one by one, probably a reactive list item by item; look items up by key or read the list with untracked(...). useReactiveMonitor({ dependencies }) sets the limit.`,
 
     MJX301: (outlet: string, ms: number) => `RouterView outlet '${outlet}' was not built within ${ms} ms, so the route chain cannot be mounted. Does the layout component render a <RouterView>?`,
     MJX302: (name: string) => `Named route '${name}' was not found.`,

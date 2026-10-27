@@ -546,7 +546,7 @@ export class Application {
     }
 
     /** Enable reactive leak monitoring (dev önerilir) */
-    public useReactiveMonitor(opts: { enabled?: boolean; threshold?: number; name?: string } = {}): this {
+    public useReactiveMonitor(opts: { enabled?: boolean; threshold?: number; name?: string; dependencies?: number } = {}): this {
         safeCallSilent(() => { configureReactivityLeakMonitor(opts); }, 'Application.useReactiveMonitor.core');
         return this;
     }

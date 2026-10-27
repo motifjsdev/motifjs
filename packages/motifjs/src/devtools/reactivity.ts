@@ -27,6 +27,15 @@ export function effectOwner(owner: object | null, kind: string): void {
     lastCreated = null;
 }
 
+export function effectOwnerLabel(e: object): string {
+    if (devtools() === undefined) return '';
+    const info = effectInfoOf(e);
+    const owner = info.owner;
+    if (owner === null) return info.kind === 'effect' ? '' : info.kind;
+    const path = pathOf(owner);
+    return `${typeOf(owner)}${path === null ? '' : ' at [' + path.join(', ') + ']'} (${info.kind})`;
+}
+
 export function effectStopped(e: object): void {
     if (devtools() === undefined) return;
     countEffectStopped(e);
