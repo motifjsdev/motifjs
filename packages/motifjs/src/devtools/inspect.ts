@@ -34,8 +34,16 @@ export function windowHandleOf(c: any): any | null {
 export type TreeNode = {
     path: number[]; type: string; tag: string;
     built: boolean; visible: boolean; waiting: boolean; disposed: boolean; connected: boolean;
+    document: number; title?: string;
     childCount: number; children?: TreeNode[];
 };
+
+export function documentIndexOf(node: any): number {
+    const doc = node == null ? null : node.nodeType === 9 ? node : node.ownerDocument ?? null;
+    if (doc === null || (typeof document !== 'undefined' && doc === document)) return 0;
+    const index = documentsSource.list().indexOf(doc);
+    return index < 0 ? 0 : index + 1;
+}
 
 const names = new WeakMap<object, string>();
 const functionProps = new WeakMap<object, object>();
@@ -87,8 +95,13 @@ function nodeOf(c: any, path: number[], depth: number): TreeNode {
         path, type: typeOf(c), tag: tagOf(c),
         built: !!c.isBuilt, visible: !!c.isVisible, waiting: !!c.isWait, disposed: !!c.isDisposed,
         connected: !!(c.element as any)?.isConnected,
+        document: documentIndexOf(c.element),
         childCount: items.length,
     };
+    if (!c.parent) {
+        const handle = windowHandleOf(c);
+        if (handle !== null) { try { out.title = String(handle.document.title ?? ''); } catch { } }
+    }
     if (depth > 0) out.children = items.map((ch, i) => nodeOf(ch, [...path, i], depth - 1));
     return out;
 }
@@ -97,7 +110,7 @@ export function getTree(path: number[] = [], depth: number = Infinity): TreeNode
     if (path.length === 0) {
         if (root === null) return null;
         const list = treeRoots();
-        const out: TreeNode = { path: [], type: 'Application', tag: '#roots', built: true, visible: true, waiting: false, disposed: false, connected: true, childCount: list.length };
+        const out: TreeNode = { path: [], type: 'Application', tag: '#roots', built: true, visible: true, waiting: false, disposed: false, connected: true, document: 0, childCount: list.length };
         if (depth > 0) out.children = list.map((c, i) => nodeOf(c, [i], depth - 1));
         return out;
     }

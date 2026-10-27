@@ -4,7 +4,7 @@ export type DevtoolsComponentRef = { path: DevtoolsPath | null; type: string; ta
 
 export type DevtoolsTreeNode = DevtoolsComponentRef & {
     path: DevtoolsPath; built: boolean; visible: boolean; waiting: boolean; disposed: boolean;
-    connected: boolean; childCount: number; children?: DevtoolsTreeNode[];
+    connected: boolean; document: number; title?: string; childCount: number; children?: DevtoolsTreeNode[];
 };
 
 export type DevtoolsEvent =

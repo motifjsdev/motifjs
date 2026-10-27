@@ -127,6 +127,46 @@ describe('devtools window roots', () => {
         expect(after.notInTree).toBe(before.notInTree);
     });
 
+    test('every node says which document holds its element and a window root carries its title', () => {
+        const win = app.windows.attach(frameWindow(), { title: 'Notlar' });
+        win.add(b);
+        const tree = hook().getTree();
+        expect(tree.document).toBe(0);
+        expect(tree.children[0]).toMatchObject({ path: [0], document: 0 });
+        expect(hook().getTree([0, 0, 0, 0])).toMatchObject({ tag: 'li', document: 0 });
+        expect(tree.children[1]).toMatchObject({ path: [1], type: 'Window', document: 1, title: 'Notlar' });
+        expect(hook().getTree([1, 0])).toMatchObject({ tag: 'li', document: 1 });
+        expect('title' in hook().getTree([1, 0])).toBe(false);
+        expect('title' in tree.children[0]).toBe(false);
+    });
+
+    test('a component whose element lives in a connected frame points at that document while it stays in the page tree', () => {
+        const frame = document.createElement('iframe');
+        document.body.appendChild(frame);
+        const doc = frame.contentDocument!;
+        const release = app.connectDocument(doc);
+        const away = new Component('p');
+        strip.controls.add(away);
+        doc.body.appendChild(away.element as Node);
+        expect((away.element as Node).ownerDocument).toBe(doc);
+        expect(hook().getDocuments().indexOf(doc)).toBe(1);
+        expect(hook().getTree([0, 0, 0, 2])).toMatchObject({ tag: 'p', document: 1 });
+        expect(hook().getTree([0, 0, 0, 0]).document).toBe(0);
+        release();
+        expect(hook().getTree([0, 0, 0, 2]).document).toBe(0);
+    });
+
+    test('a root cannot be hidden: neither the shell nor a window', async () => {
+        const win = app.windows.attach(frameWindow());
+        win.add(b);
+        expect(await hook().setVisible([1], false)).toEqual({ ok: false, error: 'a root is placed by the page and cannot be hidden' });
+        expect(win.document.body.isConnected).toBe(true);
+        expect(await hook().setVisible([0], false)).toEqual({ ok: false, error: 'a root is placed by the page and cannot be hidden' });
+        expect(host.isConnected).toBe(true);
+        expect(await hook().setVisible([1, 0], false)).toEqual({ ok: true, value: false });
+        expect(await hook().setVisible([1, 0], true)).toEqual({ ok: true, value: true });
+    });
+
     test('the contract is version 2', () => {
         expect(hook().version).toBe(2);
     });

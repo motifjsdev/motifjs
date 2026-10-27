@@ -34,6 +34,7 @@ export function setAttribute(path: number[], name: string, value: string | null)
 export async function setVisible(path: number[], visible: boolean): Promise<WriteResult> {
     const c = at(path);
     if (c === null) return fail('no component at path');
+    if (path.length === 1) return fail('a root is placed by the page and cannot be hidden');
     try {
         await (visible ? c.motif.show() : c.motif.hide());
         return { ok: true, value: !!c.isVisible };
