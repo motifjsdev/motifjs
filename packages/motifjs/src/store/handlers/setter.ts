@@ -1,5 +1,5 @@
 import { ReactiveEngine } from "../ReactiveEngine";
-import { ITERATE_KEY, getRaw, hasOwn, isNumericKey, isReadonly, removeArrayStack } from "../common";
+import { ITERATE_KEY, arrayMutation, getRaw, hasOwn, isNumericKey, isReadonly, removeArrayStack } from "../common";
 import { trigger } from "../reactivity-core";
 
 
@@ -30,6 +30,9 @@ export function createSetter(engine: ReactiveEngine) {
 
         trigger(target, p);
         if (!isArray && !hadKey) {
+            trigger(target, ITERATE_KEY);
+        }
+        if (isArray && arrayMutation.target !== target) {
             trigger(target, ITERATE_KEY);
         }
         if (numeric && !hadKey) {

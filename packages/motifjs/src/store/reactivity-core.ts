@@ -7,17 +7,20 @@ import { effectCreated, effectStopped, runStarting, runFinished, triggered, flus
 
 export type EffectFn = () => void;
 
+type Dep = Map<Effect, number>;
+
 class Effect {
     deps: [object, string | symbol][] = [];
     active = true;
     running = false;
+    runs = 0;
     scheduler?: () => void;
     constructor(public fn: EffectFn, private callback?: (value: unknown) => void) { }
     run() {
         let value: unknown;
         let ok = false;
         if (!this.active || this.running) return;
-        cleanup(this);
+        this.runs++;
         effectStack.push(this);
         this.running = true;
         /* @DEV-ONLY */ const devAt = runStarting();
@@ -27,6 +30,7 @@ class Effect {
         } finally {
             effectStack.pop();
             this.running = false;
+            sweep(this);
             /* @DEV-ONLY */ runFinished(this, devAt);
             if (ok && this.callback) {
                 this.callback(value);
@@ -40,7 +44,7 @@ class Effect {
     }
 }
 
-const depMap = new WeakMap<object, Map<string | symbol, Set<Effect>>>();
+const depMap = new WeakMap<object, Map<string | symbol, Dep>>();
 const effectStack: Effect[] = [];
 const effectQueue = new Set<Effect>();
 let isFlushing = false;
@@ -48,7 +52,7 @@ let isFlushing = false;
 let leakEnabled = false;
 let leakThreshold = -1;
 let leakMonitor: LeakMonitor | undefined;
-const leakCleanups = new WeakMap<Set<Effect>, Map<Effect, () => void>>();
+const leakCleanups = new WeakMap<Dep, Map<Effect, () => void>>();
 export function configureReactivityLeakMonitor(opts: { enabled?: boolean; threshold?: number; name?: string } = {}) {
     leakEnabled = !!opts.enabled;
     leakThreshold = typeof opts.threshold === 'number' ? opts.threshold : (leakEnabled ? 200 : -1);
@@ -63,9 +67,11 @@ export function track(target: object, key: string | symbol) {
     let deps = depMap.get(rawTarget);
     if (!deps) depMap.set(rawTarget, (deps = new Map()));
     let dep = deps.get(key);
-    if (!dep) deps.set(key, (dep = new Set()));
-    if (!dep.has(effect)) {
-        dep.add(effect);
+    if (!dep) deps.set(key, (dep = new Map()));
+    const seen = dep.get(effect);
+    if (seen === effect.runs) return;
+    dep.set(effect, effect.runs);
+    if (seen === undefined) {
         pushTight(effect.deps, [rawTarget, key]);
         if (leakEnabled && leakMonitor && leakThreshold > 0) {
             try {
@@ -86,9 +92,9 @@ export function trigger(target: object, key: string | symbol) {
     if (!deps) return;
     const effects = deps.get(key);
     if (!effects) return;
-    /* @DEV-ONLY */ triggered(rawTarget, key, effects);
+    /* @DEV-ONLY */ triggered(rawTarget, key, effects.keys());
     let queued = false;
-    effects.forEach(effect => {
+    effects.forEach((_run, effect) => {
         if (!effect.active) return;
         if (effect.scheduler) {
             runReported(effect.scheduler);
@@ -140,26 +146,42 @@ function flushEffects() {
     });
 }
 
-function cleanup(effect: Effect) {
-    for (const [target, key] of effect.deps) {
-        const keyMap = depMap.get(target);
-        if (!keyMap) continue;
-        const depSet = keyMap.get(key);
-        if (!depSet) continue;
-        depSet.delete(effect);
-        try {
-            const map = leakCleanups.get(depSet);
-            const fn = map?.get(effect);
-            if (fn) { try { fn(); } catch { } map!.delete(effect); }
-        } catch { }
-        if (depSet.size === 0) {
-            keyMap.delete(key);
-        }
-        if (keyMap.size === 0) {
-            depMap.delete(target);
-        }
+function release(effect: Effect, target: object, key: string | symbol) {
+    const keyMap = depMap.get(target);
+    if (!keyMap) return;
+    const dep = keyMap.get(key);
+    if (!dep) return;
+    dep.delete(effect);
+    try {
+        const map = leakCleanups.get(dep);
+        const fn = map?.get(effect);
+        if (fn) { try { fn(); } catch { } map!.delete(effect); }
+    } catch { }
+    if (dep.size === 0) {
+        keyMap.delete(key);
     }
+    if (keyMap.size === 0) {
+        depMap.delete(target);
+    }
+}
+
+function cleanup(effect: Effect) {
+    for (const [target, key] of effect.deps) release(effect, target, key);
     effect.deps = [];
+}
+
+function sweep(effect: Effect) {
+    const deps = effect.deps;
+    let kept = 0;
+    for (let i = 0; i < deps.length; i++) {
+        const entry = deps[i];
+        if (depMap.get(entry[0])?.get(entry[1])?.get(effect) === effect.runs) {
+            deps[kept++] = entry;
+            continue;
+        }
+        release(effect, entry[0], entry[1]);
+    }
+    deps.length = kept;
 }
 
 
@@ -225,10 +247,10 @@ export function untracked<T>(fn: () => T): T {
 
 
 
-export function debugGetDeps(target: object): Map<string | symbol, Set<Effect>> | undefined {
+export function debugGetDeps(target: object): Map<string | symbol, Map<Effect, number>> | undefined {
     const rawTarget = getRaw(target as any);
     return depMap.get(rawTarget);
 }
-export function debugGetDepMap(): WeakMap<object, Map<string | symbol, Set<Effect>>> {
+export function debugGetDepMap(): WeakMap<object, Map<string | symbol, Map<Effect, number>>> {
     return depMap;
 }

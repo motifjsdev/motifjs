@@ -28,6 +28,7 @@ export function createDelete(engine: ReactiveEngine) {
             if (isOwned) {
                 if (Array.isArray(target)) {
                     trigger(target, 'length');
+                    trigger(target, ITERATE_KEY);
                 } else {
                     trigger(target, p);
                     trigger(target, ITERATE_KEY);

@@ -46,6 +46,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 
 ### Changed
 
+- Reactivity: reading a reactive array with `find`, `findIndex`, `findLast`, `findLastIndex`, `some`, `every`, `filter`, `map`, `forEach`, `flatMap`, `reduce`, `reduceRight`, `join`, `slice`, `includes`, `indexOf`, `lastIndexOf`, the iterators, `for...of` and spread subscribes to the array once instead of to every index; a write to an index or the length and the structural methods (`push`, `splice`, `sort`, ...) wake those readers once. The items handed to the callbacks and returned by `find`, `filter`, `slice` and the iterators are reactive, as before. An effect keeps its dependencies between runs and drops only the ones it stopped reading, so the effects of a key run in the order they first subscribed.
 - Performance: a component packs its state flags and creates its namespace, disposables, classes, attributes and bindings on first use; text components leave their children, classes and attributes unset until first use; a single lifecycle handler is stored without an array; static class names stay a plain string until class tracking is needed; bound lists are reordered without moving rows one by one and start with room for exactly their first entry; detached descendants and empty binding sets are skipped on dispose; the first static classes of a fresh element are written at once; the listeners of a detached child are marked removed instead of being removed one by one.
 - The compiler contract stays at 1; a lone compiled setup is marked so the runtime takes it directly, and core class fields are compiled as constructor assignments.
 - Enter transitions start in a microtask again; `RouterLink` builds its content in `onBuilt` and writes hrefs in the address form of the router mode.
@@ -57,6 +58,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 
 ### Fixed
 
+- `includes`, `indexOf` and `lastIndexOf` on a reactive array rerun an effect when an index is overwritten, not only when the length changes.
 - A hidden component whose element had been moved to another document (a window of the app, an iframe) is shown where its trace was left instead of being rebuilt under its parent in the page; `MJX106` is reported only when the trace was moved or its holder left the document.
 - The effect result callback is called only for a run that produced a value: a throwing getter no longer switches a `when`, ternary or `switchCase` branch (the error is still reported as `MJX208`).
 - A JSX `switch` or ternary getter keeps its statements as written: locals before the switch, case bodies, fall-through and the statements after it; boolean and trailing-return branches compile; the default branch is drawn for an initial `null`; a switch slot is emptied on `null` branches; a component's own value receives `x-model`.

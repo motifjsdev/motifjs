@@ -51,7 +51,7 @@ export function runFinished(e: object, at: number): void {
     }
 }
 
-export function triggered(target: object, key: unknown, effects: Set<object>): void {
+export function triggered(target: object, key: unknown, effects: Iterable<object>): void {
     if (devtools() === undefined) return;
     const store = storeOf(target);
     const t: { target: any; key: string; store?: { id: number; path: string[] } } = { target: preview(target), key: store !== null && store.type !== 'reactive' ? 'value' : String(key) };

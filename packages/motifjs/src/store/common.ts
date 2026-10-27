@@ -19,6 +19,7 @@ export const enum TargetType {
 export const ITERATE_KEY = Symbol('')
 export let followTracking: boolean = true;
 export let arrayScope: { enabled: boolean, key: string } = { enabled: false, key: '' };
+export const arrayMutation: { target: object | null } = { target: null };
 
 
 export function getRaw<T>(value: T): T {
