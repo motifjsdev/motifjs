@@ -56,6 +56,12 @@ export function windowClosed(): void {
     treeChanged(FOREST);
 }
 
+export function layerCreated(layer: any): void {
+    if (devtools() === undefined) return;
+    rename(layer, 'Layer');
+    treeChanged(FOREST);
+}
+
 export function treeChanged(owner: any): void {
     if (devtools() === undefined) return;
     dirty.add(owner);

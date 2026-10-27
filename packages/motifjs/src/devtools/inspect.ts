@@ -1,9 +1,11 @@
 let root: any = null;
 let windows: () => any[] = () => [];
+let layerSource: () => any = () => null;
 
 export function setTreeRoot(c: any): void { root = c; }
 export function clearTreeRoot(c: any): void { if (root === c) root = null; }
 export function setWindowsResolver(fn: () => any[]): void { windows = fn; }
+export function setLayerResolver(fn: () => any): void { layerSource = fn; }
 
 export const documentsSource = { list: (): Document[] => [], onChange: (_listener: () => void): (() => void) => () => { } };
 export function setDocumentsSource(list: () => Document[], onChange: (listener: () => void) => () => void): void {
@@ -14,6 +16,8 @@ export function setDocumentsSource(list: () => Document[], onChange: (listener: 
 export function treeRoots(): any[] {
     if (root === null) return [];
     const out = [root];
+    const layer = layerSource();
+    if (layer) out.push(layer);
     for (const w of windows()) out.push(w.host);
     return out;
 }
@@ -21,8 +25,14 @@ export function treeRoots(): any[] {
 function rootIndexOf(top: any): number {
     if (root === null) return -1;
     if (top === root) return 0;
+    const layer = layerSource();
+    let next = 1;
+    if (layer) {
+        if (top === layer) return 1;
+        next = 2;
+    }
     const list = windows();
-    for (let i = 0; i < list.length; i++) if (list[i].host === top) return i + 1;
+    for (let i = 0; i < list.length; i++) if (list[i].host === top) return next + i;
     return -1;
 }
 

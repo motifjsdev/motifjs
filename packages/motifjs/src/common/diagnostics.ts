@@ -91,6 +91,7 @@ export const motifMessages = {
     MJX421: (reason: string) => `Application.windows: ${reason}.`,
     MJX422: () => `Application.windows: a disposed component cannot be placed in a window.`,
     MJX423: () => `Application.windows: the onClosing hook threw.`,
+    MJX424: () => `Application.layerOf: the target is neither a component nor a node.`,
 
     MJX501: () => `Disposable already disposed.`,
     MJX502: () => `Cannot register a disposable on itself.`,

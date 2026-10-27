@@ -4,7 +4,8 @@ import { ServiceProvider, keepOnDispose } from "./dependencyInjection/ServicePro
 import { Component } from "./component/Component";
 import { RouteItem } from "./routing/RouteItem";
 import { setRoutes, setDevtoolsEnabled } from "./devtools/devbus";
-import { setTreeRoot, clearTreeRoot, setWindowsResolver, setDocumentsSource } from "./devtools/inspect";
+import { setTreeRoot, clearTreeRoot, setWindowsResolver, setDocumentsSource, setLayerResolver } from "./devtools/inspect";
+import { layerCreated } from "./devtools/tree";
 import { lintRoutes } from "./devtools/routeLinter";
 import { RouterView } from "./routing/RouterView";
 import { UrlRoutingModule } from "./routing/UrlRoutingModule";
@@ -16,7 +17,8 @@ import { configureReactivityLeakMonitor } from "./store/reactivity-core";
 import { MotifError, callReported, formatMotifMessage, motifError, reportError } from "./common/diagnostics";
 import { flushCompilerContractWarnings } from "./common/compilerContract";
 import { isTransitionMode, transitionSettings, TransitionMode } from "./common/transitionRegistry";
-import { ComponentBase } from "./component/componentBase";
+import { ComponentBase, placed } from "./component/componentBase";
+import { isDomNode } from "./common/functions";
 import { componentSlots } from "./component/componentSlots";
 import { connectDocument, connectedDocuments, onDocumentConnection } from "./core/documents";
 /* @DEV-ONLY */ setDocumentsSource(connectedDocuments, onDocumentConnection);
@@ -115,6 +117,8 @@ export class Application {
     private _middlewares: Array<(ctx: RouteResolveContext, next: () => Promise<void>) => any> = [];
     private _beforeEachGuards: NavigationGuard[] = [];
     public readonly windows: WindowManager = new WindowManager(this);
+    private _layer: Component | null = null;
+    private _layerJoin: (() => void) | null = null;
     public readonly _routerState = new RouterState();
     public readonly router: Router = createRouter(this._routerState, () => this.urlRoutingModule);
     public _addressOf(uri: string): string { return this.urlRoutingModule?.addressOf(uri) ?? uri; }
@@ -151,6 +155,7 @@ export class Application {
         this.appShell = AppShell;
         /* @DEV-ONLY */ setTreeRoot(AppShell);
         /* @DEV-ONLY */ setWindowsResolver(() => this.windows._handles());
+        /* @DEV-ONLY */ setLayerResolver(() => this._layer);
         safeCallSilent(() => {
             (AppShell as any)._keepElementOnDispose = true;
             if (anchor) (AppShell as any)._mountAnchor = anchor;
@@ -158,6 +163,10 @@ export class Application {
             (AppShell as any).provider = this.provider;
 
         }, 'Application.run.setupAppShell');
+        safeCallSilent(() => {
+            const layer = this._layer?.element as HTMLElement | undefined;
+            if (layer && layer.parentNode && target && (target.compareDocumentPosition(layer) & Node.DOCUMENT_POSITION_PRECEDING) !== 0) layer.parentNode.appendChild(layer);
+        }, 'Application.run.placeLayer');
 
         if (!rootInstance) {
             rootInstance = AppShell;
@@ -175,6 +184,59 @@ export class Application {
         } 
         try {
         } catch { }
+    }
+
+    public get layer(): Component {
+        if (this._layer) return this._layer;
+        const layer = new Component(document.createElement('div'));
+        this._layer = layer;
+        (layer as any).application = this;
+        (layer as any).provider = this.provider;
+        layer.build();
+        this._placeLayer(document);
+        /* @DEV-ONLY */ layerCreated(layer);
+        return layer;
+    }
+
+    public layerOf(target?: ComponentBase | Node | null, ...components: ComponentBase[]): Component {
+        let anchor: Node | null = null;
+        if (target instanceof ComponentBase) {
+            if (target.parent || this._isRoot(target)) anchor = target.element as Node | null;
+            else components.unshift(target);
+        } else if (isDomNode(target)) {
+            anchor = target;
+        } else if (target != null) {
+            throw motifError('MJX424');
+        }
+        const layer = this._layerIn(anchor);
+        if (components.length) layer.controls.add(...components);
+        return layer;
+    }
+
+    private _isRoot(component: ComponentBase): boolean {
+        return component === this.appShell || component === this._layer || this.windows._handles().some(handle => handle.host === component);
+    }
+
+    private _layerIn(node: Node | null): Component {
+        const doc = node === null ? null : node.nodeType === Node.DOCUMENT_NODE ? node as Document : node.ownerDocument;
+        if (doc) for (const handle of this.windows._handles()) if (handle.document === doc) return handle.host;
+        return this.layer;
+    }
+
+    private _placeLayer(doc: Document): void {
+        const element = this._layer!.element as HTMLElement;
+        if (doc.body) {
+            doc.body.appendChild(element);
+            return;
+        }
+        const join = () => {
+            this._layerJoin = null;
+            if (!this._layer || this._layer.isDisposed || !doc.body) return;
+            doc.body.appendChild(element);
+            placed(this._layer);
+        };
+        this._layerJoin = () => doc.removeEventListener('DOMContentLoaded', join);
+        doc.addEventListener('DOMContentLoaded', join, { once: true });
     }
 
     public _startServices(): void {
@@ -224,6 +286,7 @@ export class Application {
         safeCallSilent(() => { this._removeLifecycleListeners(); }, 'Application.dispose.lifecycle');
         safeCallSilent(() => { routerDone = (this as any).urlRoutingModule?.dispose?.(); }, 'Application.dispose.router');
         safeCallSilent(() => { this.windows._disposeAll(); }, 'Application.dispose.windows');
+        safeCallSilent(() => { this._layerJoin?.(); this._layerJoin = null; }, 'Application.dispose.layer');
         safeCallSilent(() => { for (const release of [...this._documentReleases]) release(); }, 'Application.dispose.documents');
         safeCallSilent(() => { engine.stopGc(); }, 'Application.dispose.gcStop');
         safeCallSilent(() => {
@@ -240,11 +303,16 @@ export class Application {
         }, 'Application.dispose.resetUrl');
         transitionSettings.mode = 'concurrent';
         const shell = this.appShell;
+        const layer = this._layer;
         return this._disposing = (async () => {
             try { await routerDone; } catch (error) { reportError('MJX307', error); }
             if (shell && !shell.isDisposed) {
                 try { await shell.dispose(); } catch (error) { reportError('MJX307', error); }
             }
+            if (layer && !layer.isDisposed) {
+                try { await layer.dispose(); } catch (error) { reportError('MJX307', error); }
+            }
+            this._layer = null;
             /* @DEV-ONLY */ clearTreeRoot(shell);
             try { await this.provider.dispose(); } catch { }
             if (_globalApplication === this) _globalApplication = null;
@@ -524,6 +592,8 @@ export function useApplication() {
         services: Application.main.provider,
         router: Application.main.router,
         windows: Application.main.windows,
+        get layer() { return Application.main.layer; },
+        layerOf(target?: ComponentBase | Node | null, ...components: ComponentBase[]) { return Application.main.layerOf(target, ...components); },
         attach(...components: ComponentBase[]) {
             Application.main && Application.main.getAppShell().controls.add(...components);
         }

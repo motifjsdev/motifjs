@@ -3092,7 +3092,7 @@ function settleMounted(entry: MountEntry): void {
         if (root) queueMounted(entry, root); else parkMounted(entry);
 }
 
-function placed(component: any): void {
+export function placed(component: any): void {
         const base = component._baseCtx;
         if (!base) return;
         const watched: Set<any> | undefined = base._pendingWatch;

@@ -167,6 +167,29 @@ describe('devtools window roots', () => {
         expect(await hook().setVisible([1, 0], true)).toEqual({ ok: true, value: true });
     });
 
+    test('the page layer is a root between the shell and the windows', async () => {
+        const events: number[][][] = [];
+        const off = hook().on((ev: any) => { if (ev.type === 'tree:changed') events.push(ev.payload.parents); });
+        try {
+            await tick();
+            events.length = 0;
+            const win = app.windows.attach(frameWindow());
+            win.add(b);
+            expect(hook().getTree([], 1).children.map((n: any) => n.type)).toEqual(['Component', 'Window']);
+            const toast = new Component('p');
+            app.layer.controls.add(toast);
+            await tick();
+            expect(events.some(parents => parents.some(p => p.length === 0))).toBe(true);
+            expect(hook().getTree([], 1).children.map((n: any) => n.type)).toEqual(['Component', 'Layer', 'Window']);
+            expect(hook().getTree([1])).toMatchObject({ path: [1], type: 'Layer', tag: 'div', document: 0 });
+            expect(hook().pathOfElement(toast.element)).toEqual([1, 0]);
+            expect(hook().pathOfElement(b.element)).toEqual([2, 0]);
+            expect(await hook().setVisible([1], false)).toMatchObject({ ok: false });
+        } finally {
+            off();
+        }
+    });
+
     test('the contract is version 2', () => {
         expect(hook().version).toBe(2);
     });
