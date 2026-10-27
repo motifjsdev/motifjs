@@ -4,7 +4,7 @@ import { ServiceProvider, keepOnDispose } from "./dependencyInjection/ServicePro
 import { Component } from "./component/Component";
 import { RouteItem } from "./routing/RouteItem";
 import { setRoutes, setDevtoolsEnabled } from "./devtools/devbus";
-import { setTreeRoot, clearTreeRoot, setWindowsResolver } from "./devtools/inspect";
+import { setTreeRoot, clearTreeRoot, setWindowsResolver, setDocumentsSource } from "./devtools/inspect";
 import { lintRoutes } from "./devtools/routeLinter";
 import { RouterView } from "./routing/RouterView";
 import { UrlRoutingModule } from "./routing/UrlRoutingModule";
@@ -18,7 +18,8 @@ import { flushCompilerContractWarnings } from "./common/compilerContract";
 import { isTransitionMode, transitionSettings, TransitionMode } from "./common/transitionRegistry";
 import { ComponentBase } from "./component/componentBase";
 import { componentSlots } from "./component/componentSlots";
-import { connectDocument } from "./core/documents";
+import { connectDocument, connectedDocuments, onDocumentConnection } from "./core/documents";
+/* @DEV-ONLY */ setDocumentsSource(connectedDocuments, onDocumentConnection);
 import { WindowManager } from "./core/windows";
 export interface IStartup {
     configuration?: (services: any) => void;

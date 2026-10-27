@@ -1,4 +1,4 @@
-import { getTree, getElement, pathOfElement, inspect, getServices, componentAt, holdersOf, FRAMEWORK_FIELDS, signalTypeOf, type StoreHolder } from './inspect';
+import { getTree, getElement, pathOfElement, inspect, getServices, componentAt, holdersOf, FRAMEWORK_FIELDS, signalTypeOf, documentsSource, type StoreHolder } from './inspect';
 import { getCounters, resetCounters } from './counters';
 import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
 import { setClass, setAttribute, setVisible, writeModel, setProp, navigate, BLOCKED_KEYS, type WriteResult } from './writes';
@@ -26,6 +26,7 @@ const state = {
     route: null as { uri: string; params: any; chain: string[] } | null,
     errors: new Map<string, DevError>(),
     exposed: null as MotifDevtools | null,
+    documentsOff: null as (() => void) | null,
 };
 
 let devMode = false;
@@ -46,16 +47,24 @@ export function setDevtoolsEnabled(enabled: boolean) {
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 2, coreVersion: __MOTIF_VERSION__, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getScopes, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readValue, readStore, readService, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
+            state.exposed = { version: 2, coreVersion: __MOTIF_VERSION__, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getScopes, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readValue, readStore, readService, getDocuments, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
+            state.documentsOff ??= documentsSource.onChange(() => { emit('documents:changed', {}); });
         } else {
             if (state.exposed !== null && g.__MOTIF_DEVTOOLS__ === state.exposed) delete g.__MOTIF_DEVTOOLS__;
             state.exposed = null;
+            state.documentsOff?.();
+            state.documentsOff = null;
         }
     } catch { }
 }
 
 export function isEnabled(): boolean { return state.enabled; }
+
+export function getDocuments(): Document[] {
+    const page = typeof document === 'undefined' ? null : document;
+    return page === null ? documentsSource.list() : [page, ...documentsSource.list()];
+}
 
 export function devtools(): ((type: string, payload?: any) => void) | undefined {
     return state.enabled ? emit : undefined;

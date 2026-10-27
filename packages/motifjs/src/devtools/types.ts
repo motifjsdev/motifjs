@@ -21,6 +21,7 @@ export type DevtoolsEvent =
     | { type: 'route:navigation-end'; payload: { uri: string; requested: string; outcome: 'done' | 'skipped' | 'cancelled' | 'notFound' | 'error'; reason?: string; params?: unknown; duration: number } }
     | { type: 'stores:changed'; payload: Record<string, never> }
     | { type: 'scopes:changed'; payload: Record<string, never> }
+    | { type: 'documents:changed'; payload: Record<string, never> }
     | { type: 'service:created'; payload: { scope: number; token: string; lifetime: string; source: 'class' | 'factory' | 'value'; instance: unknown } }
     | { type: 'service:disposed'; payload: { scope: number; token: string; lifetime: string; instance: unknown } }
     | { type: `ext:${string}`; payload?: unknown };
@@ -37,6 +38,7 @@ export interface MotifDevtools {
     getTree(path?: DevtoolsPath, depth?: number): DevtoolsTreeNode | null;
     getElement(path: DevtoolsPath): Node | null;
     pathOfElement(node: Node | null): DevtoolsPath | null;
+    getDocuments(): Document[];
     inspect(path: DevtoolsPath): (Omit<DevtoolsTreeNode, 'children'> & { props: Record<string, unknown>; fields: Record<string, unknown>; functionProps?: Record<string, unknown>; bindings: unknown[]; events: unknown[]; hooks: unknown[]; classes: { static: string[]; reactive: { id: string; classes: string[] }[] }; attributes: unknown[]; services: unknown; effects: unknown[]; extensions: Record<string, unknown>; window?: { kind: string; title: string; open: boolean; components: number } }) | null;
     getServices(): { token: string; lifetime: string; created: boolean }[];
     getScopes(): { id: number; kind: 'root' | 'navigation' | 'user'; name: string | null; parent: number | null; current: boolean; pending: boolean; pins: number; services: { token: string; lifetime: string; instance: unknown; creating?: true }[]; transients: unknown[] }[];

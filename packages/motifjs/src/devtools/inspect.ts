@@ -5,6 +5,12 @@ export function setTreeRoot(c: any): void { root = c; }
 export function clearTreeRoot(c: any): void { if (root === c) root = null; }
 export function setWindowsResolver(fn: () => any[]): void { windows = fn; }
 
+export const documentsSource = { list: (): Document[] => [], onChange: (_listener: () => void): (() => void) => () => { } };
+export function setDocumentsSource(list: () => Document[], onChange: (listener: () => void) => () => void): void {
+    documentsSource.list = list;
+    documentsSource.onChange = onChange;
+}
+
 export function treeRoots(): any[] {
     if (root === null) return [];
     const out = [root];

@@ -5,7 +5,7 @@ import type { MotifDevtools, DevtoolsEvent } from '@motifx/core/devtools';
 
 const KEYS: (keyof MotifDevtools)[] = [
     'version', 'coreVersion', 'on', 'isEnabled',
-    'getTree', 'getElement', 'pathOfElement', 'inspect', 'getServices', 'getScopes', 'getCounters',
+    'getTree', 'getElement', 'pathOfElement', 'getDocuments', 'inspect', 'getServices', 'getScopes', 'getCounters',
     'getWarnings', 'getErrors', 'getRoutes', 'getRoute', 'getNavigations', 'getStores',
     'getExtensions', 'readExtension', 'readValue', 'readStore', 'readService',
     'setClass', 'setAttribute', 'setVisible', 'writeModel', 'setProp', 'navigate', 'setStoreValue',
