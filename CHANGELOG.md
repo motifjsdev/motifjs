@@ -60,6 +60,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 
 ### Fixed
 
+- Application: a disposed application starts again with `run()`: `Application.main` is filled again, services are created anew on demand, a fresh router is built from the configuration, the `useTransitions` mode is applied again, a layer read in between moves after the host and `dispose()` runs again; `run()` throws `MJX405` when a newer application was built in between.
 - `includes`, `indexOf` and `lastIndexOf` on a reactive array rerun an effect when an index is overwritten, not only when the length changes.
 - A hidden component whose element had been moved to another document (a window of the app, an iframe) is shown where its trace was left instead of being rebuilt under its parent in the page; `MJX106` is reported only when the trace was moved or its holder left the document.
 - The effect result callback is called only for a run that produced a value: a throwing getter no longer switches a `when`, ternary or `switchCase` branch (the error is still reported as `MJX208`).

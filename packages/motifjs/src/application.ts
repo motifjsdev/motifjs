@@ -119,6 +119,7 @@ export class Application {
     public readonly windows: WindowManager = new WindowManager(this);
     private _layer: Component | null = null;
     private _layerJoin: (() => void) | null = null;
+    private _transitionMode: TransitionMode = 'concurrent';
     public readonly _routerState = new RouterState();
     public readonly router: Router = createRouter(this._routerState, () => this.urlRoutingModule);
     public _addressOf(uri: string): string { return this.urlRoutingModule?.addressOf(uri) ?? uri; }
@@ -132,6 +133,7 @@ export class Application {
         return this.appShell;
     }
     public run(host: HTMLElement | string | Node, appRoot?: any): void {
+        if (this._state === 'disposed') this._restart();
         safeCallSilent(() => {
             engine.startGc();
         }, 'Application.run.engine.startGc');
@@ -243,6 +245,17 @@ export class Application {
         for (const desc of this.provider.getAllServices().getStartupServices()) this.provider.get(desc.token);
     }
 
+    private _restart(): void {
+        if (_globalApplication && _globalApplication !== this) throw motifError('MJX405');
+        _globalApplication = this;
+        this._disposing = undefined;
+        transitionSettings.mode = this._transitionMode;
+        if (this._routerConfig) {
+            this.urlRoutingModule = new UrlRoutingModule(this._routerConfig, this);
+            this._routerState.reset();
+        }
+    }
+
     public _restartServices(): void {
         if (this._state !== 'running') return;
         (this.appShell as any).provider = this.provider;
@@ -322,7 +335,7 @@ export class Application {
     }
 
     public useTransitions(options: { mode?: TransitionMode }): Application {
-        if (isTransitionMode(options?.mode)) transitionSettings.mode = options.mode;
+        if (isTransitionMode(options?.mode)) transitionSettings.mode = this._transitionMode = options.mode;
         return this;
     }
 
