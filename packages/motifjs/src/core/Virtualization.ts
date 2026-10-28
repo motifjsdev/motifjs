@@ -253,6 +253,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
         this._stopDataWatch();
         let result!: Promise<VirtualizationDataResponse<T>>;
         let first = true;
+        /* @DEV-ONLY */ effectOwner(this, 'virtual-data');
         this._dataWatchStop = effect(() => {
             if (first) {
                 first = false;
@@ -262,7 +263,6 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
             }
             this._scheduleReload();
         });
-        /* @DEV-ONLY */ effectOwner(this, 'virtual-data');
         return result;
     }
 

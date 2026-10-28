@@ -130,10 +130,10 @@ export class Binding implements IBaseBinding {
             return value;
         };
 
+        /* @DEV-ONLY */ effectOwner(this._component, 'binding:' + this.propertyName);
         this._effectCleanup = effect(() => {
             return updateTarget();
         });
-        /* @DEV-ONLY */ effectOwner(this._component, 'binding:' + this.propertyName);
 
     }
 

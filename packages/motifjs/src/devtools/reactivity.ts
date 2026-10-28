@@ -5,26 +5,27 @@ import { countEffectCreated, countEffectOwned, countEffectStopped, countRun, cou
 type Trigger = { target: any; key: string; count: number; store?: { id: number; path: string[] } };
 type Flush = { at: number; runs: number; effects: Map<object, number>; triggers: Map<string, Trigger> };
 
-let lastCreated: object | null = null;
+let nextOwner: { owner: object | null; kind: string } | null = null;
 let pending = new Map<string, Trigger>();
 let current: Flush | null = null;
 
 export function effectCreated(e: object): void {
     if (devtools() === undefined) return;
-    effectInfoOf(e);
+    const info = effectInfoOf(e);
     countEffectCreated(e);
-    lastCreated = e;
+    const next = nextOwner;
+    if (next === null) return;
+    nextOwner = null;
+    info.kind = next.kind;
+    if (next.owner !== null) {
+        ownEffect(next.owner, e, info);
+        countEffectOwned(e);
+    }
 }
 
 export function effectOwner(owner: object | null, kind: string): void {
-    if (devtools() === undefined || lastCreated === null) return;
-    const info = effectInfoOf(lastCreated);
-    info.kind = kind;
-    if (owner !== null) {
-        ownEffect(owner, lastCreated, info);
-        countEffectOwned(lastCreated);
-    }
-    lastCreated = null;
+    if (devtools() === undefined) return;
+    nextOwner = { owner, kind };
 }
 
 export function effectOwnerLabel(e: object): string {

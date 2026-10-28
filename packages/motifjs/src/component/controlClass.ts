@@ -315,8 +315,8 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
             this._applySourceDiff(id, prev, next, el);
             rec.set = next;
         });
-        let current = run();
         /* @DEV-ONLY */ effectOwner(this._parent, 'class');
+        let current = run();
         const stop = () => { try { current(); } catch { } };
 
         const binding: IBaseBinding = {
@@ -332,8 +332,8 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
             },
             reActivate: () => {
                 stop();
-                current = run();
                 /* @DEV-ONLY */ effectOwner(this._parent, 'class');
+                current = run();
             }
         } as any;
         try { this._parent.bindings.add(binding); } catch { }

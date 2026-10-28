@@ -75,8 +75,8 @@ export class ConditionalWrapper extends ComponentBase<Comment, { render: () => a
 
     public override build(building: boolean = true) {
         if (this.isBuilt) return;
-        this.stopEffect = effect(() => this.updateChild());
         /* @DEV-ONLY */ effectOwner(this, 'conditional');
+        this.stopEffect = effect(() => this.updateChild());
         super.build(building);
     }
 

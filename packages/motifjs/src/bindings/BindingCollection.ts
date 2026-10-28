@@ -67,6 +67,7 @@ export class BindingCollection implements IBindingCollection {
         let shown = false;
         let last: any;
         this._keepEffect(() => {
+            /* @DEV-ONLY */ effectOwner(this._component, 'when');
             const stop = effect(computeFn, (value) => {
                 if (shown && (Object.is(last, value) || (!last && !value))) return;
                 shown = true;
@@ -81,7 +82,6 @@ export class BindingCollection implements IBindingCollection {
                     }
                 });
             });
-            /* @DEV-ONLY */ effectOwner(this._component, 'when');
             return stop;
         });
 
@@ -192,6 +192,7 @@ export class BindingCollection implements IBindingCollection {
             host.controls.remove(previous);
         };
         this._keepEffect(() => {
+            /* @DEV-ONLY */ effectOwner(host, 'method');
             const stop = effect(cb, (result) => {
                 if (host.isDisposed) return;
                 const isText = typeof result === 'string' || typeof result === 'number' || typeof result === 'boolean' || typeof result === 'bigint';
@@ -219,7 +220,6 @@ export class BindingCollection implements IBindingCollection {
                     frame.navigate(result as any);
                 }
             });
-            /* @DEV-ONLY */ effectOwner(host, 'method');
             return stop;
         });
     }
@@ -249,6 +249,7 @@ export class BindingCollection implements IBindingCollection {
             }
         };
         this._keepEffect(() => {
+            /* @DEV-ONLY */ effectOwner(this._component, 'ternary');
             const stopEffect = effect(condFn, (condition) => {
                 if (!first && Object.is(last, condition)) return;
                 last = condition;
@@ -269,7 +270,6 @@ export class BindingCollection implements IBindingCollection {
                 }
                 defer(() => { if (!stopped && !this._component.isDisposed) run(); });
             });
-            /* @DEV-ONLY */ effectOwner(this._component, 'ternary');
             return stopEffect;
         }, () => {
             stopped = true;
@@ -285,10 +285,10 @@ export class BindingCollection implements IBindingCollection {
 
     watch(cb: () => any) {
         this._keepEffect(() => {
+            /* @DEV-ONLY */ effectOwner(this._component, 'watch');
             const ef = effect(() => {
                 cb();
             });
-            /* @DEV-ONLY */ effectOwner(this._component, 'watch');
             return ef;
         });
     }
@@ -482,6 +482,7 @@ export class BindingCollection implements IBindingCollection {
         var hasValue = false;
         var defaultRunned = false;
         this._keepEffect(() => {
+            /* @DEV-ONLY */ effectOwner(this._component, 'switch');
             const ef = effect(discriminatorFn, (value) => {
                 if (hasValue && currentValue == value) return;
                 hasValue = true;
@@ -502,7 +503,6 @@ export class BindingCollection implements IBindingCollection {
                     frame.navigate(empty);
                 }
             });
-            /* @DEV-ONLY */ effectOwner(this._component, 'switch');
             return ef;
         });
 

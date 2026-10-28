@@ -2026,8 +2026,8 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                         prevKeys = [];
                                 }
                         });
-                        let current = run();
                         /* @DEV-ONLY */ effectOwner(this, 'style');
+                        let current = run();
                         const stop = () => { try { current(); } catch { } };
                         const binding: IBaseBinding = {
                                 propertyName: '__style',
@@ -2035,8 +2035,8 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                 activate() { /* no-op */ },
                                 reActivate: () => {
                                         stop();
-                                        current = run();
                                         /* @DEV-ONLY */ effectOwner(this, 'style');
+                                        current = run();
                                 },
                                 deactivate() { stop(); }
                         } as any;

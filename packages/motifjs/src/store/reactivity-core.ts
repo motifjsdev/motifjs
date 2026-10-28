@@ -161,7 +161,7 @@ function checkDependencies(effect: Effect) {
     effect.warned = true;
     dependencyWarnings++;
     const count = effect.deps.length;
-    queueMicrotask(() => reportWarning('MJX209', [count, dependencyLimit, effectOwnerLabel(effect)], { fn: String(effect.fn).slice(0, 200) }));
+    reportWarning('MJX209', [count, dependencyLimit, effectOwnerLabel(effect)], { fn: String(effect.fn).slice(0, 200) });
 }
 
 function release(effect: Effect, target: object, key: string | symbol) {
@@ -205,8 +205,8 @@ function sweep(effect: Effect) {
 
 export function effect<T>(fn: () => T, onValueChanged?: (value: NoInfer<T>) => void) {
     const e = new Effect(fn, onValueChanged as ((value: unknown) => void) | undefined);
-    runReported(() => e.run());
     /* @DEV-ONLY */ effectCreated(e);
+    runReported(() => e.run());
     return () => e.stop();
 }
 

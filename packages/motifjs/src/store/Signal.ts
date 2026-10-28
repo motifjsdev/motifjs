@@ -101,6 +101,7 @@ export class Computed<T> {
         this._target = { [SIGNAL_TARGET]: true };
         this._key = SIGNAL_KEY;
 
+        /* @DEV-ONLY */ effectOwner(null, 'computed');
         this._cleanup = effect(() => {
             if (this._computing) return; 
             this._computing = true;
@@ -116,7 +117,6 @@ export class Computed<T> {
                 this._computing = false;
             }
         });
-        /* @DEV-ONLY */ effectOwner(null, 'computed');
     }
 
     get value(): T {
@@ -179,6 +179,7 @@ export class LazyComputed<T> {
         this._getter = getter;
         this._target = { [SIGNAL_TARGET]: true };
         this._key = SIGNAL_KEY;
+        /* @DEV-ONLY */ effectOwner(null, 'computed');
         this._runner = createScheduledEffect(
             () => { this._value = this._getter(); },
             () => {
@@ -187,7 +188,6 @@ export class LazyComputed<T> {
                 trigger(this._target, this._key);
             }
         );
-        /* @DEV-ONLY */ effectOwner(null, 'computed');
     }
 
     get value(): T {

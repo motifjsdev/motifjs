@@ -158,8 +158,8 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                 const v = values();
                 this._applyValue(key, v);
             });
-            let current = run();
             /* @DEV-ONLY */ effectOwner(this._parent, 'attr:' + String(key));
+            let current = run();
             const stop = () => { try { current(); } catch { } };
 
             const binding: IBaseBinding = {
@@ -169,8 +169,8 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
                 deactivate: () => { stop(); this._forgetFormAction(key); },
                 reActivate: () => {
                     stop();
-                    current = run();
                     /* @DEV-ONLY */ effectOwner(this._parent, 'attr:' + String(key));
+                    current = run();
                 }
             } as any;
             try { this._parent.bindings.add(binding); } catch { }

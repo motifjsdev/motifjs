@@ -249,8 +249,8 @@ export class ListBinding implements IBaseBinding {
             this.olditems = items === source ? source.slice() : items;
             return count;
         };
-        this._effectCleanup = effect(() => update());
         /* @DEV-ONLY */ effectOwner(this.component, 'list');
+        this._effectCleanup = effect(() => update());
     }
 
     private _syncContainer(newComponents: ComponentBase[]) {
