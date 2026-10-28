@@ -265,8 +265,10 @@ function effectsOf(c: any) {
     if (s === undefined) return [];
     return [...s].filter(e => (e as any).active !== false).map(e => {
         const i = effectInfoOf(e);
-        const deps: any[] = (e as any).deps ?? [];
-        return { kind: i.kind, runs: i.runs, lastDuration: i.lastDuration, lastTrigger: i.lastTrigger, deps: deps.map(([t, k]) => ({ target: preview(t), key: String(k) })) };
+        const list: any[] = (e as any).deps ?? [];
+        const deps: { target: unknown; key: string }[] = [];
+        for (let n = 0; n < list.length; n += 2) deps.push({ target: preview(list[n]), key: String(list[n + 1]) });
+        return { kind: i.kind, runs: i.runs, lastDuration: i.lastDuration, lastTrigger: i.lastTrigger, deps };
     });
 }
 

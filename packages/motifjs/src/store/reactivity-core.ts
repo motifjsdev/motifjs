@@ -2,19 +2,24 @@
 import { LeakMonitor } from "../common/LeakMonitor";
 import { reportError, reportWarning } from "../common/diagnostics";
 import { getRaw, followTracking, RANGE_KEY } from "./common";
-import { pushTight } from "../common/pushTight";
 import { effectCreated, effectStopped, effectOwnerLabel, runStarting, runFinished, triggered, flushStarting, flushFinished } from "../devtools/reactivity";
 import { configureScanMonitor, scanEffectStopped } from "./scanMonitor";
 
 export type EffectFn = () => void;
 
-type Dep = Map<Effect, number>;
+type Mark = Effect | EffectMark;
+type Dep = Mark | Map<Effect, number>;
+
+class EffectMark {
+    constructor(public effect: Effect) { }
+}
 
 class Effect {
-    deps: [object, string | symbol][] = [];
+    deps: (object | string | symbol)[] = [];
     active = true;
     running = false;
     runs = 0;
+    mark: EffectMark | undefined = undefined;
     warned = false;
     scheduler?: () => void;
     constructor(public fn: EffectFn, private callback?: (value: unknown) => void) { }
@@ -60,7 +65,7 @@ const MAX_DEPENDENCY_WARNINGS = 10;
 let leakEnabled = false;
 let leakThreshold = -1;
 let leakMonitor: LeakMonitor | undefined;
-const leakCleanups = new WeakMap<Dep, Map<Effect, () => void>>();
+const leakCleanups = new WeakMap<Map<Effect, number>, Map<Effect, () => void>>();
 export function configureReactivityLeakMonitor(opts: { enabled?: boolean; threshold?: number; name?: string; dependencies?: number; scans?: boolean } = {}) {
     if (typeof opts.scans === 'boolean') configureScanMonitor(opts.scans);
     if (typeof opts.dependencies === 'number') {
@@ -86,24 +91,64 @@ export function track(target: object, key: string | symbol) {
     if (!effect || !effect.active) return;
     let deps = depMap.get(rawTarget);
     if (!deps) depMap.set(rawTarget, (deps = new Map()));
-    let dep = deps.get(key);
-    if (!dep) deps.set(key, (dep = new Map()));
-    const seen = dep.get(effect);
-    if (seen === effect.runs) return;
-    dep.set(effect, effect.runs);
-    if (seen === undefined) {
-        pushTight(effect.deps, [rawTarget, key]);
-        if (leakEnabled && leakMonitor && leakThreshold > 0) {
-            try {
-                const cleanup = leakMonitor.check(dep.size);
-                if (cleanup) {
-                    let m = leakCleanups.get(dep);
-                    if (!m) { m = new Map(); leakCleanups.set(dep, m); }
-                    m.set(effect, cleanup);
-                }
-            } catch { }
+    const dep = deps.get(key);
+    if (dep instanceof Map) {
+        const seen = dep.get(effect);
+        if (seen === effect.runs) return;
+        dep.set(effect, effect.runs);
+        if (seen !== undefined) return;
+    } else {
+        const mark = markOf(effect, effect.runs);
+        if (dep === mark) return;
+        if (dep === undefined) {
+            deps.set(key, mark);
+        } else if (ownerOf(dep) === effect) {
+            deps.set(key, mark);
+            return;
+        } else {
+            deps.set(key, new Map([[ownerOf(dep), runOf(dep)], [effect, effect.runs]]));
         }
     }
+    const list = effect.deps;
+    if (list.length === 0) {
+        list.length = 2;
+        list[0] = rawTarget;
+        list[1] = key;
+    } else {
+        list.push(rawTarget, key);
+    }
+    if (leakEnabled && leakMonitor && leakThreshold > 0) {
+        try {
+            let subscribers = deps.get(key)!;
+            const cleanup = leakMonitor.check(subscribers instanceof Map ? subscribers.size : 1);
+            if (cleanup) {
+                if (!(subscribers instanceof Map)) deps.set(key, (subscribers = new Map([[effect, effect.runs]])));
+                let m = leakCleanups.get(subscribers);
+                if (!m) { m = new Map(); leakCleanups.set(subscribers, m); }
+                m.set(effect, cleanup);
+            }
+        } catch { }
+    }
+}
+
+function markOf(effect: Effect, runs: number): Mark {
+    if ((runs & 1) === 1) return effect;
+    return effect.mark ?? (effect.mark = new EffectMark(effect));
+}
+
+function ownerOf(mark: Mark): Effect {
+    return mark instanceof EffectMark ? mark.effect : mark;
+}
+
+function runOf(mark: Mark): number {
+    const effect = ownerOf(mark);
+    return ((effect.runs & 1) === 1) === (mark === effect) ? effect.runs : effect.runs - 1;
+}
+
+function seenInRun(dep: Dep | undefined, effect: Effect): boolean {
+    if (dep === undefined) return false;
+    if (dep instanceof Map) return dep.get(effect) === effect.runs;
+    return dep === ((effect.runs & 1) === 1 ? effect : effect.mark);
 }
 
 export function trackRange(target: object, maxIndex: number) {
@@ -113,7 +158,7 @@ export function trackRange(target: object, maxIndex: number) {
     if (!effect || !effect.active) return;
     let ranges = rangeMax.get(rawTarget);
     if (!ranges) rangeMax.set(rawTarget, (ranges = new Map()));
-    const fresh = depMap.get(rawTarget)?.get(RANGE_KEY)?.get(effect) !== effect.runs;
+    const fresh = !seenInRun(depMap.get(rawTarget)?.get(RANGE_KEY), effect);
     ranges.set(effect, fresh ? maxIndex : Math.max(ranges.get(effect) ?? -1, maxIndex));
     track(rawTarget, RANGE_KEY);
 }
@@ -124,7 +169,9 @@ export function triggerRange(target: object, from: number) {
     if (!effects) return;
     const ranges = rangeMax.get(rawTarget);
     const woken: Effect[] = [];
-    effects.forEach((_run, effect) => { if (effect.active && (ranges?.get(effect) ?? Infinity) >= from) woken.push(effect); });
+    const wake = (effect: Effect) => { if (effect.active && (ranges?.get(effect) ?? Infinity) >= from) woken.push(effect); };
+    if (effects instanceof Map) effects.forEach((_run, effect) => wake(effect));
+    else wake(ownerOf(effects));
     if (woken.length === 0) return;
     /* @DEV-ONLY */ triggered(rawTarget, RANGE_KEY, woken);
     let queued = false;
@@ -145,6 +192,18 @@ export function trigger(target: object, key: string | symbol) {
     if (!deps) return;
     const effects = deps.get(key);
     if (!effects) return;
+    if (!(effects instanceof Map)) {
+        const effect = ownerOf(effects);
+        /* @DEV-ONLY */ triggered(rawTarget, key, [effect]);
+        if (!effect.active) return;
+        if (effect.scheduler) {
+            runReported(effect.scheduler);
+            return;
+        }
+        effectQueue.add(effect);
+        flushEffects();
+        return;
+    }
     /* @DEV-ONLY */ triggered(rawTarget, key, effects.keys());
     let queued = false;
     effects.forEach((_run, effect) => {
@@ -200,10 +259,10 @@ function flushEffects() {
 }
 
 function checkDependencies(effect: Effect) {
-    if (effect.warned || dependencyLimit <= 0 || effect.deps.length < dependencyLimit || dependencyWarnings >= MAX_DEPENDENCY_WARNINGS) return;
+    const count = effect.deps.length / 2;
+    if (effect.warned || dependencyLimit <= 0 || count < dependencyLimit || dependencyWarnings >= MAX_DEPENDENCY_WARNINGS) return;
     effect.warned = true;
     dependencyWarnings++;
-    const count = effect.deps.length;
     reportWarning('MJX209', [count, dependencyLimit, effectOwnerLabel(effect)], { fn: String(effect.fn).slice(0, 200) });
 }
 
@@ -212,14 +271,21 @@ function release(effect: Effect, target: object, key: string | symbol) {
     if (!keyMap) return;
     const dep = keyMap.get(key);
     if (!dep) return;
-    dep.delete(effect);
     if (key === RANGE_KEY) rangeMax.get(target)?.delete(effect);
-    try {
-        const map = leakCleanups.get(dep);
-        const fn = map?.get(effect);
-        if (fn) { try { fn(); } catch { } map!.delete(effect); }
-    } catch { }
-    if (dep.size === 0) {
+    if (dep instanceof Map) {
+        dep.delete(effect);
+        try {
+            const map = leakCleanups.get(dep);
+            const fn = map?.get(effect);
+            if (fn) { try { fn(); } catch { } map!.delete(effect); }
+        } catch { }
+        if (dep.size === 0) {
+            keyMap.delete(key);
+        } else if (dep.size === 1 && !leakCleanups.get(dep)?.size) {
+            const [owner, runs] = dep.entries().next().value!;
+            keyMap.set(key, markOf(owner, runs));
+        }
+    } else if (ownerOf(dep) === effect) {
         keyMap.delete(key);
     }
     if (keyMap.size === 0) {
@@ -228,22 +294,25 @@ function release(effect: Effect, target: object, key: string | symbol) {
 }
 
 function cleanup(effect: Effect) {
-    for (const [target, key] of effect.deps) release(effect, target, key);
+    const list = effect.deps;
+    for (let i = 0; i < list.length; i += 2) release(effect, list[i] as object, list[i + 1] as string | symbol);
     effect.deps = [];
 }
 
 function sweep(effect: Effect) {
-    const deps = effect.deps;
+    const list = effect.deps;
     let kept = 0;
-    for (let i = 0; i < deps.length; i++) {
-        const entry = deps[i];
-        if (depMap.get(entry[0])?.get(entry[1])?.get(effect) === effect.runs) {
-            deps[kept++] = entry;
+    for (let i = 0; i < list.length; i += 2) {
+        const target = list[i] as object;
+        const key = list[i + 1] as string | symbol;
+        if (seenInRun(depMap.get(target)?.get(key), effect)) {
+            list[kept++] = target;
+            list[kept++] = key;
             continue;
         }
-        release(effect, entry[0], entry[1]);
+        release(effect, target, key);
     }
-    deps.length = kept;
+    list.length = kept;
 }
 
 
@@ -311,8 +380,18 @@ export function untracked<T>(fn: () => T): T {
 
 export function debugGetDeps(target: object): Map<string | symbol, Map<Effect, number>> | undefined {
     const rawTarget = getRaw(target as any);
-    return depMap.get(rawTarget);
+    const deps = depMap.get(rawTarget);
+    if (!deps) return undefined;
+    const view = new Map<string | symbol, Map<Effect, number>>();
+    deps.forEach((dep, key) => view.set(key, dep instanceof Map ? dep : new Map([[ownerOf(dep), runOf(dep)]])));
+    return view;
 }
+
+class DepMapView extends WeakMap<object, Map<string | symbol, Map<Effect, number>>> {
+    get(target: object) { return debugGetDeps(target); }
+    has(target: object) { return depMap.has(getRaw(target as any)); }
+}
+const depMapView = new DepMapView();
 export function debugGetDepMap(): WeakMap<object, Map<string | symbol, Map<Effect, number>>> {
-    return depMap;
+    return depMapView;
 }
