@@ -217,6 +217,23 @@ describe('x-chunk: children of an element are built in slices', () => {
         expect(texts(ul)).toEqual(Array.from({ length: 40 }, (_, i) => String(i)));
     });
 
+    test('a function given to x-chunk or to options.chunk is read once when the component is set up', async () => {
+        let reads = 0;
+        const minRows = () => { reads++; return 3; };
+        const viaProp = new Component('ul', { 'x-chunk': minRows } as any);
+        const viaOptions = new Component('ul', { options: { chunk: minRows } } as any);
+        const automatic = new Component('ul', { options: { chunk: () => true } } as any);
+        expect(viaProp.motif.options.chunk).toBe(3);
+        expect(viaOptions.motif.options.chunk).toBe(3);
+        expect(automatic.motif.options.chunk).toBe(true);
+        expect(reads).toBe(2);
+        viaOptions.controls.add(...Array.from({ length: 8 }, (_, i) => new Row(i)));
+        app.run(host, viaOptions);
+        expect(liCount(viaOptions.element as Element)).toBe(3);
+        await until(() => liCount(viaOptions.element as Element) === 8);
+        expect(reads).toBe(2);
+    });
+
     test('x-chunk through props sets the option and zero switches it off', async () => {
         const chunked = new Component('ul', { 'x-chunk': 4 });
         expect(chunked.motif.options.chunk).toBe(4);

@@ -128,7 +128,13 @@ export class ListBinding implements IBaseBinding {
         const items = this.container.controls.items;
         const at = items[slot.at] === slot ? slot.at : items.indexOf(slot);
         const index = this._rendered[slot.at] === slot ? slot.at : this._rendered.indexOf(slot);
-        const row = this._render(slot.item, index >= 0 ? index : Math.max(0, at));
+        let row: ComponentBase;
+        try {
+            row = this._render(slot.item, index >= 0 ? index : Math.max(0, at));
+        } catch (error) {
+            (slot as any)._sliceFailed = true;
+            throw error;
+        }
         if (index >= 0) this._rendered[index] = row;
         if (slot.raw !== null) {
             const list = this._identityMap.get(slot.raw);
@@ -217,7 +223,7 @@ export class ListBinding implements IBaseBinding {
             const claimed = new Set<ComponentBase>();
             const positionalReuse = new Map<number, ComponentBase>();
             const isReusable = (c: ComponentBase | undefined): c is ComponentBase =>
-                !!c && !c.isDisposed && !claimed.has(c) && !isListAdopted(c);
+                !!c && !c.isDisposed && !claimed.has(c) && !isListAdopted(c) && !(c as any)._sliceFailed;
 
             const shared = Math.min(items.length, prevItems.length);
             for (let i = 0; i < shared; i++) {
@@ -256,7 +262,7 @@ export class ListBinding implements IBaseBinding {
                         this._identityMap.set(raw, list);
                     }
                     const existing = list[occurrence];
-                    if (existing && !existing.isDisposed) {
+                    if (existing && !existing.isDisposed && !(existing as any)._sliceFailed) {
                         component = existing;
                     } else {
                         component = this._make(item, idx, raw, occurrence, host, budget);

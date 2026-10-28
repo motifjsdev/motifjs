@@ -191,6 +191,51 @@ describe('list binding under x-chunk: rows are created lazily, a chunk per frame
         expect(texts(list.ul)).toEqual(state.items.map(n => n.title));
     });
 
+    test('a row that throws on its turn is reported as MJX130 and tried again on the next list update', async () => {
+        const errors: string[] = [];
+        const spy = jest.spyOn(console, 'error').mockImplementation((...args: any[]) => { errors.push(args.map(String).join(' ')); });
+        try {
+            const state = reactive({ items: notes(6), bad: 4 });
+            const list = mountList(2, state, (n) => {
+                if (n.id === state.bad) throw new Error('row ' + n.id);
+                return new Row(n, 0);
+            });
+            await until(() => list.ul.querySelectorAll('li').length === 5);
+            expect(texts(list.ul)).toEqual(['n0', 'n1', 'n2', 'n3', 'n5']);
+            expect(errors.some(e => e.includes('MJX130'))).toBe(true);
+            state.bad = -1;
+            state.items.push({ id: 6, title: 'n6' });
+            await until(() => list.ul.querySelectorAll('li').length === 7);
+            expect(texts(list.ul)).toEqual(['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6']);
+            const plain = mountList(0, reactive({ items: notes(2) }));
+            expect(comments(list.ul)).toBe(comments(plain.ul));
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    test('a primitive row that throws on its turn is tried again on the next list update', async () => {
+        const spy = jest.spyOn(console, 'error').mockImplementation(() => { });
+        try {
+            const state = reactive({ items: ['a', 'b', 'c', 'd', 'e'] as string[], bad: 'd' });
+            const ul = new Component('ul', { 'x-chunk': 2 });
+            ul.bindings.list(() => state.items, (s: string) => {
+                if (s === state.bad) throw new Error('row ' + s);
+                const li = new Component('li'); (li.element as HTMLElement).textContent = s; return li;
+            });
+            app.run(host, ul);
+            const el = ul.element as HTMLUListElement;
+            await until(() => el.querySelectorAll('li').length === 4);
+            expect(texts(el)).toEqual(['a', 'b', 'c', 'e']);
+            state.bad = '';
+            state.items.push('f');
+            await until(() => el.querySelectorAll('li').length === 6);
+            expect(texts(el)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
     test('disposing the list while rows are pending renders nothing more', async () => {
         const state = reactive({ items: notes(6) });
         const list = mountList(2, state);

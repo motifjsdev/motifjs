@@ -26,18 +26,17 @@ export class ControlCollection {
             if (first.isDisposed) return [] as ComponentBase[];
             return [this._insertOne(undefined, first)];
         }
-        const args = Array.from(arguments) as any[];
-        if (typeof args[0] === 'number' && args.length > 1) {
-            const index = args[0] as number;
-            const children = ([] as ComponentBase[]).concat(...args.slice(1));
-            return this.insert(index, ...children);
+        if (typeof first === 'number' && count > 1) {
+            const index = first as number;
+            const children = spreadOnce(spreadOnce(arguments, 1), 0);
+            return this.insert(index, children as any);
         } else {
-            const children = ([] as ComponentBase[]).concat(...args);
-            return this.insert(undefined, ...children);
+            const children = spreadOnce(spreadOnce(arguments, 0), 0);
+            return this.insert(undefined, children as any);
         }
     }
     insert(index?: number, ...controls: ComponentBase[]): ComponentBase[] {
-        const flat: ComponentBase[] = ([] as any[]).concat(...controls as any);
+        const flat: ComponentBase[] = spreadOnce(controls, 0);
         let previous: ComponentBase | undefined;
         return flat.filter(x => x != undefined && !x.isDisposed).map(control => {
             const added = this._insertOne(index, control, previous);
@@ -251,6 +250,19 @@ export class ControlCollection {
         const before = index >= rest.length ? null : rest[index];
         this.move(control, before);
     }
+}
+
+function spreadOnce(items: ArrayLike<any>, from: number): any[] {
+    const out: any[] = [];
+    for (let i = from; i < items.length; i++) {
+        const item = items[i];
+        if (Array.isArray(item)) {
+            for (let k = 0; k < item.length; k++) out.push(item[k]);
+        } else {
+            out.push(item);
+        }
+    }
+    return out;
 }
 
 /** Owner için DOM'a eklenebilir gerçek element'i bulur. */

@@ -2826,9 +2826,7 @@ export function ParseProps(props: any, component: ComponentBase): boolean {
                                 } else if (key.toLowerCase() == "x-display") {
                                         component.bindings.display(props[key]);
                                 } else if (key.toLowerCase() == "x-chunk") {
-                                        const value = typeof props[key] === 'function' ? props[key]() : props[key];
-                                        const chunk = Number(value);
-                                        component.motif.options.chunk = value === true ? true : chunk > 0 ? Math.floor(chunk) : 0;
+                                        component.motif.options.chunk = chunkSetting(props[key]);
                                 } else {
                                         if (collectLifecycleHandlers(component, nkey.toLowerCase(), props[key])) {
                                                 delete props[key];
@@ -2917,10 +2915,17 @@ function warnComponentInTextBinding(component: ComponentBase, value: any): void 
 
 const COMPONENT_OPTION_KEYS = ['hideStrategy', 'disableDisposal', 'chunk'] as const;
 
+function chunkSetting(source: any): number | true {
+        const value = typeof source === 'function' ? source() : source;
+        if (value === true) return true;
+        const chunk = Number(value);
+        return chunk > 0 ? Math.floor(chunk) : 0;
+}
+
 export function applyComponentOptions(source: any, component: ComponentBase): void {
         if (!source || typeof source !== 'object' || !component || component.isDisposed) return;
         for (const key of COMPONENT_OPTION_KEYS) {
-                if (source[key] !== undefined) (component.motif.options as any)[key] = source[key];
+                if (source[key] !== undefined) (component.motif.options as any)[key] = key === 'chunk' ? chunkSetting(source[key]) : source[key];
         }
 }
 
