@@ -3063,7 +3063,11 @@ export function markExternalElement(component: ComponentBase): void {
 function mountedRoot(component: any): any {
         for (let c: any = component; c; c = c.parent) {
                 if (c.isDisposed) return null;
-                if ((c._flags & F_EXTERNAL) !== 0) return (c.element as Node | null)?.isConnected === true ? c : null;
+                if ((c._flags & F_EXTERNAL) !== 0) {
+                        const node = c.element as Node | null;
+                        if (node?.isConnected === true) return c;
+                        return node !== null && c._reattach?.() === true ? c : null;
+                }
                 if ((c._flags & (F_WAIT | F_HIDDEN)) !== 0) return null;
         }
         return null;

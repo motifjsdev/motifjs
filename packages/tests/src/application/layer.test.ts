@@ -224,6 +224,62 @@ describe('app.layer before run', () => {
         await app.dispose();
     });
 
+    test('a layer taken out of the page comes back with its content when something next asks for a place', async () => {
+        document.body.innerHTML = '';
+        const app = Application.CreateBuilder().build();
+        const layer = app.layer;
+        const early = new Toast();
+        layer.controls.add(early);
+        await tick(30);
+        expect(early.mounted).toBe(1);
+        document.body.innerHTML = '';
+        expect((layer.element as Node).isConnected).toBe(false);
+        const toast = new Toast();
+        layer.controls.add(toast);
+        expect((layer.element as Node).isConnected).toBe(true);
+        expect(document.body.lastElementChild).toBe(layer.element);
+        expect((layer.element as HTMLElement).contains(early.element as Node)).toBe(true);
+        await tick(30);
+        expect(toast.mounted).toBe(1);
+        await app.dispose();
+        expect(document.body.children.length).toBe(0);
+    });
+
+    test('run() puts a layer taken out of the page back after the host', async () => {
+        document.body.innerHTML = '';
+        const app = Application.CreateBuilder().build();
+        const layer = app.layer;
+        document.body.innerHTML = '';
+        const host = document.body.appendChild(document.createElement('div'));
+        app.run(host, new Component('main'));
+        expect(document.body.lastElementChild).toBe(layer.element);
+        expect(host.compareDocumentPosition(layer.element as Node) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+        const toast = new Toast();
+        app.layer.controls.add(toast);
+        await tick(30);
+        expect(toast.mounted).toBe(1);
+        await app.dispose();
+    });
+
+    test('once body exists, the next add places the layer and settles what was parked before', async () => {
+        const body = document.body;
+        body.innerHTML = '';
+        document.documentElement.removeChild(body);
+        const app = Application.CreateBuilder().build();
+        const first = new Toast();
+        app.layer.controls.add(first);
+        document.documentElement.appendChild(body);
+        const second = new Toast();
+        app.layer.controls.add(second);
+        expect(document.body.lastElementChild).toBe(app.layer.element);
+        await tick(30);
+        expect(first.mounted).toBe(1);
+        expect(second.mounted).toBe(1);
+        await app.dispose();
+        document.dispatchEvent(new Event('DOMContentLoaded'));
+        expect(document.body.children.length).toBe(0);
+    });
+
     test('without a body the layer waits and joins at DOMContentLoaded, mounting what it holds', async () => {
         const body = document.body;
         document.documentElement.removeChild(body);

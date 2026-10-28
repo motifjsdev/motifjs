@@ -167,9 +167,10 @@ export class Application {
         }, 'Application.run.setupAppShell');
         safeCallSilent(() => {
             const layer = this._layer?.element as HTMLElement | undefined;
-            if (!layer || !layer.parentNode || !target) return;
+            if (!layer || !target) return;
+            if (!layer.isConnected) { this._reattachLayer(); return; }
             if (target.contains(layer)) this._anchorShell(layer);
-            else if ((target.compareDocumentPosition(layer) & Node.DOCUMENT_POSITION_PRECEDING) !== 0) layer.parentNode.appendChild(layer);
+            else if ((target.compareDocumentPosition(layer) & Node.DOCUMENT_POSITION_PRECEDING) !== 0) layer.parentNode?.appendChild(layer);
         }, 'Application.run.placeLayer');
 
         if (!rootInstance) {
@@ -196,6 +197,7 @@ export class Application {
         this._layer = layer;
         (layer as any).application = this;
         (layer as any).provider = this.provider;
+        (layer as any)._reattach = () => this._reattachLayer();
         layer.build();
         this._placeLayer(document);
         /* @DEV-ONLY */ layerCreated(layer);
@@ -243,6 +245,18 @@ export class Application {
         };
         this._layerJoin = () => doc.removeEventListener('DOMContentLoaded', join);
         doc.addEventListener('DOMContentLoaded', join, { once: true });
+    }
+
+    private _reattachLayer(): boolean {
+        const layer = this._layer;
+        const element = layer?.element as HTMLElement | undefined;
+        if (!layer || layer.isDisposed || !element || element.isConnected || !document.body) return false;
+        this._layerJoin?.();
+        this._layerJoin = null;
+        document.body.appendChild(element);
+        this._anchorShell(element);
+        placed(layer);
+        return true;
     }
 
     private _anchorShell(layer: HTMLElement): void {
