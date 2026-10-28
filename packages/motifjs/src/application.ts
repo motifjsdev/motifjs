@@ -167,7 +167,9 @@ export class Application {
         }, 'Application.run.setupAppShell');
         safeCallSilent(() => {
             const layer = this._layer?.element as HTMLElement | undefined;
-            if (layer && layer.parentNode && target && (target.compareDocumentPosition(layer) & Node.DOCUMENT_POSITION_PRECEDING) !== 0) layer.parentNode.appendChild(layer);
+            if (!layer || !layer.parentNode || !target) return;
+            if (target.contains(layer)) this._anchorShell(layer);
+            else if ((target.compareDocumentPosition(layer) & Node.DOCUMENT_POSITION_PRECEDING) !== 0) layer.parentNode.appendChild(layer);
         }, 'Application.run.placeLayer');
 
         if (!rootInstance) {
@@ -229,16 +231,26 @@ export class Application {
         const element = this._layer!.element as HTMLElement;
         if (doc.body) {
             doc.body.appendChild(element);
+            this._anchorShell(element);
             return;
         }
         const join = () => {
             this._layerJoin = null;
             if (!this._layer || this._layer.isDisposed || !doc.body) return;
             doc.body.appendChild(element);
+            this._anchorShell(element);
             placed(this._layer);
         };
         this._layerJoin = () => doc.removeEventListener('DOMContentLoaded', join);
         doc.addEventListener('DOMContentLoaded', join, { once: true });
+    }
+
+    private _anchorShell(layer: HTMLElement): void {
+        const shell = this.appShell as any;
+        const host = shell?.element as HTMLElement | undefined;
+        if (!shell || shell.isDisposed || !host || !host.contains(layer)) return;
+        if (host.lastElementChild !== layer) host.appendChild(layer);
+        if (!shell._mountAnchor) shell._mountAnchor = layer;
     }
 
     public _startServices(): void {

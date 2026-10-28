@@ -198,6 +198,32 @@ describe('app.layer before run', () => {
         expect(toast.isDisposed).toBe(true);
     });
 
+    test('with body as the run() host the layer stays last: the root and later inserts go before it', async () => {
+        document.body.innerHTML = '';
+        const app = Application.CreateBuilder().build();
+        const layer = app.layer;
+        app.run(document.body, new Component('main'));
+        app.insert(new Component('aside'));
+        app.getAppShell().controls.add(new Component('footer'));
+        await tick(30);
+        expect([...document.body.children].map(c => c.tagName)).toEqual(['MAIN', 'ASIDE', 'FOOTER', 'DIV']);
+        expect(document.body.lastElementChild).toBe(layer.element);
+        await app.dispose();
+        expect(document.body.children.length).toBe(0);
+    });
+
+    test('a layer first read after run() on body takes the same place for what comes next', async () => {
+        document.body.innerHTML = '';
+        const app = Application.CreateBuilder().build();
+        app.run(document.body, new Component('main'));
+        const layer = app.layer;
+        app.insert(new Component('aside'));
+        await tick(30);
+        expect([...document.body.children].map(c => c.tagName)).toEqual(['MAIN', 'ASIDE', 'DIV']);
+        expect(document.body.lastElementChild).toBe(layer.element);
+        await app.dispose();
+    });
+
     test('without a body the layer waits and joins at DOMContentLoaded, mounting what it holds', async () => {
         const body = document.body;
         document.documentElement.removeChild(body);
