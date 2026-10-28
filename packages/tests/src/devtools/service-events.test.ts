@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 import { Application, Component, RouteItem } from '@motifx/core';
+import { waitFor } from '../helpers/test-utils';
 
 const tick = (ms = 40) => new Promise(r => setTimeout(r, ms));
 
@@ -110,7 +111,7 @@ describe('devtools service events', () => {
     test('leaving a page disposes the services of its navigation scope', async () => {
         const first = scopeId('navigation', 'navigation');
         await app.router.navigate('/b');
-        await tick();
+        await waitFor(() => of('service:disposed', 'Svc').length > 0, 3000, 5);
         const disposed = of('service:disposed', 'Svc');
         expect(disposed.map(e => e.payload.scope)).toEqual([first]);
         const created = of('service:created', 'Svc');

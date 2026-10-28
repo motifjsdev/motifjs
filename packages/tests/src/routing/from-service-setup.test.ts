@@ -1,4 +1,5 @@
 import { Application, Component, FromService, RouteItem } from '@motifx/core';
+import { waitFor } from '../helpers/test-utils';
 
 const tick = (ms = 40) => new Promise(r => setTimeout(r, ms));
 
@@ -81,7 +82,7 @@ describe('FromService while a page is set up', () => {
         await app.router.navigate('/b');
         await tick();
         await app.router.navigate('/a');
-        await tick();
+        await waitFor(() => Svc.all.filter(s => !s.disposed).length === 1, 3000, 5);
         const live = Svc.all.filter(s => !s.disposed).map(s => s.id);
         expect(live).toEqual([ClassPage.last!.own.id]);
     });
