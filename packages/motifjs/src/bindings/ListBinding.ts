@@ -5,12 +5,32 @@ import { effect, untracked } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
 import { getRaw } from "../store/common";
 import { motifError, reportWarning } from "../common/diagnostics";
-import { isListAdopted, noteListAdopted } from "../component/componentBase";
+import { isListAdopted, noteListAdopted, findAppendableComponent } from "../component/componentBase";
+import { sliceRemaining, sliceDefer } from "../component/slices";
+import { dom } from "../core/dom";
 import { IBaseBinding } from "./IBaseBinding";
 
 
 export interface ListBindingOptions {
     reuse?: boolean;
+}
+
+type SliceSlot = ComponentBase & { item: any; raw: object | null; occurrence: number };
+
+let SliceRow: (new (list: ListBinding, item: any, raw: object | null, occurrence: number) => SliceSlot) | null = null;
+
+function sliceSlot(list: ListBinding, item: any, raw: object | null, occurrence: number): SliceSlot {
+    if (SliceRow === null) {
+        SliceRow = class extends ComponentBase<Comment> {
+            constructor(private readonly list: ListBinding, readonly item: any, readonly raw: object | null, readonly occurrence: number) {
+                super(dom.createComment('h') as Comment, {} as any);
+            }
+            _materialize(): void {
+                this.list._materialize(this);
+            }
+        };
+    }
+    return new SliceRow(list, item, raw, occurrence);
 }
 
 export class ListBinding implements IBaseBinding {
@@ -87,6 +107,36 @@ export class ListBinding implements IBaseBinding {
         return comp.element !== null || comp.parent !== null;
     }
 
+    private _host(): ComponentBase | null {
+        return findAppendableComponent(this.container) ?? null;
+    }
+
+    private _make(item: any, idx: number, raw: object | null, occurrence: number, host: ComponentBase | null, budget: { left: number }): ComponentBase {
+        if (host === null || budget.left > 0) {
+            budget.left--;
+            return this._render(item, idx);
+        }
+        const slot = sliceSlot(this, item, raw, occurrence);
+        try { (slot as any)._base.itemRef = item; } catch { }
+        sliceDefer(slot, host);
+        return slot;
+    }
+
+    _materialize(slot: SliceSlot): void {
+        if (slot.isDisposed || this.container.isDisposed || slot.parent !== this.container) return;
+        const at = this.container.controls.items.indexOf(slot);
+        const index = this._rendered.indexOf(slot);
+        const row = this._render(slot.item, index >= 0 ? index : Math.max(0, at));
+        if (index >= 0) this._rendered[index] = row;
+        if (slot.raw !== null) {
+            const list = this._identityMap.get(slot.raw);
+            const k = list ? list.indexOf(slot) : -1;
+            if (list && k >= 0) list[k] = row;
+        }
+        this.container.controls.add(at >= 0 ? at : this.container.controls.items.length, row);
+        this.container.controls.remove(slot);
+    }
+
     private _render(item: any, idx: number): ComponentBase {
         return untracked(() => {
             const rendered = this.renderFn(item, idx);
@@ -119,6 +169,8 @@ export class ListBinding implements IBaseBinding {
 
     private _setupBinding() {
         const update = () => {
+            const host = this._host();
+            const budget = { left: host === null ? Infinity : sliceRemaining(host) };
             const source = this._toArray(this.itemsFn());
             const rawSource = getRaw(source);
             const count = source.length;
@@ -200,7 +252,7 @@ export class ListBinding implements IBaseBinding {
                     if (existing && !existing.isDisposed) {
                         component = existing;
                     } else {
-                        component = this._render(item, idx);
+                        component = this._make(item, idx, raw, occurrence, host, budget);
                         list[occurrence] = component;
                     }
                 }
@@ -216,7 +268,7 @@ export class ListBinding implements IBaseBinding {
                     if (reused) {
                         component = reused;
                     } else {
-                        component = this._render(item, idx);
+                        component = this._make(item, idx, null, 0, host, budget);
                     }
                 }
                 const userKey = this._getComponentKey(component);

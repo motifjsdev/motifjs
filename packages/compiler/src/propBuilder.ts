@@ -301,7 +301,7 @@ export const UNSUPPORTED_DIRECTIVES = new Set(['reload', 'bind', 'effect', 'focu
 const directiveNames = new Set<string>(SUPPORTED_DIRECTIVES);
 
 export function supportedDirectivesText(): string {
-    return [...SUPPORTED_DIRECTIVES, 'style', 'ref', 'key'].map(d => 'x-' + d).join(', ') + ' and the lifecycle hooks (x-mounted, x-built, x-disposed, …)';
+    return [...SUPPORTED_DIRECTIVES, 'chunk', 'style', 'ref', 'key'].map(d => 'x-' + d).join(', ') + ' and the lifecycle hooks (x-mounted, x-built, x-disposed, …)';
 }
 
 const EQUALITY = new Set(['===', '!==', '==', '!=']);

@@ -91,6 +91,11 @@ function isContextHandler(name: string) {
     return name.toLowerCase().startsWith("on-") || name.toLowerCase().startsWith("on:") || name.toLowerCase().startsWith("on_");
 }
 
+function cannotBeNumber(value: t.Node): boolean {
+    return t.isStringLiteral(value) || t.isBooleanLiteral(value) || t.isNullLiteral(value) || t.isObjectExpression(value) || t.isArrayExpression(value)
+        || t.isTemplateLiteral(value) || t.isArrowFunctionExpression(value) || t.isFunctionExpression(value) || t.isJSXElement(value) || t.isJSXFragment(value);
+}
+
 function isDirective(name: string) {
     return name.toLowerCase().startsWith("x-") || name.toLowerCase().startsWith("x:");
 }
@@ -290,6 +295,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
     const eventProps: t.ExpressionStatement[] = [];
     const directives: t.ExpressionStatement[] = [];
     const preDirectives: t.ExpressionStatement[] = [];
+    const setupProps: t.ObjectProperty[] = [];
     const componentEvents: t.ObjectProperty[] = [];
     let htmlAttrlist: t.ObjectProperty[] = [];
     const thisStatement: t.VariableDeclaration[] = [];
@@ -518,9 +524,19 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                     if (UNSUPPORTED_DIRECTIVES.has(directiveName)) {
                         fail('MJX006', `Directive "${name}" is not supported. Supported: ${supportedDirectivesText()}.`, prop);
                     }
+                    if (directiveName === 'chunk' && value == null) {
+                        fail('MJX012', `Directive "${name}" expects a number: x-chunk={200}.`, prop);
+                    }
                     if (value != null) {
                         var clearedName = name.toLowerCase().replace("x:", "").replace("x-", "").replace("on:", "");
-                        if ((SUPPORTED_DIRECTIVES as readonly string[]).includes(clearedName)) {
+                        if (clearedName === 'chunk') {
+                            if (t.isExpression(value) && !cannotBeNumber(value)) {
+                                setupProps.push(t.objectProperty(t.stringLiteral('x-chunk'), value));
+                                explainProp(prop, 'directive', 'directive.chunk', value, 'static', DEPS.none, 'the element builds this many children per frame after the first ones');
+                            } else {
+                                fail('MJX012', `Directive "${name}" expects a number: x-chunk={200}.`, prop);
+                            }
+                        } else if ((SUPPORTED_DIRECTIVES as readonly string[]).includes(clearedName)) {
                             if (clearedName !== 'wait' && clearedName !== 'display') {
                                 var directive = makeDirectives(prop, name, value, path, state);
                                 if (directive != null) {
@@ -737,7 +753,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
 
     const htmlProps: t.ExpressionStatement[] = mergeHtmlAttributes(htmlAttrlist);
 
-    return { htmlProps, eventProps, objectExpression, objectProps, componentEvents, directives, preDirectives, thisStatement, spreadProps, userInit: userInit as t.Expression | null }
+    return { htmlProps, eventProps, objectExpression, objectProps, componentEvents, setupProps, directives, preDirectives, thisStatement, spreadProps, userInit: userInit as t.Expression | null }
 };
 
 
@@ -1560,7 +1576,7 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
         if (tagName === 'svg') isSvgHere = true;
         else if (svgTags.includes(tagName) && (!htmlTags.includes(tagName as any) || isInsideSvgTree(path))) isSvgHere = true;
     }
-    const { htmlProps, eventProps, objectExpression, componentEvents, directives, preDirectives, thisStatement, spreadProps, userInit } = getProps(props, path, state)
+    const { htmlProps, eventProps, objectExpression, componentEvents, setupProps, directives, preDirectives, thisStatement, spreadProps, userInit } = getProps(props, path, state)
     const fileName = String(state.get('filename') ?? '');
     const isComponentTag = !t.isStringLiteral(tag);
 
@@ -1773,6 +1789,9 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
         if (componentEvents.length > 0) {
             bodyExpression.properties.push(...componentEvents)
         }
+        if (setupProps.length > 0) {
+            bodyExpression.properties.push(...setupProps)
+        }
         if (objectExpression.length > 0) {
             // var expr = t.objectProperty(t.identifier('props'), t.objectExpression(objectExpression));
             bodyExpression.properties.push(...objectExpression)
@@ -1814,6 +1833,9 @@ export function ParseComponent(path: NodePath<t.JSXElement>, state: State): t.Ca
 
         if (componentEvents.length > 0) {
             takedown.properties.push(...componentEvents)
+        }
+        if (setupProps.length > 0) {
+            takedown.properties.push(...setupProps)
         }
         var exp = t.objectProperty(id('runover'), takedown);
         bodyExpression.properties.push(exp);

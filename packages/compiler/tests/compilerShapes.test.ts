@@ -285,6 +285,30 @@ describe('MJX017: reaktif getter reaktif değer yazıyor', () => {
     });
 });
 
+describe('x-chunk: kabın çocukları dilim dilim kurulur', () => {
+    test('x-chunk çalışma zamanına prop olarak geçer, MJX007 vermez', () => {
+        const code = `class A { view(){ return <tbody x-chunk={200}>{this.state.rows.map((r) => <tr key={r.id}><td>{r.name}</td></tr>)}</tbody>; } }`;
+        expect(compile(code)).toContain('"x-chunk": 200');
+        expect(codesOf(code)).not.toContain('MJX007');
+        expect(compile(code)).not.toContain('onchunk');
+    });
+    test('bileşen etiketindeki x-chunk da prop olarak geçer; değer çalışma zamanında okunur', () => {
+        const code = `class A { view(){ return <NoteList x-chunk={this.rowsPerFrame} folder="notes"/>; } }`;
+        const out = compile(code);
+        expect(out).toContain('"x-chunk": this.rowsPerFrame');
+        expect(out.indexOf('runover')).toBeGreaterThan(-1);
+        expect(out.indexOf('"x-chunk"')).toBeGreaterThan(out.indexOf('runover'));
+        expect(codesOf(code)).not.toContain('MJX007');
+    });
+    test('değersiz ya da sayı olamayacak x-chunk derlemeyi MJX012 ile durdurur', () => {
+        const rows = `{this.state.rows.map((r) => <tr key={r.id}><td>{r.name}</td></tr>)}`;
+        expect(() => compile(`class A { view(){ return <tbody x-chunk>${rows}</tbody>; } }`)).toThrow(/MJX012/);
+        expect(() => compile(`class A { view(){ return <tbody x-chunk="200">${rows}</tbody>; } }`)).toThrow(/MJX012/);
+        expect(() => compile(`class A { view(){ return <tbody x-chunk={{ rows: 200 }}>${rows}</tbody>; } }`)).toThrow(/MJX012/);
+        expect(() => compile(`class A { view(){ return <tbody x-chunk={() => 200}>${rows}</tbody>; } }`)).toThrow(/MJX012/);
+    });
+});
+
 describe('MJX018: reaktif getter listeyi yerinde değiştiriyor', () => {
     test('sort, reverse ve push uyarır', () => {
         const d = diags(`class A { view(){ return <div>{() => this.state.items.sort((a, b) => a.n - b.n).length}</div>; } }`);

@@ -1,4 +1,5 @@
 import { ControlCollection } from "../core/ControlCollection";
+import { sliceWanted, sliceDefer } from "./slices";
 import { dom, windowOf } from "../core/dom";
 import { Disposable } from "../disposable/Disposable";
 import { IClass } from "../common/IAttribute";
@@ -643,6 +644,14 @@ const ComponentHelper = {
         },
         internalBuild(this: ComponentBase, c: ComponentBase) {
                 if (this.isDisposed || c?.isDisposed) { return; }
+                if (!c.isWait) {
+                        const sliceHost = findAppendableComponent(this);
+                        if (sliceHost && sliceWanted(sliceHost, c)) {
+                                sliceDefer(c, sliceHost);
+                                if (this.isBuilt) placeTrace(this, c);
+                                return;
+                        }
+                }
                 ComponentHelper.callConfigured(c);
                 if (c.isDisposed) return;
                 activatePreBindings(c);
@@ -1880,8 +1889,10 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
 
                         const kids = childrenOf(this);
                         const hiddenRoot = isFragment && inHiddenFragment(this);
+                        const sliceHost = findAppendableComponent(this);
                         for (const element of kids.length ? kids.slice() : kids) {
                                 var target = isFragment ? this.motif.options.cache : this.element;
+                                if (!element.isWait && sliceHost && sliceWanted(sliceHost, element)) sliceDefer(element, sliceHost);
                                 if (!element.isWait) {
                                         element.parent = this;
                                         element.build(false);
@@ -2812,6 +2823,9 @@ export function ParseProps(props: any, component: ComponentBase): boolean {
 
                                 } else if (key.toLowerCase() == "x-display") {
                                         component.bindings.display(props[key]);
+                                } else if (key.toLowerCase() == "x-chunk") {
+                                        const chunk = Number(typeof props[key] === 'function' ? props[key]() : props[key]);
+                                        component.motif.options.chunk = chunk > 0 ? Math.floor(chunk) : 0;
                                 } else {
                                         if (collectLifecycleHandlers(component, nkey.toLowerCase(), props[key])) {
                                                 delete props[key];
@@ -2898,7 +2912,7 @@ function warnComponentInTextBinding(component: ComponentBase, value: any): void 
         reportWarning('MJX204', [], { value: Array.isArray(value) ? `ComponentBase[${value.length}]` : 'ComponentBase' });
 }
 
-const COMPONENT_OPTION_KEYS = ['hideStrategy', 'disableDisposal'] as const;
+const COMPONENT_OPTION_KEYS = ['hideStrategy', 'disableDisposal', 'chunk'] as const;
 
 export function applyComponentOptions(source: any, component: ComponentBase): void {
         if (!source || typeof source !== 'object' || !component || component.isDisposed) return;
@@ -3020,7 +3034,7 @@ export function applyFallthroughProps(props: any, component: ComponentBase): voi
 }
 
 
-function findAppendableComponent(component: ComponentBase): ComponentBase | null | undefined {
+export function findAppendableComponent(component: ComponentBase): ComponentBase | null | undefined {
 
         return safeCall<ComponentBase | null | undefined>(() => {
                 if (!component || component.isDisposed) return null;
