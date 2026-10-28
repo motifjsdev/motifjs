@@ -202,6 +202,23 @@ describe('scanning a reactive array', () => {
         expect(indexKeys(state.list)).toEqual([]);
     });
 
+    test('includes and indexOf with a start index follow the copy they found, not an earlier one', async () => {
+        const state = reactive({ tags: ['a', 'b', 'a'] });
+        const seen: boolean[] = [];
+        effect(() => { seen.push(state.tags.includes('a', 1)); });
+        await flush();
+        state.tags[2] = 'c';
+        await flush();
+        expect(seen).toEqual([true, false]);
+        const list = reactive({ tags: ['a', 'b', 'a'] });
+        const idx: number[] = [];
+        effect(() => { idx.push(list.tags.indexOf('a', 1)); });
+        await flush();
+        list.tags[2] = 'c';
+        await flush();
+        expect(idx).toEqual([2, -1]);
+    });
+
     test('includes follows an index overwrite', async () => {
         const state = reactive({ tags: ['a', 'b'] });
         const seen: boolean[] = [];

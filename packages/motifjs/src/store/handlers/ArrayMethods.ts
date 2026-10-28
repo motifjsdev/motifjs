@@ -98,7 +98,7 @@ export class ArrayMethods {
                     const outcome = isLookupMiss(direct) ? source[name](...needles.map(needle => getRaw(needle))) : direct;
                     let at = -1;
                     if (name === 'indexOf') at = outcome;
-                    else if (name === 'includes' && outcome === true) { at = source.indexOf(needles[0]); if (at < 0) at = source.indexOf(getRaw(needles[0])); }
+                    else if (name === 'includes' && outcome === true) { at = source.indexOf(needles[0], needles[1]); if (at < 0) at = source.indexOf(getRaw(needles[0]), needles[1]); }
                     if (at >= 0) owner.engine.trackRange(source, at);
                     else owner.engine.track(source, ITERATE_KEY);
                     return outcome;
