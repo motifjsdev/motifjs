@@ -152,7 +152,7 @@ export type __attr = {
     initializeComponent?: (sender: ComponentBase) => void;
     oninitializeComponent?: (sender: ComponentBase, e: EventArgs) => void;
     "x-wait"?: (sender: ComponentBase, e: EventArgs) => boolean;
-    "x-chunk"?: number;
+    "x-chunk"?: number | boolean;
     "x-building"?: (sender: ComponentBase, e: EventArgs) => void;
     "x-built"?: (sender: ComponentBase, e: EventArgs) => void;
     "x-config"?: (sender: ComponentBase, e: EventArgs) => void;

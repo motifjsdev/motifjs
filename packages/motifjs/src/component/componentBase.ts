@@ -2826,8 +2826,9 @@ export function ParseProps(props: any, component: ComponentBase): boolean {
                                 } else if (key.toLowerCase() == "x-display") {
                                         component.bindings.display(props[key]);
                                 } else if (key.toLowerCase() == "x-chunk") {
-                                        const chunk = Number(typeof props[key] === 'function' ? props[key]() : props[key]);
-                                        component.motif.options.chunk = chunk > 0 ? Math.floor(chunk) : 0;
+                                        const value = typeof props[key] === 'function' ? props[key]() : props[key];
+                                        const chunk = Number(value);
+                                        component.motif.options.chunk = value === true ? true : chunk > 0 ? Math.floor(chunk) : 0;
                                 } else {
                                         if (collectLifecycleHandlers(component, nkey.toLowerCase(), props[key])) {
                                                 delete props[key];

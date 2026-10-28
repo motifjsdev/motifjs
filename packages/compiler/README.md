@@ -118,7 +118,7 @@ Compiled code calls into the `@motifx/core` runtime:
 
 - the `motifComponent`, `motifFragment`, `FNComponent`, `motifCompiled`, `asyncTracking` and `Component` exports;
 - component members: `bindings.*` (each binding directive `x-wait`, `x-display`, `x-model`, `x-text`, `x-html`, `x-value` and `x-watch` calls the method of the same name), `class.add`, `attr.add`, `style`, `motif.on`, `controls.add`, `setText`, and `navigate` on the frame passed to conditional branches;
-- property keys: `runover`, `initializeComponent`, `preconfig`, `ref`, `childs`, `__childExpr`, `__isSvgElement`, `onRefCreated`, `x-chunk` (the chunk directive, passed as a number), the lifecycle hook props that lifecycle directives become (`x-mounted` becomes `onmounted`), and the static class fields `elementTag` and `elementNamespace`.
+- property keys: `runover`, `initializeComponent`, `preconfig`, `ref`, `childs`, `__childExpr`, `__isSvgElement`, `onRefCreated`, `x-chunk` (the chunk directive, passed as a number, or `true` when written without a value), the lifecycle hook props that lifecycle directives become (`x-mounted` becomes `onmounted`), and the static class fields `elementTag` and `elementNamespace`.
 
 This set is the compiler contract. It changes only in a major version, so `@motifx/compiler` 1.x works with any `@motifx/core` 1.x. Every compiled module calls `motifCompiled(<contract>)` once; in development the runtime warns with `MJX121` when the numbers differ, for example when a package that ships compiled JSX was built for another major version. The call is marked pure, so production builds drop it.
 

@@ -300,9 +300,15 @@ describe('x-chunk: kabın çocukları dilim dilim kurulur', () => {
         expect(out.indexOf('"x-chunk"')).toBeGreaterThan(out.indexOf('runover'));
         expect(codesOf(code)).not.toContain('MJX007');
     });
-    test('değersiz ya da sayı olamayacak x-chunk derlemeyi MJX012 ile durdurur', () => {
+    test('değersiz x-chunk otomatik dilime iner; true ve false da geçer', () => {
         const rows = `{this.state.rows.map((r) => <tr key={r.id}><td>{r.name}</td></tr>)}`;
-        expect(() => compile(`class A { view(){ return <tbody x-chunk>${rows}</tbody>; } }`)).toThrow(/MJX012/);
+        expect(compile(`class A { view(){ return <tbody x-chunk>${rows}</tbody>; } }`)).toContain('"x-chunk": true');
+        expect(compile(`class A { view(){ return <NoteList x-chunk folder="notes"/>; } }`)).toContain('"x-chunk": true');
+        expect(compile(`class A { view(){ return <tbody x-chunk={true}>${rows}</tbody>; } }`)).toContain('"x-chunk": true');
+        expect(compile(`class A { view(){ return <tbody x-chunk={false}>${rows}</tbody>; } }`)).toContain('"x-chunk": false');
+    });
+    test('sayı olamayacak x-chunk derlemeyi MJX012 ile durdurur', () => {
+        const rows = `{this.state.rows.map((r) => <tr key={r.id}><td>{r.name}</td></tr>)}`;
         expect(() => compile(`class A { view(){ return <tbody x-chunk="200">${rows}</tbody>; } }`)).toThrow(/MJX012/);
         expect(() => compile(`class A { view(){ return <tbody x-chunk={{ rows: 200 }}>${rows}</tbody>; } }`)).toThrow(/MJX012/);
         expect(() => compile(`class A { view(){ return <tbody x-chunk={() => 200}>${rows}</tbody>; } }`)).toThrow(/MJX012/);

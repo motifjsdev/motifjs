@@ -525,16 +525,18 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                         fail('MJX006', `Directive "${name}" is not supported. Supported: ${supportedDirectivesText()}.`, prop);
                     }
                     if (directiveName === 'chunk' && value == null) {
-                        fail('MJX012', `Directive "${name}" expects a number: x-chunk={200}.`, prop);
+                        const automatic = t.booleanLiteral(true);
+                        setupProps.push(t.objectProperty(t.stringLiteral('x-chunk'), automatic));
+                        explainProp(prop, 'directive', 'directive.chunk', automatic, 'static', DEPS.none, 'the element builds its children over frames, as many as each frame allows');
                     }
                     if (value != null) {
                         var clearedName = name.toLowerCase().replace("x:", "").replace("x-", "").replace("on:", "");
                         if (clearedName === 'chunk') {
-                            if (t.isExpression(value) && !cannotBeNumber(value)) {
+                            if (t.isExpression(value) && (t.isBooleanLiteral(value) || !cannotBeNumber(value))) {
                                 setupProps.push(t.objectProperty(t.stringLiteral('x-chunk'), value));
-                                explainProp(prop, 'directive', 'directive.chunk', value, 'static', DEPS.none, 'the element builds this many children per frame after the first ones');
+                                explainProp(prop, 'directive', 'directive.chunk', value, 'static', DEPS.none, 'the element builds this many children at once, then at least this many per frame');
                             } else {
-                                fail('MJX012', `Directive "${name}" expects a number: x-chunk={200}.`, prop);
+                                fail('MJX012', `Directive "${name}" expects a number or no value: x-chunk or x-chunk={200}.`, prop);
                             }
                         } else if ((SUPPORTED_DIRECTIVES as readonly string[]).includes(clearedName)) {
                             if (clearedName !== 'wait' && clearedName !== 'display') {

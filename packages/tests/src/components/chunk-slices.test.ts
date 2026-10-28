@@ -173,7 +173,7 @@ describe('x-chunk: children of an element are built in slices', () => {
         expect(texts(ul)).toEqual(expected);
     });
 
-    test('every chunked parent gets its own slice in each frame', async () => {
+    test('every chunked parent gets at least its own slice in each frame', async () => {
         const a = new Component('ul', { 'x-chunk': 2 });
         const b = new Component('ul', { 'x-chunk': 3 });
         const root = new Component('div');
@@ -185,10 +185,36 @@ describe('x-chunk: children of an element are built in slices', () => {
         b.controls.add(...Array.from({ length: 9 }, (_, i) => new Row(i)));
         expect([liCount(ae), liCount(be)]).toEqual([2, 3]);
         await until(() => liCount(ae) > 2 || liCount(be) > 3);
-        expect([liCount(ae), liCount(be)]).toEqual([4, 6]);
+        expect(liCount(ae)).toBeGreaterThanOrEqual(4);
+        expect(liCount(be)).toBeGreaterThanOrEqual(6);
         await until(() => liCount(ae) === 8 && liCount(be) === 9);
         expect(texts(ae)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7']);
         expect(texts(be)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8']);
+    });
+
+    test('x-chunk without a number builds the first 100 children at once and the rest frame by frame, in order', async () => {
+        const list = new Component('ul', { 'x-chunk': true });
+        app.run(host, list);
+        const ul = list.element as HTMLUListElement;
+        const rows = Array.from({ length: 250 }, (_, i) => new Row(i));
+        list.controls.add(...rows);
+        expect(liCount(ul)).toBe(100);
+        expect(rows[100].isWait).toBe(true);
+        await until(() => liCount(ul) === 250);
+        expect(texts(ul)).toEqual(rows.map((_, i) => String(i)));
+        await until(() => rows.every(r => r.mounted === 1));
+    });
+
+    test('a frame builds more than the given number when it has time left', async () => {
+        const list = new Component('ul', { 'x-chunk': 2 });
+        app.run(host, list);
+        const ul = list.element as HTMLUListElement;
+        list.controls.add(...Array.from({ length: 40 }, (_, i) => new Row(i)));
+        expect(liCount(ul)).toBe(2);
+        await until(() => liCount(ul) > 2);
+        expect(liCount(ul)).toBeGreaterThan(4);
+        await until(() => liCount(ul) === 40);
+        expect(texts(ul)).toEqual(Array.from({ length: 40 }, (_, i) => String(i)));
     });
 
     test('x-chunk through props sets the option and zero switches it off', async () => {
@@ -196,6 +222,10 @@ describe('x-chunk: children of an element are built in slices', () => {
         expect(chunked.motif.options.chunk).toBe(4);
         const viaOptions = new Component('ul', { options: { chunk: 3 } } as any);
         expect(viaOptions.motif.options.chunk).toBe(3);
+        const automatic = new Component('ul', { 'x-chunk': true });
+        expect(automatic.motif.options.chunk).toBe(true);
+        const automaticOptions = new Component('ul', { options: { chunk: true } } as any);
+        expect(automaticOptions.motif.options.chunk).toBe(true);
         const plain = new Component('ul', { 'x-chunk': 0 });
         plain.controls.add(new Row(0), new Row(1), new Row(2));
         app.run(host, plain);

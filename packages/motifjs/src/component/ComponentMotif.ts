@@ -6,7 +6,7 @@ import type { ComponentBaseOptions, EventArgs, HtmlElementEvents } from "./types
 export class ComponentMotif<TSelf extends ComponentBase = ComponentBase, TProps extends object = any> {
 
         private readonly _component: TSelf;
-        public options: ComponentBaseOptions<TProps> & { hideStrategy?: 'placeholder' | 'detach' | 'auto', chunk?: number, __fromList?: boolean, __key?: any, placeholder?: Comment };
+        public options: ComponentBaseOptions<TProps> & { hideStrategy?: 'placeholder' | 'detach' | 'auto', chunk?: number | boolean, __fromList?: boolean, __key?: any, placeholder?: Comment };
 
         constructor(component: TSelf, options: ComponentMotif<TSelf, TProps>['options']) {
                 this._component = component;

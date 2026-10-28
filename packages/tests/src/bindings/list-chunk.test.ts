@@ -167,6 +167,30 @@ describe('list binding under x-chunk: rows are created lazily, a chunk per frame
         expect(texts(list.ul)).toEqual(['n0', 'n1', 'n2', 'n3', 'n4', 'n5']);
     });
 
+    test('without a number the first 100 rows render with the list and the rest follow', async () => {
+        const state = reactive({ items: notes(260) });
+        const ul = new Component('ul', { 'x-chunk': true });
+        let renders = 0;
+        ul.bindings.list(() => state.items, (n: Note, i: number) => { renders++; return new Row(n, i); });
+        app.run(host, ul);
+        const el = ul.element as HTMLUListElement;
+        expect(renders).toBe(100);
+        expect(el.querySelectorAll('li').length).toBe(100);
+        await until(() => el.querySelectorAll('li').length === 260);
+        expect(renders).toBe(260);
+        expect(texts(el)).toEqual(state.items.map(n => n.title));
+    });
+
+    test('rows created in a frame are built in that frame, none is put off again', async () => {
+        const state = reactive({ items: notes(40) });
+        const list = mountList(2, state);
+        await until(() => list.renders() > 2);
+        expect(list.ul.querySelectorAll('li').length).toBe(list.renders());
+        await until(() => list.renders() === 40);
+        expect(list.ul.querySelectorAll('li').length).toBe(40);
+        expect(texts(list.ul)).toEqual(state.items.map(n => n.title));
+    });
+
     test('disposing the list while rows are pending renders nothing more', async () => {
         const state = reactive({ items: notes(6) });
         const list = mountList(2, state);
