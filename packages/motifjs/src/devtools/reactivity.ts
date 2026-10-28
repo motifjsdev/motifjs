@@ -28,6 +28,13 @@ export function effectOwner(owner: object | null, kind: string): void {
     nextOwner = { owner, kind };
 }
 
+export function effectOwnerKind(e: object): { key: string; owned: boolean } {
+    if (devtools() === undefined) return { key: '', owned: false };
+    const info = effectInfoOf(e);
+    const owner = info.owner;
+    return owner === null ? { key: info.kind, owned: false } : { key: `${typeOf(owner)} (${info.kind})`, owned: true };
+}
+
 export function effectOwnerLabel(e: object): string {
     if (devtools() === undefined) return '';
     const info = effectInfoOf(e);

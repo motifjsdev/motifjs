@@ -1,7 +1,10 @@
 import { ReactiveEngine } from "../ReactiveEngine";
 import { ITERATE_KEY, arrayMutation, getRaw, isObject, pauseTracking, resetTracking } from "../common";
+import { scanObserved } from "../scanMonitor";
 
 type PatchKind = 'lookup' | 'scan' | 'fold' | 'read' | 'iterate' | 'order' | 'join' | 'structural';
+
+const SCAN_LOOKUPS = new Set<string | symbol>(['find', 'findIndex', 'findLast', 'findLastIndex', 'some', 'every']);
 
 const PATCHED_ARRAY_METHODS: ReadonlyArray<readonly [string | symbol, PatchKind]> = [
     ['includes', 'lookup'],
@@ -93,6 +96,7 @@ export class ArrayMethods {
                 return function (this: unknown[], callback: Function, thisArg?: unknown) {
                     const source = getRaw(this) as any;
                     owner.engine.track(source, ITERATE_KEY);
+                    /* @DEV-ONLY */ if (SCAN_LOOKUPS.has(name)) scanObserved(source, name as string);
                     const proxy = this;
                     const result = source[name]((value: unknown, index: number) => callback.call(thisArg, owner.wrap(value), index, proxy));
                     if (name === 'filter') return (result as unknown[]).map(value => owner.wrap(value));

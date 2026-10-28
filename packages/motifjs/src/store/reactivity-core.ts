@@ -4,6 +4,7 @@ import { reportError, reportWarning } from "../common/diagnostics";
 import { getRaw, followTracking } from "./common";
 import { pushTight } from "../common/pushTight";
 import { effectCreated, effectStopped, effectOwnerLabel, runStarting, runFinished, triggered, flushStarting, flushFinished } from "../devtools/reactivity";
+import { configureScanMonitor, scanEffectStopped } from "./scanMonitor";
 
 export type EffectFn = () => void;
 
@@ -43,6 +44,7 @@ class Effect {
         this.active = false;
         cleanup(this);
         /* @DEV-ONLY */ effectStopped(this);
+        /* @DEV-ONLY */ scanEffectStopped(this);
     }
 }
 
@@ -58,7 +60,8 @@ let leakEnabled = false;
 let leakThreshold = -1;
 let leakMonitor: LeakMonitor | undefined;
 const leakCleanups = new WeakMap<Dep, Map<Effect, () => void>>();
-export function configureReactivityLeakMonitor(opts: { enabled?: boolean; threshold?: number; name?: string; dependencies?: number } = {}) {
+export function configureReactivityLeakMonitor(opts: { enabled?: boolean; threshold?: number; name?: string; dependencies?: number; scans?: boolean } = {}) {
+    if (typeof opts.scans === 'boolean') configureScanMonitor(opts.scans);
     if (typeof opts.dependencies === 'number') {
         dependencyLimit = opts.dependencies;
         dependencyWarnings = 0;
@@ -67,6 +70,12 @@ export function configureReactivityLeakMonitor(opts: { enabled?: boolean; thresh
     leakEnabled = !!opts.enabled;
     leakThreshold = typeof opts.threshold === 'number' ? opts.threshold : (leakEnabled ? 200 : -1);
     leakMonitor = leakEnabled && leakThreshold > 0 ? new LeakMonitor(leakThreshold, opts.name ?? 'reactivity-core') : undefined;
+}
+
+export function trackingEffect(): object | null {
+    if (!followTracking) return null;
+    const effect = effectStack[effectStack.length - 1];
+    return effect !== undefined && effect.active ? effect : null;
 }
 
 export function track(target: object, key: string | symbol) {
