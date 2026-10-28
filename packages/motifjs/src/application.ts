@@ -316,7 +316,7 @@ export class Application {
     }
 
     public dispose(): Promise<void> {
-        if (this._disposing) return this._disposing;
+        if (this._disposing) return this._state === 'disposed' ? (this._disposing = this._disposeLate()) : this._disposing;
         this._state = 'disposing';
         Application._disposingCount++;
         startedApplicationBuilder = false;
@@ -357,6 +357,20 @@ export class Application {
             if (_globalApplication === this) _globalApplication = null;
             this._state = 'disposed';
             Application._disposingCount--;
+        })();
+    }
+
+    private _disposeLate(): Promise<void> {
+        safeCallSilent(() => { this.windows._disposeAll(); }, 'Application.dispose.windows');
+        safeCallSilent(() => { this._layerJoin?.(); this._layerJoin = null; }, 'Application.dispose.layer');
+        safeCallSilent(() => { for (const release of [...this._documentReleases]) release(); }, 'Application.dispose.documents');
+        const layer = this._layer;
+        return (async () => {
+            if (layer && !layer.isDisposed) {
+                try { await layer.dispose(); } catch (error) { reportError('MJX307', error); }
+            }
+            this._layer = null;
+            try { await this.provider.dispose(); } catch { }
         })();
     }
 

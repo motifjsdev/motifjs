@@ -149,6 +149,27 @@ describe('a disposed application runs again', () => {
         expect(await waitsForLeave()).toBe(false);
     });
 
+    test('dispose() called again on a disposed application removes a layer read in between and leaves the address alone', async () => {
+        const app = build();
+        app.run(host());
+        await app.dispose();
+        const layer = app.layer;
+        const toast = new Probe();
+        layer.controls.add(toast);
+        await tick(30);
+        expect(toast.mounted).toBe(1);
+        const element = layer.element as Node;
+        window.location.hash = '#kept';
+        const again = app.dispose();
+        expect(app.state).toBe('disposed');
+        await again;
+        expect(layer.isDisposed).toBe(true);
+        expect(toast.isDisposed).toBe(true);
+        expect(element.isConnected).toBe(false);
+        expect(window.location.hash).toBe('#kept');
+        expect(Application.main).toBeNull();
+    });
+
     test('run() after dispose is refused once a newer application exists, and the single-app rule holds in the second life', async () => {
         const old = build();
         old.run(host());
