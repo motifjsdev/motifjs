@@ -9,7 +9,7 @@ type Item = { id: number; value: number; extra: number };
 const items = (count: number): Item[] => Array.from({ length: count }, (_, id) => ({ id, value: id + 1, extra: 0 }));
 
 describe('scanning a reactive array', () => {
-    test('find tracks the list as a whole, not index by index', async () => {
+    test('find tracks the list with one key, not index by index', async () => {
         const state = reactive({ list: items(5) });
         let runs = 0;
         effect(() => { runs++; state.list.find((x) => x.id === 2); });
@@ -20,7 +20,6 @@ describe('scanning a reactive array', () => {
     });
 
     test.each([
-        ['push', (list: Item[]) => { list.push({ id: 9, value: 9, extra: 0 }); }],
         ['splice', (list: Item[]) => { list.splice(0, 1); }],
         ['index overwrite', (list: Item[]) => { list[1] = { id: 7, value: 7, extra: 0 }; }],
         ['length truncate', (list: Item[]) => { list.length = 2; }],
@@ -36,6 +35,90 @@ describe('scanning a reactive array', () => {
         change(state.list);
         await flush();
         expect(runs).toBe(2);
+    });
+
+    test.each([
+        ['push', (list: Item[]) => { list.push({ id: 9, value: 9, extra: 0 }); }],
+        ['splice after the match', (list: Item[]) => { list.splice(4, 0, { id: 8, value: 8, extra: 0 }); }],
+        ['index overwrite after the match', (list: Item[]) => { list[4] = { id: 7, value: 7, extra: 0 }; }],
+        ['pop', (list: Item[]) => { list.pop(); }],
+        ['length truncate after the match', (list: Item[]) => { list.length = 3; }],
+        ['field change after the match', (list: Item[]) => { list[4].id = 70; }],
+    ])('%s beyond the index where find stopped leaves the effect alone', async (_name, change) => {
+        const state = reactive({ list: items(5) });
+        let runs = 0;
+        effect(() => { runs++; state.list.find((x) => x.id === 2); });
+        await flush();
+        change(state.list);
+        await flush();
+        expect(runs).toBe(1);
+    });
+
+    test('a scan without a match depends on the whole list and sees the pushed match', async () => {
+        const state = reactive({ list: items(5) });
+        let found: Item | undefined;
+        effect(() => { found = state.list.find((x) => x.id === 9); });
+        await flush();
+        expect(found).toBeUndefined();
+        state.list.push({ id: 9, value: 9, extra: 0 });
+        await flush();
+        expect(found?.id).toBe(9);
+    });
+
+    test('some, every, indexOf and includes that stop early follow only the prefix they read', async () => {
+        const state = reactive({ list: items(5), tags: ['a', 'b', 'c'] });
+        let runs = 0;
+        effect(() => { runs++; state.list.some((x) => x.id === 1); state.list.every((x) => x.id < 3); state.tags.indexOf('b'); state.tags.includes('a'); });
+        await flush();
+        state.list.push({ id: 9, value: 9, extra: 0 });
+        state.tags.push('d');
+        state.tags[2] = 'z';
+        await flush();
+        expect(runs).toBe(1);
+        state.tags[1] = 'x';
+        await flush();
+        expect(runs).toBe(2);
+        state.list.splice(3, 1);
+        await flush();
+        expect(runs).toBe(3);
+    });
+
+    test('the prefix follows the longest scan of a run and is recomputed on every run', async () => {
+        const state = reactive({ list: items(6) });
+        let runs = 0;
+        effect(() => { runs++; state.list.find((x) => x.id === 1); state.list.some((x) => x.id === 3); });
+        await flush();
+        state.list[4] = { id: 40, value: 0, extra: 0 };
+        await flush();
+        expect(runs).toBe(1);
+        state.list[2] = { id: 20, value: 0, extra: 0 };
+        await flush();
+        expect(runs).toBe(2);
+        state.list[4] = { id: 41, value: 0, extra: 0 };
+        await flush();
+        expect(runs).toBe(2);
+    });
+
+    test('a match at the last index still leaves a later push alone', async () => {
+        const state = reactive({ list: items(3) });
+        let runs = 0;
+        effect(() => { runs++; state.list.findIndex((x) => x.id === 2); });
+        await flush();
+        state.list.push({ id: 9, value: 9, extra: 0 });
+        await flush();
+        expect(runs).toBe(1);
+        state.list.unshift({ id: -1, value: 0, extra: 0 });
+        await flush();
+        expect(runs).toBe(2);
+    });
+
+    test('stopping a scanning effect releases its subscription to the list', async () => {
+        const state = reactive({ list: items(5) });
+        const stop = effect(() => { state.list.find((x) => x.id === 2); });
+        await flush();
+        expect(debugGetDeps(state.list)!.size).toBeGreaterThan(0);
+        stop();
+        expect(debugGetDeps(state.list)).toBeUndefined();
     });
 
     test('a field the scan reads reruns the effect, a field it does not read does not', async () => {
@@ -106,7 +189,7 @@ describe('scanning a reactive array', () => {
         expect(reactive({ list: [] as number[] }).list.reduce((a, b) => a + b, 7)).toBe(7);
     });
 
-    test.each(['some', 'every', 'map', 'forEach', 'flatMap', 'join', 'findLast', 'findLastIndex'] as const)('%s reruns when the list changes and never on its own', async (method) => {
+    test.each(['map', 'forEach', 'flatMap', 'join', 'findLast', 'findLastIndex'] as const)('%s reruns when the list changes and never on its own', async (method) => {
         const state = reactive({ list: items(3) });
         let runs = 0;
         effect(() => { runs++; (state.list as any)[method]((x: Item) => x.value > 1); });

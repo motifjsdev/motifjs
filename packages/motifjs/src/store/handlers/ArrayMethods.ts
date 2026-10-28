@@ -5,6 +5,8 @@ import { scanObserved } from "../scanMonitor";
 type PatchKind = 'lookup' | 'scan' | 'fold' | 'read' | 'iterate' | 'order' | 'join' | 'structural';
 
 const SCAN_LOOKUPS = new Set<string | symbol>(['find', 'findIndex', 'findLast', 'findLastIndex', 'some', 'every']);
+const PREFIX_SCANS = new Set<string | symbol>(['find', 'findIndex', 'some', 'every']);
+const stoppedEarly = (name: string | symbol, result: unknown) => name === 'find' ? result !== undefined : name === 'findIndex' ? result !== -1 : name === 'some' ? result === true : result === false;
 
 const PATCHED_ARRAY_METHODS: ReadonlyArray<readonly [string | symbol, PatchKind]> = [
     ['includes', 'lookup'],
@@ -72,12 +74,17 @@ export class ArrayMethods {
 
     private mutate(source: any[], proxy: unknown, name: string | symbol, args: unknown[]) {
         const previous = arrayMutation.target;
+        const previousFrom = arrayMutation.from;
         arrayMutation.target = source;
+        arrayMutation.from = Infinity;
         try {
             return source[name as any].apply(proxy, args);
         } finally {
+            const from = arrayMutation.from;
             arrayMutation.target = previous;
+            arrayMutation.from = previousFrom;
             this.engine.trigger(source, ITERATE_KEY, undefined);
+            if (from !== Infinity) this.engine.triggerRange(source, from);
         }
     }
 
@@ -87,18 +94,30 @@ export class ArrayMethods {
             case 'lookup':
                 return function (this: unknown[], ...needles: any[]) {
                     const source = getRaw(this) as any;
-                    owner.engine.track(source, ITERATE_KEY);
                     const direct = source[name](...needles);
-                    if (!isLookupMiss(direct)) return direct;
-                    return source[name](...needles.map(needle => getRaw(needle)));
+                    const outcome = isLookupMiss(direct) ? source[name](...needles.map(needle => getRaw(needle))) : direct;
+                    let at = -1;
+                    if (name === 'indexOf') at = outcome;
+                    else if (name === 'includes' && outcome === true) { at = source.indexOf(needles[0]); if (at < 0) at = source.indexOf(getRaw(needles[0])); }
+                    if (at >= 0) owner.engine.trackRange(source, at);
+                    else owner.engine.track(source, ITERATE_KEY);
+                    return outcome;
                 };
             case 'scan':
                 return function (this: unknown[], callback: Function, thisArg?: unknown) {
                     const source = getRaw(this) as any;
-                    owner.engine.track(source, ITERATE_KEY);
                     /* @DEV-ONLY */ if (SCAN_LOOKUPS.has(name)) scanObserved(source, name as string);
                     const proxy = this;
-                    const result = source[name]((value: unknown, index: number) => callback.call(thisArg, owner.wrap(value), index, proxy));
+                    let last = -1;
+                    let completed = false;
+                    let result: any;
+                    try {
+                        result = source[name]((value: unknown, index: number) => { last = index; return callback.call(thisArg, owner.wrap(value), index, proxy); });
+                        completed = true;
+                    } finally {
+                        if (completed && last >= 0 && PREFIX_SCANS.has(name) && stoppedEarly(name, result)) owner.engine.trackRange(source, last);
+                        else owner.engine.track(source, ITERATE_KEY);
+                    }
                     if (name === 'filter') return (result as unknown[]).map(value => owner.wrap(value));
                     if (name === 'find' || name === 'findLast') return owner.wrap(result);
                     return result;

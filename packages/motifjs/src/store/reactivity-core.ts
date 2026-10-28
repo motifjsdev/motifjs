@@ -1,7 +1,7 @@
 
 import { LeakMonitor } from "../common/LeakMonitor";
 import { reportError, reportWarning } from "../common/diagnostics";
-import { getRaw, followTracking } from "./common";
+import { getRaw, followTracking, RANGE_KEY } from "./common";
 import { pushTight } from "../common/pushTight";
 import { effectCreated, effectStopped, effectOwnerLabel, runStarting, runFinished, triggered, flushStarting, flushFinished } from "../devtools/reactivity";
 import { configureScanMonitor, scanEffectStopped } from "./scanMonitor";
@@ -50,6 +50,7 @@ class Effect {
 
 const depMap = new WeakMap<object, Map<string | symbol, Dep>>();
 const effectStack: Effect[] = [];
+const rangeMax = new WeakMap<object, Map<Effect, number>>();
 const effectQueue = new Set<Effect>();
 let isFlushing = false;
 
@@ -103,6 +104,39 @@ export function track(target: object, key: string | symbol) {
             } catch { }
         }
     }
+}
+
+export function trackRange(target: object, maxIndex: number) {
+    if (!followTracking) return;
+    const rawTarget = getRaw(target as any);
+    const effect = effectStack[effectStack.length - 1];
+    if (!effect || !effect.active) return;
+    let ranges = rangeMax.get(rawTarget);
+    if (!ranges) rangeMax.set(rawTarget, (ranges = new Map()));
+    const fresh = depMap.get(rawTarget)?.get(RANGE_KEY)?.get(effect) !== effect.runs;
+    ranges.set(effect, fresh ? maxIndex : Math.max(ranges.get(effect) ?? -1, maxIndex));
+    track(rawTarget, RANGE_KEY);
+}
+
+export function triggerRange(target: object, from: number) {
+    const rawTarget = getRaw(target as any);
+    const effects = depMap.get(rawTarget)?.get(RANGE_KEY);
+    if (!effects) return;
+    const ranges = rangeMax.get(rawTarget);
+    const woken: Effect[] = [];
+    effects.forEach((_run, effect) => { if (effect.active && (ranges?.get(effect) ?? Infinity) >= from) woken.push(effect); });
+    if (woken.length === 0) return;
+    /* @DEV-ONLY */ triggered(rawTarget, RANGE_KEY, woken);
+    let queued = false;
+    for (const effect of woken) {
+        if (effect.scheduler) {
+            runReported(effect.scheduler);
+            continue;
+        }
+        effectQueue.add(effect);
+        queued = true;
+    }
+    if (queued) flushEffects();
 }
 
 export function trigger(target: object, key: string | symbol) {
@@ -179,6 +213,7 @@ function release(effect: Effect, target: object, key: string | symbol) {
     const dep = keyMap.get(key);
     if (!dep) return;
     dep.delete(effect);
+    if (key === RANGE_KEY) rangeMax.get(target)?.delete(effect);
     try {
         const map = leakCleanups.get(dep);
         const fn = map?.get(effect);

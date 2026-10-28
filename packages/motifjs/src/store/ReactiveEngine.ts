@@ -6,7 +6,7 @@ import { createDelete, createHas, createOwn } from "./handlers/orhers";
 import { ArrayMethods } from "./handlers/ArrayMethods";
 import { createCollectionHandler } from "./handlers/collections";
 import { LinkedList } from "../common/LinkedList";
-import { track, trigger } from "./reactivity-core";
+import { track, trigger, trackRange, triggerRange } from "./reactivity-core";
 export const ReactiveEngineMapper = new WeakSet<ReactiveEngine>();
 
 const AllreactiveMap: WeakMap<any, any> = new WeakMap();
@@ -148,6 +148,12 @@ export class ReactiveEngine {
 
     track(model: any, key: any) {
         track(model, key);
+    }
+    trackRange(model: any, maxIndex: number) {
+        trackRange(model, maxIndex);
+    }
+    triggerRange(model: any, from: number) {
+        triggerRange(model, from);
     }
     trigger(model: any, key: any, value: any) {
         trigger(model, key);

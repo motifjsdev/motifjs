@@ -1,6 +1,6 @@
 import { ReactiveEngine } from "../ReactiveEngine";
-import { ITERATE_KEY, hasOwn, isIntrinsicSymbol, pauseTracking, resetTracking } from "../common";
-import { track, trigger } from "../reactivity-core";
+import { ITERATE_KEY, arrayMutation, hasOwn, isIntrinsicSymbol, isNumericKey, pauseTracking, resetTracking } from "../common";
+import { track, trigger, triggerRange } from "../reactivity-core";
 
 export function createOwn(engine: ReactiveEngine) {
     return function ownKeys(target: any) {
@@ -29,6 +29,10 @@ export function createDelete(engine: ReactiveEngine) {
                 if (Array.isArray(target)) {
                     trigger(target, 'length');
                     trigger(target, ITERATE_KEY);
+                    if (isNumericKey(p)) {
+                        if (arrayMutation.target === target) arrayMutation.from = Math.min(arrayMutation.from, Number(p));
+                        else triggerRange(target, Number(p));
+                    }
                 } else {
                     trigger(target, p);
                     trigger(target, ITERATE_KEY);

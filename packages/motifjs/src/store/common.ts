@@ -17,9 +17,10 @@ export const enum TargetType {
 }
 
 export const ITERATE_KEY = Symbol('')
+export const RANGE_KEY = Symbol('')
 export let followTracking: boolean = true;
 export let arrayScope: { enabled: boolean, key: string } = { enabled: false, key: '' };
-export const arrayMutation: { target: object | null } = { target: null };
+export const arrayMutation: { target: object | null; from: number } = { target: null, from: Infinity };
 
 
 export function getRaw<T>(value: T): T {

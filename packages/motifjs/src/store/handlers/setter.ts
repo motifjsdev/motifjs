@@ -1,6 +1,6 @@
 import { ReactiveEngine } from "../ReactiveEngine";
 import { ITERATE_KEY, arrayMutation, getRaw, hasOwn, isNumericKey, isReadonly, removeArrayStack } from "../common";
-import { trigger } from "../reactivity-core";
+import { trigger, triggerRange } from "../reactivity-core";
 
 
 export function createSetter(engine: ReactiveEngine) {
@@ -34,6 +34,11 @@ export function createSetter(engine: ReactiveEngine) {
         }
         if (isArray && arrayMutation.target !== target) {
             trigger(target, ITERATE_KEY);
+            if (numeric) triggerRange(target, Number(p));
+            else if (p === 'length') triggerRange(target, Number(newValue));
+        } else if (isArray) {
+            if (numeric) arrayMutation.from = Math.min(arrayMutation.from, Number(p));
+            else if (p === 'length') arrayMutation.from = Math.min(arrayMutation.from, Number(newValue));
         }
         if (numeric && !hadKey) {
             trigger(target, 'length');
