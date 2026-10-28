@@ -222,6 +222,30 @@ describe('MJX004: reaktif getter içinde anahtarla arama taraması', () => {
     test('düz alan okuması: uyarı YOK', () => {
         expect(codesOf(`class A { view(){ return <div>{() => this.state.name}</div>; } }`)).not.toContain('MJX004');
     });
+
+    test('senkron dizi geri çağrısı içindeki arama da uyarır; setTimeout ve then içindeki uyarmaz', () => {
+        expect(codesOf(`class A { view(){ return <div>{() => this.state.ids.map(id => this.state.rows.find(r => r.id === id))}</div>; } }`)).toContain('MJX004');
+        expect(codesOf(`class A { view(){ return <div>{() => this.state.ids.reduce((n, id) => n + (this.state.rows.find(r => r.id === id) ? 1 : 0), 0)}</div>; } }`)).toContain('MJX004');
+        expect(codesOf(`class A { view(){ return <div>{() => { setTimeout(() => this.state.rows.find(r => r.id === this.id)); return 1; }}</div>; } }`)).not.toContain('MJX004');
+        expect(codesOf(`class A { view(){ return <div>{() => { this.load().then(() => this.state.rows.find(r => r.id === this.id)); return 1; }}</div>; } }`)).not.toContain('MJX004');
+    });
+
+    test('bileşik yüklemde alan karşılaştırması uyarır ve alanı söyler', () => {
+        const d = diags(`class A { view(){ return <div>{() => this.state.rows.find(x => x.id === this.props.id && x.kind === 'a')}</div>; } }`);
+        expect(d.find(x => x.code === 'MJX004')!.message).toContain('"id"');
+        expect(codesOf(`class A { view(){ return <div>{() => this.state.rows.some(x => x.on || x.id === this.id)}</div>; } }`)).toContain('MJX004');
+    });
+
+    test('getter içindeki takma ad ve destructuring reaktif sayılır', () => {
+        expect(codesOf(`class A { view(){ return <div>{() => { const list = this.state.rows; return list.find(x => x.id === this.props.id); }}</div>; } }`)).toContain('MJX004');
+        expect(codesOf(`class A { view(){ return <div>{() => { const { rows } = this.state; return rows.find(x => x.id === this.props.id); }}</div>; } }`)).toContain('MJX004');
+        expect(codesOf(`import { reactive, effect } from '@motifx/core'; const store = reactive({ rows: [] }); effect(() => { const { rows } = store; rows.find(x => x.id === current); });`)).toContain('MJX004');
+    });
+
+    test('constructor\'da reactive ile kurulan alan reaktif kök sayılır, düz nesne sayılmaz', () => {
+        expect(codesOf(`import { reactive, Component } from '@motifx/core'; class A extends Component { model: any; constructor(){ super('div'); this.model = reactive({ rows: [] }); } view(){ return <div>{() => this.model.rows.find(x => x.id === this.props.id)}</div>; } }`)).toContain('MJX004');
+        expect(codesOf(`import { Component } from '@motifx/core'; class A extends Component { model: any; constructor(){ super('div'); this.model = { rows: [] }; } view(){ return <div>{() => this.model.rows.find(x => x.id === this.props.id)}</div>; } }`)).not.toContain('MJX004');
+    });
 });
 
 describe('MJX017: reaktif getter reaktif değer yazıyor', () => {
@@ -247,6 +271,18 @@ describe('MJX017: reaktif getter reaktif değer yazıyor', () => {
         expect(codesOf(`import { reactive } from '@motifx/core'; class A { model = reactive({ n: 0 }); view(){ return <div>{() => this.model.n++}</div>; } }`)).toContain('MJX017');
         expect(codesOf(`class A { view(){ return <div>{() => this.cache.n++}</div>; } }`)).not.toContain('MJX017');
     });
+
+    test('untracked yalnız okumayı izlemesiz yapar: içindeki düz yazma dışarıda izlenen okumayla uyarır, okuma untracked ise yazma uyarmaz', () => {
+        expect(codesOf(`class A { view(){ return <div>{() => { if (this.state.flag) return 1; untracked(() => { this.state.flag = true; }); return 0; }}</div>; } }`)).toContain('MJX017');
+        expect(codesOf(`class A { view(){ return <div>{() => { if (untracked(() => this.state.flag)) return 1; this.state.flag = true; return 0; }}</div>; } }`)).not.toContain('MJX017');
+        expect(codesOf(`class A { view(){ return <div>{() => { untracked(() => this.state.items.sort()); return 1; }}</div>; } }`)).not.toContain('MJX018');
+        expect(codesOf(`class A { view(){ return <div>{() => { untracked(() => this.state.items.sort()); return this.state.items.length; }}</div>; } }`)).toContain('MJX018');
+    });
+
+    test('senkron dizi geri çağrısı içindeki yazma da uyarır', () => {
+        expect(codesOf(`class A { view(){ return <div>{() => { this.state.rows.forEach(r => { this.state.total += r.v; }); return this.state.total; }}</div>; } }`)).toContain('MJX017');
+        expect(codesOf(`class A { view(){ return <div>{() => { this.state.rows.forEach(r => { this.state.total += r.v; }); return this.state.total; }}</div>; } }`)).not.toContain('MJX018');
+    });
 });
 
 describe('MJX018: reaktif getter listeyi yerinde değiştiriyor', () => {
@@ -262,6 +298,11 @@ describe('MJX018: reaktif getter listeyi yerinde değiştiriyor', () => {
         expect(codesOf(`class A { view(){ return <div>{() => this.state.items.slice().sort().length}</div>; } }`)).not.toContain('MJX018');
         expect(codesOf(`class A { view(){ return <div onclick={() => this.state.items.push(1)} />; } }`)).not.toContain('MJX018');
         expect(codesOf(`import { reactive, effect } from '@motifx/core'; const stats = reactive({ log: [] }); effect(() => { stats.log.push(1); });`)).not.toContain('MJX018');
+    });
+
+    test('takma ad üzerinden sort gerçek listeyi söyler', () => {
+        const d = diags(`class A { view(){ return <div>{() => { const l = this.state.rows; return l.sort().length; }}</div>; } }`);
+        expect(d.find(x => x.code === 'MJX018')!.message).toContain('"this.state.rows"');
     });
 });
 

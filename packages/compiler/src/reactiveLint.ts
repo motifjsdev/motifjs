@@ -11,8 +11,9 @@ const BINDING_GETTERS: Record<string, number> = { add: 1, watch: 0, when: 0, ter
 const PLAIN_ATTRIBUTES = new Set(['ref', 'key', 'transition', 'x-ref']);
 const COMPARISONS = new Set(['===', '==', '!==', '!=']);
 const REACTIVE_FIELDS = new Set(['state', 'props']);
+const SYNC_CALLBACK_METHODS = new Set(['map', 'forEach', 'filter', 'reduce', 'reduceRight', 'flatMap', 'some', 'every', 'find', 'findIndex', 'findLast', 'findLastIndex', 'sort']);
 
-type Roots = { stores: Set<string>; fields: Set<string> };
+type Roots = { stores: Set<string>; fields: Set<string>; aliases: Map<string, string> };
 
 function memberRoot(node: t.Node): t.Node | null {
     let cur: t.Node = node;
@@ -33,20 +34,30 @@ function firstField(node: t.Node): string | null {
 function isReactive(node: t.Node, roots: Roots): boolean {
     const root = memberRoot(node);
     if (root === null) return false;
-    if (t.isIdentifier(root)) return roots.stores.has(root.name);
+    if (t.isIdentifier(root)) return roots.stores.has(root.name) || roots.aliases.has(root.name);
     const field = firstField(node);
     return field !== null && (REACTIVE_FIELDS.has(field) || roots.fields.has(field));
 }
 
-function describe(node: t.Node): string {
+function describe(node: t.Node, aliases?: Map<string, string>): string {
     if (t.isThisExpression(node)) return 'this';
-    if (t.isIdentifier(node)) return node.name;
+    if (t.isIdentifier(node)) return aliases?.get(node.name) ?? node.name;
     if (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) {
         const key = node.computed ? '[…]' : '.' + (t.isIdentifier(node.property) ? node.property.name : '…');
-        return describe(node.object) + key;
+        return describe(node.object, aliases) + key;
     }
     return '…';
 }
+
+function runsInline(fn: NodePath<t.Function>): boolean {
+    const parent = fn.parent;
+    if (!t.isCallExpression(parent) || !(parent.arguments as t.Node[]).includes(fn.node)) return false;
+    const callee = parent.callee;
+    if (t.isIdentifier(callee)) return callee.name === 'untracked';
+    return t.isMemberExpression(callee) && !callee.computed && t.isIdentifier(callee.property) && SYNC_CALLBACK_METHODS.has(callee.property.name);
+}
+
+const isUntrackedCall = (call: t.CallExpression) => t.isIdentifier(call.callee) && call.callee.name === 'untracked';
 
 function isFunction(node: t.Node | null | undefined): node is t.ArrowFunctionExpression | t.FunctionExpression {
     return t.isArrowFunctionExpression(node) || t.isFunctionExpression(node);
@@ -83,12 +94,19 @@ function lookupField(predicate: t.Node | null | undefined): string | null {
         if (body.body.length !== 1 || !t.isReturnStatement(body.body[0])) return null;
         body = unwrap(body.body[0].argument);
     }
-    if (!body || !t.isBinaryExpression(body) || !COMPARISONS.has(body.operator)) return null;
+    return comparedField(body, param.name);
+}
+
+function comparedField(expr: t.Node | null | undefined, param: string): string | null {
+    const body = unwrap(expr);
+    if (!body) return null;
+    if (t.isLogicalExpression(body)) return comparedField(body.left, param) ?? comparedField(body.right, param);
+    if (!t.isBinaryExpression(body) || !COMPARISONS.has(body.operator)) return null;
     for (const [side, other] of [[body.left, body.right], [body.right, body.left]] as [t.Node, t.Node][]) {
         if (!t.isMemberExpression(side) || side.computed || !t.isIdentifier(side.property)) continue;
         const root = memberRoot(side);
-        if (root === null || !t.isIdentifier(root) || root.name !== param.name) continue;
-        if (mentions(other, param.name)) continue;
+        if (root === null || !t.isIdentifier(root) || root.name !== param) continue;
+        if (mentions(other, param)) continue;
         return side.property.name;
     }
     return null;
@@ -102,27 +120,48 @@ const readsPath = (reads: Set<string>, path: string) => {
 function checkGetter(fn: NodePath<t.Node>, roots: Roots, filename: string): void {
     const reads = new Set<string>();
     const skipped = new Set<t.Node>();
-    const writes: { at: NodePath<t.Node>; target: t.Node; op: string }[] = [];
-    const mutations: { at: NodePath<t.Node>; list: t.Node; method: string }[] = [];
+    const writes: { at: NodePath<t.Node>; target: t.Node; op: string; untracked: boolean }[] = [];
+    const mutations: { at: NodePath<t.Node>; list: t.Node; method: string; untracked: boolean }[] = [];
+    let untracked = 0;
     const readMember = (member: NodePath<t.MemberExpression | t.OptionalMemberExpression>) => {
-        if (skipped.has(member.node)) return;
+        if (untracked > 0 || skipped.has(member.node)) return;
         const parent = member.parent;
         if (skipped.has(parent) && (t.isMemberExpression(parent) || t.isOptionalMemberExpression(parent))) return;
-        reads.add(describe(member.node));
+        reads.add(describe(member.node, roots.aliases));
     };
     fn.traverse({
         Function(inner) {
+            if (runsInline(inner)) return;
             inner.skip();
         },
-        CallExpression(call) {
+        VariableDeclarator(declarator) {
+            const { id, init } = declarator.node;
+            if (!init) return;
+            if (t.isIdentifier(id)) {
+                if ((t.isMemberExpression(init) || t.isOptionalMemberExpression(init)) && isReactive(init, roots)) roots.aliases.set(id.name, describe(init, roots.aliases));
+                return;
+            }
+            if (!t.isObjectPattern(id) || !(t.isThisExpression(init) || t.isIdentifier(init) || t.isMemberExpression(init) || t.isOptionalMemberExpression(init))) return;
+            for (const property of id.properties) {
+                if (!t.isObjectProperty(property) || property.computed || !t.isIdentifier(property.key) || !t.isIdentifier(property.value)) continue;
+                const member = t.memberExpression(init, property.key);
+                if (isReactive(member, roots)) roots.aliases.set(property.value.name, describe(member, roots.aliases));
+            }
+        },
+        CallExpression: {
+            exit(call) {
+                if (isUntrackedCall(call.node)) untracked--;
+            },
+            enter(call) {
             const callee = call.node.callee;
-            if (t.isIdentifier(callee) && callee.name === 'untracked') {
-                call.skip();
+            if (isUntrackedCall(call.node)) {
+                untracked++;
                 return;
             }
             if (!t.isMemberExpression(callee) || callee.computed || !t.isIdentifier(callee.property)) return;
             const method = callee.property.name;
             if (LOOKUP_METHODS.has(method) && isReactive(callee.object, roots)) {
+                if (untracked > 0) return;
                 const field = lookupField(call.node.arguments[0]);
                 if (field !== null) {
                     warn('MJX004', `"${method}()" looks an item up by "${field}" by scanning a reactive list inside a reactive getter: every run reads that field of every item up to the match, so when many components do this each change costs n² reads. Keep a map keyed by "${field}" (or a computed lookup) and read the item from it, or read the list with untracked(...).`, call, filename);
@@ -131,20 +170,21 @@ function checkGetter(fn: NodePath<t.Node>, roots: Roots, filename: string): void
             }
             if ((ORDERING_MUTATORS.has(method) || SIZE_MUTATORS.has(method)) && isReactive(callee.object, roots)) {
                 skipped.add(callee);
-                mutations.push({ at: call, list: callee.object, method });
+                mutations.push({ at: call, list: callee.object, method, untracked: untracked > 0 });
             }
+            },
         },
         AssignmentExpression(assignment) {
             const left = assignment.node.left;
             if (!t.isMemberExpression(left) && !t.isOptionalMemberExpression(left)) return;
             skipped.add(left);
-            if (isReactive(left, roots)) writes.push({ at: assignment, target: left, op: assignment.node.operator });
+            if (isReactive(left, roots)) writes.push({ at: assignment, target: left, op: assignment.node.operator, untracked: untracked > 0 });
         },
         UpdateExpression(update) {
             const target = update.node.argument;
             if (!t.isMemberExpression(target) && !t.isOptionalMemberExpression(target)) return;
             skipped.add(target);
-            if (isReactive(target, roots)) writes.push({ at: update, target, op: update.node.operator });
+            if (isReactive(target, roots)) writes.push({ at: update, target, op: update.node.operator, untracked: untracked > 0 });
         },
         MemberExpression(member) {
             readMember(member);
@@ -154,13 +194,13 @@ function checkGetter(fn: NodePath<t.Node>, roots: Roots, filename: string): void
         },
     });
     for (const write of writes) {
-        const path = describe(write.target);
-        if (write.op === '=' && !readsPath(reads, path)) continue;
-        warn('MJX017', `A reactive getter writes "${path}" (${write.op}) and reads it too: a getter that writes what it reads retriggers itself (MJX203 at run time). Move the write into an event handler or a method, or wrap it in untracked(...).`, write.at, filename);
+        const path = describe(write.target, roots.aliases);
+        if ((write.op === '=' || write.untracked) && !readsPath(reads, path)) continue;
+        warn('MJX017', `A reactive getter writes "${path}" (${write.op}) and reads it too: a getter that writes what it reads retriggers itself (MJX203 at run time). Move the write into an event handler or a method; if it has to stay, read that value inside untracked(...) so the getter does not subscribe to it (for ++ and compound assignments wrap the whole expression).`, write.at, filename);
     }
     for (const mutation of mutations) {
-        const path = describe(mutation.list);
-        if (SIZE_MUTATORS.has(mutation.method) && !readsPath(reads, path)) continue;
+        const path = describe(mutation.list, roots.aliases);
+        if ((SIZE_MUTATORS.has(mutation.method) || mutation.untracked) && !readsPath(reads, path)) continue;
         warn('MJX018', `"${mutation.method}()" changes the reactive list "${path}" in place inside a reactive getter that reads it: the getter retriggers itself. Work on a copy ([...list].${mutation.method}(...)) or keep the result in a field or computed value.`, mutation.at, filename);
     }
 }
@@ -179,6 +219,13 @@ function reactiveFieldsOf(cls: NodePath<t.Class> | null, scope: NodePath['scope'
     const fields = new Set<string>();
     if (cls === null) return fields;
     for (const member of cls.node.body.body) {
+        if (t.isClassMethod(member) && member.kind === 'constructor') {
+            t.traverseFast(member.body, (node) => {
+                if (!t.isAssignmentExpression(node) || node.operator !== '=' || !t.isMemberExpression(node.left) || node.left.computed) return;
+                if (t.isThisExpression(node.left.object) && t.isIdentifier(node.left.property) && isCoreFactory(node.right, scope)) fields.add(node.left.property.name);
+            });
+            continue;
+        }
         if (!t.isClassProperty(member) || !t.isIdentifier(member.key) || member.computed) continue;
         if (isCoreFactory(member.value, scope)) fields.add(member.key.name);
     }
@@ -209,7 +256,7 @@ export const reactiveLintPlugin = () => ({
                     fields = reactiveFieldsOf(cls, program.scope);
                     if (cls !== null) fieldsByClass.set(cls.node, fields);
                 }
-                checkGetter(fn, { stores, fields }, filename);
+                checkGetter(fn, { stores, fields, aliases: new Map() }, filename);
             };
             program.traverse({
                 JSXExpressionContainer(container) {
