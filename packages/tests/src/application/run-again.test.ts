@@ -170,6 +170,25 @@ describe('a disposed application runs again', () => {
         expect(Application.main).toBeNull();
     });
 
+    test('a third dispose() while the second is still running joins it and disposes a late service once', async () => {
+        const app = build();
+        app.run(host());
+        await app.dispose();
+        const toast = new Probe();
+        app.layer.controls.add(toast);
+        const store = toast.getService(Store);
+        const second = app.dispose();
+        const third = app.dispose();
+        expect(third).toBe(second);
+        await second;
+        expect(store.disposed).toBe(1);
+        expect(toast.isDisposed).toBe(true);
+        const fourth = app.dispose();
+        expect(fourth).not.toBe(second);
+        await fourth;
+        expect(store.disposed).toBe(1);
+    });
+
     test('run() after dispose is refused once a newer application exists, and the single-app rule holds in the second life', async () => {
         const old = build();
         old.run(host());

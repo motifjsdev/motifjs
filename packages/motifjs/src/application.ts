@@ -111,6 +111,7 @@ export class Application {
     public static _disposingCount = 0;
     private _state: ApplicationState = 'initializing';
     private _disposing?: Promise<void>;
+    private _lateDisposing = false;
     public get state(): ApplicationState {
         return this._state;
     }
@@ -316,7 +317,11 @@ export class Application {
     }
 
     public dispose(): Promise<void> {
-        if (this._disposing) return this._state === 'disposed' ? (this._disposing = this._disposeLate()) : this._disposing;
+        if (this._disposing) {
+            if (this._state !== 'disposed' || this._lateDisposing) return this._disposing;
+            this._lateDisposing = true;
+            return this._disposing = this._disposeLate().finally(() => { this._lateDisposing = false; });
+        }
         this._state = 'disposing';
         Application._disposingCount++;
         startedApplicationBuilder = false;
