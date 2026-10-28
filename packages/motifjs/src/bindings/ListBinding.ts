@@ -5,7 +5,8 @@ import { effect, untracked } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
 import { getRaw } from "../store/common";
 import { motifError, reportWarning } from "../common/diagnostics";
-import { isListAdopted, noteListAdopted, findAppendableComponent } from "../component/componentBase";
+import { isListAdopted, noteListAdopted } from "../component/componentBase";
+import { findAppendableComponent } from "../common/functions";
 import { sliceRemaining, sliceDefer } from "../component/slices";
 import { dom } from "../core/dom";
 import { IBaseBinding } from "./IBaseBinding";
@@ -15,14 +16,14 @@ export interface ListBindingOptions {
     reuse?: boolean;
 }
 
-type SliceSlot = ComponentBase & { item: any; raw: object | null; occurrence: number };
+type SliceSlot = ComponentBase & { item: any; raw: object | null; occurrence: number; at: number };
 
-let SliceRow: (new (list: ListBinding, item: any, raw: object | null, occurrence: number) => SliceSlot) | null = null;
+let SliceRow: (new (list: ListBinding, item: any, raw: object | null, occurrence: number, at: number) => SliceSlot) | null = null;
 
-function sliceSlot(list: ListBinding, item: any, raw: object | null, occurrence: number): SliceSlot {
+function sliceSlot(list: ListBinding, item: any, raw: object | null, occurrence: number, at: number): SliceSlot {
     if (SliceRow === null) {
         SliceRow = class extends ComponentBase<Comment> {
-            constructor(private readonly list: ListBinding, readonly item: any, readonly raw: object | null, readonly occurrence: number) {
+            constructor(private readonly list: ListBinding, readonly item: any, readonly raw: object | null, readonly occurrence: number, public at: number) {
                 super(dom.createComment('h') as Comment, {} as any);
             }
             _materialize(): void {
@@ -30,7 +31,7 @@ function sliceSlot(list: ListBinding, item: any, raw: object | null, occurrence:
             }
         };
     }
-    return new SliceRow(list, item, raw, occurrence);
+    return new SliceRow(list, item, raw, occurrence, at);
 }
 
 export class ListBinding implements IBaseBinding {
@@ -116,7 +117,7 @@ export class ListBinding implements IBaseBinding {
             budget.left--;
             return this._render(item, idx);
         }
-        const slot = sliceSlot(this, item, raw, occurrence);
+        const slot = sliceSlot(this, item, raw, occurrence, idx);
         try { (slot as any)._base.itemRef = item; } catch { }
         sliceDefer(slot, host);
         return slot;
@@ -124,8 +125,9 @@ export class ListBinding implements IBaseBinding {
 
     _materialize(slot: SliceSlot): void {
         if (slot.isDisposed || this.container.isDisposed || slot.parent !== this.container) return;
-        const at = this.container.controls.items.indexOf(slot);
-        const index = this._rendered.indexOf(slot);
+        const items = this.container.controls.items;
+        const at = items[slot.at] === slot ? slot.at : items.indexOf(slot);
+        const index = this._rendered[slot.at] === slot ? slot.at : this._rendered.indexOf(slot);
         const row = this._render(slot.item, index >= 0 ? index : Math.max(0, at));
         if (index >= 0) this._rendered[index] = row;
         if (slot.raw !== null) {
@@ -133,8 +135,13 @@ export class ListBinding implements IBaseBinding {
             const k = list ? list.indexOf(slot) : -1;
             if (list && k >= 0) list[k] = row;
         }
-        this.container.controls.add(at >= 0 ? at : this.container.controls.items.length, row);
-        this.container.controls.remove(slot);
+        const slotOptions: any = slot.motif.options;
+        const rowOptions: any = row.motif.options;
+        if (rowOptions && !rowOptions.placeholder && slotOptions.placeholder) {
+            rowOptions.placeholder = slotOptions.placeholder;
+            slotOptions.placeholder = undefined;
+        }
+        this.container.controls._swap(slot, row, at);
     }
 
     private _render(item: any, idx: number): ComponentBase {
@@ -280,6 +287,7 @@ export class ListBinding implements IBaseBinding {
                     }
                 }
 
+                if (SliceRow !== null && component instanceof SliceRow) component.at = idx;
                 newComponents.push(component);
                 usedComponents.add(component);
             });

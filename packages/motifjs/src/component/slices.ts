@@ -2,9 +2,11 @@ import type { ComponentBase } from "./componentBase";
 import { reportError } from "../common/diagnostics";
 
 type HostState = { turn: number; used: number };
+type HostQueue = { items: (ComponentBase | undefined)[]; head: number };
 
 const states = new WeakMap<ComponentBase, HostState>();
-const queue: ComponentBase[] = [];
+const queues = new Map<ComponentBase, HostQueue>();
+let queued = 0;
 let turn = 0;
 let turnEndQueued = false;
 let pumpQueued = false;
@@ -55,14 +57,16 @@ export function sliceWanted(host: ComponentBase, c: ComponentBase): boolean {
 
 export function sliceDefer(c: ComponentBase, host: ComponentBase): void {
     (c as any)._slice = true;
-    (c as any)._sliceHost = host;
     if (!c.isWait) c.isWait = true;
-    queue.push(c);
+    let q = queues.get(host);
+    if (q === undefined) queues.set(host, q = { items: [], head: 0 });
+    q.items.push(c);
+    queued++;
     schedulePump();
 }
 
 export function slicesPending(): number {
-    return queue.length;
+    return queued;
 }
 
 function nextFrame(run: () => void): void {
@@ -78,42 +82,44 @@ function schedulePump(): void {
     nextFrame(pump);
 }
 
+function release(c: ComponentBase): void {
+    (c as any)._slice = false;
+    releasing = c;
+    try {
+        const materialize = (c as any)._materialize;
+        if (typeof materialize === 'function') materialize.call(c);
+        else c.isWait = false;
+    } catch (error) {
+        reportError('MJX130', error);
+    } finally {
+        releasing = null;
+    }
+}
+
 function pump(): void {
     pumpQueued = false;
-    const pending = queue.splice(0);
-    const used = new Map<ComponentBase, number>();
-    const rest: ComponentBase[] = [];
-    for (const c of pending) {
-        if (c.isDisposed || !(c as any)._slice) continue;
-        if (!c.isWait) {
-            (c as any)._slice = false;
-            continue;
-        }
-        const host = (c as any)._sliceHost as ComponentBase | undefined;
-        const chunk = host && !host.isDisposed ? chunkOf(host) : 0;
-        if (host && chunk > 0) {
-            const n = used.get(host) ?? 0;
-            if (n >= chunk) {
-                rest.push(c);
+    for (const host of [...queues.keys()]) {
+        const q = queues.get(host)!;
+        const chunk = host.isDisposed ? 0 : chunkOf(host);
+        const end = q.items.length;
+        let used = 0;
+        while (q.head < end && (chunk === 0 || used < chunk)) {
+            const c = q.items[q.head]!;
+            q.items[q.head++] = undefined;
+            queued--;
+            if (c.isDisposed || !(c as any)._slice) continue;
+            if (!c.isWait) {
+                (c as any)._slice = false;
                 continue;
             }
-            used.set(host, n + 1);
+            used++;
+            release(c);
         }
-        (c as any)._slice = false;
-        (c as any)._sliceHost = undefined;
-        releasing = c;
-        try {
-            const materialize = (c as any)._materialize;
-            if (typeof materialize === 'function') materialize.call(c);
-            else c.isWait = false;
-        } catch (error) {
-            reportError('MJX130', error);
-        } finally {
-            releasing = null;
+        if (q.head >= q.items.length) queues.delete(host);
+        else if (q.head > 1024 && q.head * 2 > q.items.length) {
+            q.items = q.items.slice(q.head);
+            q.head = 0;
         }
     }
-    if (rest.length) {
-        queue.push(...rest);
-        schedulePump();
-    }
+    if (queues.size) schedulePump();
 }

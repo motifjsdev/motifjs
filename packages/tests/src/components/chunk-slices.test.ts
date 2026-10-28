@@ -155,6 +155,42 @@ describe('x-chunk: children of an element are built in slices', () => {
         expect(texts(ul)).toEqual(['0', '9', '1', '2']);
     });
 
+    test('many children added to a built parent arrive in order and leave no trace behind', async () => {
+        const list = new Component('ul', { 'x-chunk': 7 });
+        app.run(host, list);
+        const ul = list.element as HTMLUListElement;
+        const comments = () => [...ul.childNodes].filter(n => n.nodeType === Node.COMMENT_NODE).length;
+        const before = comments();
+        const rows = Array.from({ length: 60 }, (_, i) => new Row(i));
+        list.controls.add(...rows);
+        expect(liCount(ul)).toBe(7);
+        await tick(0);
+        list.controls.add(30, new Row(900));
+        rows[40].dispose();
+        await until(() => liCount(ul) === 60 && comments() === before);
+        const expected = Array.from({ length: 60 }, (_, i) => String(i)).filter(n => n !== '40');
+        expected.splice(30, 0, '900');
+        expect(texts(ul)).toEqual(expected);
+    });
+
+    test('every chunked parent gets its own slice in each frame', async () => {
+        const a = new Component('ul', { 'x-chunk': 2 });
+        const b = new Component('ul', { 'x-chunk': 3 });
+        const root = new Component('div');
+        root.controls.add(a, b);
+        app.run(host, root);
+        const ae = a.element as HTMLUListElement;
+        const be = b.element as HTMLUListElement;
+        a.controls.add(...Array.from({ length: 8 }, (_, i) => new Row(i)));
+        b.controls.add(...Array.from({ length: 9 }, (_, i) => new Row(i)));
+        expect([liCount(ae), liCount(be)]).toEqual([2, 3]);
+        await until(() => liCount(ae) > 2 || liCount(be) > 3);
+        expect([liCount(ae), liCount(be)]).toEqual([4, 6]);
+        await until(() => liCount(ae) === 8 && liCount(be) === 9);
+        expect(texts(ae)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7']);
+        expect(texts(be)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8']);
+    });
+
     test('x-chunk through props sets the option and zero switches it off', async () => {
         const chunked = new Component('ul', { 'x-chunk': 4 });
         expect(chunked.motif.options.chunk).toBe(4);

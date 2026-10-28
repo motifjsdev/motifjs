@@ -130,6 +130,43 @@ describe('list binding under x-chunk: rows are created lazily, a chunk per frame
         expect(texts(list.ul)).toEqual(['n0', 'n1', 'n2', 'n3', 'n4']);
     });
 
+    test('rows land in their place when the list changes between frames, and no trace is left behind', async () => {
+        const state = reactive({ items: notes(12) });
+        const list = mountList(2, state);
+        await until(() => list.renders() >= 4);
+        state.items.unshift({ id: 100, title: 'a' }, { id: 101, title: 'b' });
+        state.items.splice(6, 2);
+        state.items.reverse();
+        const expected = () => state.items.map(n => n.title);
+        await until(() => list.ul.querySelectorAll('li').length === state.items.length);
+        expect(texts(list.ul)).toEqual(expected());
+        state.items.push({ id: 102, title: 'c' }, { id: 103, title: 'd' }, { id: 104, title: 'e' });
+        state.items.splice(1, 0, { id: 105, title: 'f' });
+        await until(() => list.ul.querySelectorAll('li').length === state.items.length);
+        expect(texts(list.ul)).toEqual(expected());
+        const plain = mountList(0, reactive({ items: notes(3) }));
+        expect(comments(list.ul)).toBe(comments(plain.ul));
+    });
+
+    test('a row that is hidden or waiting when its turn comes keeps its place', async () => {
+        const flags = reactive({ show: false, ready: false });
+        const state = reactive({ items: notes(6) });
+        const list = mountList(1, state, (n) => {
+            const props: any = n.id === 3 ? { 'x-display': () => flags.show } : n.id === 4 ? { 'x-wait': () => !flags.ready } : {};
+            const li = new Component('li', props);
+            (li.element as HTMLElement).textContent = n.title;
+            return li as any;
+        });
+        await until(() => list.renders() === 6 && list.ul.querySelectorAll('li').length === 4);
+        expect(texts(list.ul)).toEqual(['n0', 'n1', 'n2', 'n5']);
+        flags.show = true;
+        await until(() => list.ul.querySelectorAll('li').length === 5);
+        expect(texts(list.ul)).toEqual(['n0', 'n1', 'n2', 'n3', 'n5']);
+        flags.ready = true;
+        await until(() => list.ul.querySelectorAll('li').length === 6);
+        expect(texts(list.ul)).toEqual(['n0', 'n1', 'n2', 'n3', 'n4', 'n5']);
+    });
+
     test('disposing the list while rows are pending renders nothing more', async () => {
         const state = reactive({ items: notes(6) });
         const list = mountList(2, state);

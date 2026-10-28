@@ -690,9 +690,6 @@ const ComponentHelper = {
                         return;
                 }
 
-                const ownItems = this.controls.items;
-                const currentIndex = ownItems.length > 0 && ownItems[ownItems.length - 1] === c ? ownItems.length - 1 : ownItems.indexOf(c);
-
                 const appendableElement = findAppendableComponent(this);
                 var controlElement = (c.element as Node).nodeType == Node.COMMENT_NODE
                         ? c.motif.options.cache
@@ -707,7 +704,7 @@ const ComponentHelper = {
                 const insertHost = appendableElement?.element as Node | undefined;
                 const trace = c.motif.options.placeholder as Node | undefined;
                 const ownTrace = c.isVisible && trace && insertHost && trace.parentNode === insertHost ? trace : null;
-                const referenceNode: Node | null = ownTrace ?? (insertHost ? followingAnchor(this, currentIndex + 1, insertHost) : null);
+                const referenceNode: Node | null = ownTrace ?? (insertHost ? followingAnchor(this, childIndex(this, c) + 1, insertHost) : null);
                 const ownerHidden = inHiddenFragment(this) && (c.element as Node).nodeType !== Node.COMMENT_NODE;
 
                 if (!c.isVisible || ownerHidden) {
@@ -885,6 +882,11 @@ function followingAnchor(owner: ComponentBase, start: number, host: Node): Node 
         return mount && mount.parentNode === host ? mount : null;
 }
 
+function childIndex(owner: ComponentBase, c: ComponentBase): number {
+        const ownItems = owner.controls.items;
+        return ownItems.length > 0 && ownItems[ownItems.length - 1] === c ? ownItems.length - 1 : ownItems.indexOf(c);
+}
+
 function placeTrace(owner: ComponentBase, c: ComponentBase): void {
         if (!keepsTrace(c)) return;
         const host = findAppendableComponent(owner)?.element as unknown as Node | undefined;
@@ -894,7 +896,7 @@ function placeTrace(owner: ComponentBase, c: ComponentBase): void {
         const opts: any = c.motif.options;
         const trace: Node = opts.placeholder ?? (opts.placeholder = dom.createComment("h"));
         if (trace.parentNode === host) return;
-        host.insertBefore(trace, followingAnchor(owner, owner.controls.items.indexOf(c) + 1, host));
+        host.insertBefore(trace, followingAnchor(owner, childIndex(owner, c) + 1, host));
 }
 
 function removeComponentDom(c: any, node: Node, alsoPlaceholder: boolean): void {
@@ -3034,7 +3036,7 @@ export function applyFallthroughProps(props: any, component: ComponentBase): voi
 }
 
 
-export function findAppendableComponent(component: ComponentBase): ComponentBase | null | undefined {
+function findAppendableComponent(component: ComponentBase): ComponentBase | null | undefined {
 
         return safeCall<ComponentBase | null | undefined>(() => {
                 if (!component || component.isDisposed) return null;

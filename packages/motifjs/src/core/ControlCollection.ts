@@ -205,6 +205,43 @@ export class ControlCollection {
         /* @DEV-ONLY */ treeChanged(this.owner);
     }
 
+    _swap(control: ComponentBase, next: ComponentBase, index: number): ComponentBase | undefined {
+        const at = this.items[index] === control ? index : this.items.indexOf(control);
+        if (at === -1) return undefined;
+        next = resolveComponent(next);
+        if (next == undefined || next.isDisposed) return undefined;
+        checkReservedMembers(next);
+        if (next.parent) { next.parent.controls.detach(next); }
+        const place = this.items[at] === control ? at : this.items.indexOf(control);
+        if (place === -1) return undefined;
+        this.items[place] = next;
+        control.parent = null;
+        next.parent = this.owner;
+        /* @DEV-ONLY */ treeChanged(this.owner);
+        try { control.dispose(); } catch { /* ignore */ }
+
+        const pendingLeave = (next as any).__pendingLeave as PendingLeave | undefined;
+        if (pendingLeave) {
+            if (this.onAddBeforeBuild && !this.owner.isBuilt) {
+                this.onAddBeforeBuild(next);
+            }
+            pendingLeave.promise.then(() => {
+                if (next.isDisposed || this.owner.isDisposed || next.parent !== this.owner) return;
+                if (this.onAdd && this.owner.isBuilt) this.onAdd(next);
+            });
+            return next;
+        }
+
+        if (this.onAdd && this.owner.isBuilt) {
+            this.onAdd(next);
+        }
+
+        if (this.onAddBeforeBuild && !this.owner.isBuilt) {
+            this.onAddBeforeBuild(next);
+        }
+        return next;
+    }
+
     moveToIndex(control: ComponentBase, index: number): void {
         if (!control || control.isDisposed) return;
         if (!Number.isFinite(index as any)) return;
