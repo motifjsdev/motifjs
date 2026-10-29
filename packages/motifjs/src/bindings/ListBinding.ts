@@ -71,9 +71,9 @@ export class ListBinding implements IBaseBinding {
         }
     }
     reActivate(): void {
-
-        this.deactivate();
-        this.activate();
+        if (!this._isActive) return this.activate();
+        this.pause();
+        this._setupBinding();
     }
     private _disposeAll() {
         this._rendered.forEach(c => { try { c.dispose && c.dispose(); } catch { } });
