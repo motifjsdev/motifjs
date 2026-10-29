@@ -29,6 +29,25 @@ export function readModelValue(el: any): any {
     return el.value;
 }
 
+export function isWritablePathKey(target: object, key: string): boolean {
+    if (key === '__proto__') return false;
+    if (key === 'constructor' || key === 'prototype') return Object.prototype.hasOwnProperty.call(target, key);
+    return true;
+}
+
+function writeTargetPath(component: ComponentBase, propertyName: string, value: any): void {
+    const path = propertyName.split('.');
+    let target: any = component;
+    for (let i = 0; i < path.length - 1; i++) {
+        if (!isWritablePathKey(target, path[i])) return;
+        target = target[path[i]];
+        if (target === null || typeof target !== 'object') return;
+    }
+    const key = path[path.length - 1];
+    if (!isWritablePathKey(target, key)) return;
+    target[key] = value;
+}
+
 export class Binding implements IBaseBinding {
     propertyName: string;
     dataSource: any;
@@ -138,6 +157,10 @@ export class Binding implements IBaseBinding {
     }
 
     private _updateComponentProperty(value: any): void {
+        if (this.propertyName.indexOf('.') !== -1) {
+            writeTargetPath(this._component, this.propertyName, value);
+            return;
+        }
 
         switch (this.propertyName.toLowerCase()) {
             case 'wait': {

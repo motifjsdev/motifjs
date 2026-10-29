@@ -8,7 +8,7 @@ import { dom } from "../core/dom";
 import { effect, untracked } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
 import { listCreated, frameCreated, emptyCreated } from "../devtools/tree";
-import { Binding, readModelValue } from "./Binding";
+import { Binding, isWritablePathKey, readModelValue } from "./Binding";
 import { BindingFormatInfo, IBaseBinding } from "./IBaseBinding";
 import { IBindingCollection } from "./IBindingCollection";
 import { ListBinding, ListBindingOptions } from "./ListBinding";
@@ -20,12 +20,6 @@ const STOPPED = () => { };
 
 function resolveValue(value: any): any {
     return typeof value === 'function' ? resolveValue(value()) : value;
-}
-
-function isWritablePathKey(target: object, key: string): boolean {
-    if (key === '__proto__') return false;
-    if (key === 'constructor' || key === 'prototype') return Object.prototype.hasOwnProperty.call(target, key);
-    return true;
 }
 
 export class BindingCollection implements IBindingCollection {
