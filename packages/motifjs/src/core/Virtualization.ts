@@ -4,6 +4,7 @@ import { findAppendableComponent } from '../common/functions';
 import { ComponentBase, notifyDeactivated } from '../component/componentBase';
 import { effect, untracked } from '../store/reactivity-core';
 import { engine } from '../store';
+import { getRaw } from '../store/common';
 import { internalState } from '../devtools/devbus';
 import { effectOwner } from '../devtools/reactivity';
 import { reportError, reportWarning } from '../common/diagnostics';
@@ -54,8 +55,14 @@ export interface VirtualizationProps<T> {
     watch?: () => unknown;
 }
 
+type VirtualizationInnerState<T> = Omit<VirtualizationState<T>, 'data'> & { dataRevision: number };
+type VirtualizationAnchor = { keys: unknown[]; values: unknown[]; offsets: number[]; visible: number };
+
 export class Virtualization<T = any> extends Component<HTMLDivElement, VirtualizationProps<T>> {
-    private readonly _state: VirtualizationState<T>;
+    private readonly _state: VirtualizationInnerState<T>;
+    private readonly _publicState: VirtualizationState<T>;
+    private _data: T[] = [];
+    private _ownsData = false;
 
     private _virtualContent!: Component<Comment>;
     private _topSpacer!: Component<HTMLDivElement>;
@@ -81,9 +88,20 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
             totalCount: 0,
             hasMore: true,
             error: undefined,
-            data: []
+            dataRevision: 0
         });
         /* @DEV-ONLY */ internalState(this._state);
+        const state = this._state;
+        const self = this;
+        this._publicState = {
+            get isLoading() { return state.isLoading; },
+            get isInitialized() { return state.isInitialized; },
+            get currentPage() { return state.currentPage; },
+            get totalCount() { return state.totalCount; },
+            get hasMore() { return state.hasMore; },
+            get error() { return state.error; },
+            get data() { state.dataRevision; return self._data; }
+        };
 
         this._loadMore = this._loadMore.bind(this);
         this._renderLoadingState = this._renderLoadingState.bind(this);
@@ -115,15 +133,15 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
                 if (el) {
                     this.wrapper = el!;
                     this._loadInitial();
-                    el.style({ overflowY: 'auto', position: 'relative' });
+                    el.style({ overflowY: 'auto', position: 'relative', overflowAnchor: 'none' });
                     el.motif.on('scroll', this._handleScroll);
                 }
             });
 
-            this.controls.add(this.props.mainTemplate(this.contentWrapper, this._state));
+            this.controls.add(this.props.mainTemplate(this.contentWrapper, this._publicState));
         } else {
             this.wrapper = this;
-            this.element.style.cssText = 'overflow-y: auto; height: 100%; position: relative;';
+            this.element.style.cssText = 'overflow-y: auto; height: 100%; position: relative; overflow-anchor: none;';
             this.controls.add(this._topSpacer, this._virtualContent, this._bottomSpacer);
             this.motif.on('scroll', this._handleScroll); 
         }
@@ -148,6 +166,8 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
     }
 
     private _offsets: number[] | null = null;
+    private _first = 0;
+    private _drawnHeight: number | null = null;
     private _resizeObserver?: ResizeObserver;
     private _observed?: Element;
     private _observedHeight = -1;
@@ -184,7 +204,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
     }
 
     private _restHeight(): number {
-        const rest = this._state.hasMore ? Math.max(0, this._state.totalCount - this._state.data.length) : 0;
+        const rest = this._state.hasMore ? Math.max(0, this._state.totalCount - this._data.length) : 0;
         if (rest === 0) return 0;
         const h = this._fixedHeight();
         if (h !== null) return rest * h;
@@ -298,21 +318,13 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
                 scrollTop: this.wrapper?.element?.scrollTop ?? 0
             }, true);
             if (this.isDisposed || seq !== this._loadSeq) return;
-            const el = this.wrapper?.element as HTMLElement | undefined;
-            const top = el?.scrollTop ?? 0;
-            this._state.currentPage = pages - 1;
-            this._state.totalCount = response.totalCount;
-            this._state.hasMore = response.hasMore;
-            this._state.error = undefined;
-            this._state.data = response.items;
-            this._rebuildView();
-            // Satırlar sökülürken içerik kısalmasın: kısalırsa tarayıcı kaydırmayı kırpar.
-            // Boşluğu geçici olarak yeni listenin tam boyuna sabitle; renderViewport düzeltir.
-            this._topSpacer.style({ height: '0px' });
-            this._bottomSpacer.style({ height: this._offsetOf(this._view.length) + this._restHeight() + 'px' });
-            this._clearContent();
-            if (el && el.scrollTop !== top) el.scrollTop = top;
-            this.renderViewport();
+            this._changeView(() => {
+                this._state.currentPage = pages - 1;
+                this._state.totalCount = response.totalCount;
+                this._state.hasMore = response.hasMore;
+                this._state.error = undefined;
+                this._setItems(response.items);
+            });
         } catch (error) {
             if (this.isDisposed || seq !== this._loadSeq) return;
             this._state.error = error as Error;
@@ -326,7 +338,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
         if (!this._state.hasMore || this._isLoadingMore || !this._state.isInitialized) return;
         const el = this.wrapper.element as HTMLElement;
         const fixed = this._fixedHeight();
-        const loadedBottom = fixed !== null ? this._state.data.length * fixed : this._offsetOf(this._view.length);
+        const loadedBottom = fixed !== null ? this._data.length * fixed : this._offsetOf(this._view.length);
         const distanceToLoaded = loadedBottom - (el.scrollTop + el.clientHeight);
         if (distanceToLoaded < (this.props.autoLoadThreshold ?? 100)) void this._loadMore();
     }
@@ -351,7 +363,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
             this._state.isInitialized = true;
             this._state.isLoading = false;
             this._state.error = undefined;
-            this._state.data = response.items;
+            this._setItems(response.items);
             this._clearContent();
             this._rebuildView();
             this.renderViewport();
@@ -378,13 +390,13 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
                 scrollTop: this.wrapper?.element?.scrollTop ?? 0
             }, false);
             if (this.isDisposed || seq !== this._loadSeq) return;
-            this._state.totalCount = response.totalCount;
-            this._state.currentPage = nextPage;
-            this._state.hasMore = response.hasMore;
-            this._state.error = undefined;
-            this._state.data.push(...response.items);
-            this._rebuildView();
-            this.renderViewport();
+            this._changeView(() => {
+                this._state.totalCount = response.totalCount;
+                this._state.currentPage = nextPage;
+                this._state.hasMore = response.hasMore;
+                this._state.error = undefined;
+                this._appendItems(response.items);
+            });
 
         } catch (error) {
             if (this.isDisposed || seq !== this._loadSeq) return;
@@ -401,22 +413,157 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
         const el = this.wrapper?.element as HTMLElement | undefined;
         if (!el || el.clientHeight <= 0) return false;
         const fixed = this._fixedHeight();
-        const loadedBottom = fixed !== null ? this._state.data.length * fixed : this._offsetOf(this._view.length);
+        const loadedBottom = fixed !== null ? this._data.length * fixed : this._offsetOf(this._view.length);
         return loadedBottom - (el.scrollTop + el.clientHeight) < (this.props.autoLoadThreshold ?? 100);
     }
 
 
-    private _rebuildView(): void {
-        this._view = this.props.filter ? this.props.filter(this._state.data) : this._state.data;
+    private _setItems(items: T[]): void {
+        this._data = items;
+        this._ownsData = false;
+        this._state.dataRevision++;
+    }
+
+    private _appendItems(items: T[]): void {
+        if (!this._ownsData) {
+            this._data = this._data.slice();
+            this._ownsData = true;
+        }
+        for (let i = 0; i < items.length; i++) this._data.push(items[i]);
+        this._state.dataRevision++;
+    }
+
+    private _rebuildView(): Map<object, number> {
+        this._view = this.props.filter ? this.props.filter(this._data) : this._data;
         const seen = new Map<object, number>();
         this._occurrence = this._view.map(item => {
             if (typeof item !== 'object' || item === null) return 0;
-            const n = seen.get(item) ?? 0;
-            seen.set(item, n + 1);
+            const raw = getRaw(item) as object;
+            const n = seen.get(raw) ?? 0;
+            seen.set(raw, n + 1);
             return n;
         });
         if (typeof this.props.itemHeight === 'function') this._computeOffsets();
         else this._offsets = null;
+        return seen;
+    }
+
+    private _releaseMissingRows(counts: Map<object, number>): void {
+        if (!this._virtualContent) return;
+        const controls = this._virtualContent.controls;
+        const rows = new Set(this._cache.values());
+        if (controls.items.some(c => !rows.has(c))) {
+            this._clearContent();
+            return;
+        }
+        for (const [key, c] of this._cache) {
+            if (!c.isDisposed && this._rowStays(key, c, counts)) continue;
+            this._cache.delete(key);
+            if (c.parent === this._virtualContent) controls.silentUnlink(c);
+            if (!c.isDisposed) void c.dispose();
+        }
+    }
+
+    private _rowStays(key: unknown, c: ComponentBase, counts: Map<object, number>): boolean {
+        const item = (c as any).__listItemRef;
+        if (typeof key === 'number') return key < this._view.length && Object.is(this._view[key], item);
+        const raw = getRaw(item) as object;
+        const occurrence = key === raw ? 0 : (this._occurrenceKeys.get(raw)?.indexOf(key as object) ?? -1);
+        return occurrence >= 0 && (counts.get(raw) ?? 0) > occurrence;
+    }
+
+    private _changeView(change: () => void): void {
+        const anchor = this._captureAnchor();
+        const top = (this.wrapper?.element as HTMLElement | undefined)?.scrollTop ?? 0;
+        change();
+        const counts = this._rebuildView();
+        this._holdScroll(this._anchorTop(anchor) ?? top);
+        this._releaseMissingRows(counts);
+        this.renderViewport();
+    }
+
+    private _captureAnchor(): VirtualizationAnchor | null {
+        const el = this.wrapper?.element as HTMLElement | undefined;
+        if (!el || !this._virtualContent || !this._state.isInitialized) return null;
+        const top = el.scrollTop;
+        if (top <= 0) return null;
+        const rows = this._virtualContent.controls.items;
+        if (rows.length === 0 || rows.some(c => (c as any).__listKey === undefined)) return null;
+        const h = this._drawnHeight;
+        const offsets = this._offsets;
+        if (h === null && !offsets) return null;
+        const topOf = (i: number) => h !== null ? i * h : offsets![Math.min(i, offsets!.length - 1)];
+        const bottom = top + el.clientHeight;
+        const visible: number[] = [], above: number[] = [], below: number[] = [];
+        for (let pos = 0; pos < rows.length; pos++) {
+            if (topOf(this._first + pos + 1) <= top) above.push(pos);
+            else if (topOf(this._first + pos) >= bottom) below.push(pos);
+            else visible.push(pos);
+        }
+        const order = visible.concat(above.reverse(), below);
+        return {
+            keys: order.map(pos => (rows[pos] as any).__listKey),
+            values: order.map(pos => (rows[pos] as any).__listItemRef),
+            offsets: order.map(pos => topOf(this._first + pos) - top),
+            visible: visible.length
+        };
+    }
+
+    private _anchorTop(anchor: VirtualizationAnchor | null): number | null {
+        if (!anchor) return null;
+        const ranks = new Map<unknown, number>();
+        const byValue = new Map<unknown, number[]>();
+        anchor.keys.forEach((key, rank) => {
+            if (typeof key !== 'number') {
+                ranks.set(key, rank);
+                return;
+            }
+            const list = byValue.get(anchor.values[rank]);
+            if (list) list.push(rank);
+            else byValue.set(anchor.values[rank], [rank]);
+        });
+        const view = this._view;
+        const nearest = new Map<number, number>();
+        let best = Infinity, found = -1;
+        for (let i = 0; i < view.length && best > 0; i++) {
+            const item = view[i];
+            if (typeof item === 'object' && item !== null) {
+                const rank = ranks.get(this._keyFor(item, i));
+                if (rank !== undefined && rank < best) {
+                    best = rank;
+                    found = i;
+                }
+                continue;
+            }
+            const list = byValue.get(item);
+            if (!list) continue;
+            for (const rank of list) {
+                const was = anchor.keys[rank] as number;
+                const at = nearest.get(rank);
+                if (at === undefined || Math.abs(i - was) < Math.abs(at - was)) nearest.set(rank, i);
+            }
+        }
+        for (const [rank, i] of nearest) {
+            if (rank < best) {
+                best = rank;
+                found = i;
+            }
+        }
+        if (found < 0) return null;
+        const rowTop = this._offsetOf(found);
+        const height = this._offsetOf(found + 1) - rowTop;
+        const offset = best < anchor.visible ? Math.max(anchor.offsets[best], Math.min(0, 1 - height)) : anchor.offsets[best];
+        return Math.max(0, rowTop - offset);
+    }
+
+    private _holdScroll(top: number): void {
+        const el = this.wrapper?.element as HTMLElement | undefined;
+        if (!el) return;
+        // Satırlar sökülürken içerik kısalmasın: kısalırsa tarayıcı kaydırmayı kırpar.
+        // Boşluğu geçici olarak yeni listenin tam boyuna sabitle; renderViewport düzeltir.
+        this._topSpacer.style({ height: '0px' });
+        this._bottomSpacer.style({ height: this._offsetOf(this._view.length) + this._restHeight() + 'px' });
+        if (el.scrollTop !== top) el.scrollTop = top;
     }
 
     private _clearContent(): void {
@@ -506,6 +653,8 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
             if (c.parent === this._virtualContent) this._detachRow(c);
             this._virtualContent.controls.insert(pos, c);
         }
+        this._first = first;
+        this._drawnHeight = h;
         this._topSpacer.style({ height: topPx + 'px' });
         this._bottomSpacer.style({ height: bottomPx + 'px' });
 
@@ -525,11 +674,15 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
         return keys[occurrence] ??= {};
     }
 
-    private _rowFor(item: T, index: number): ComponentBase {
+    private _keyFor(item: T, index: number): unknown {
+        if (typeof item !== 'object' || item === null) return index;
+        const raw = getRaw(item) as object;
         const occurrence = this._occurrence[index] ?? 0;
-        const key = (typeof item === 'object' && item !== null)
-            ? (occurrence === 0 ? item : this._occurrenceKey(item, occurrence))
-            : index;
+        return occurrence === 0 ? raw : this._occurrenceKey(raw, occurrence);
+    }
+
+    private _rowFor(item: T, index: number): ComponentBase {
+        const key = this._keyFor(item, index);
         let component = this._cache.get(key);
         if (component && component.isDisposed) {
             this._cache.delete(key);
@@ -543,6 +696,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
         const rendered = this.props.itemTemplate(item, index);
         component = rendered instanceof ComponentBase ? rendered : new Component(rendered);
         (component as any).__listItemRef = item;
+        (component as any).__listKey = key;
         this._cache.set(key, component);
         return component;
     }
@@ -582,7 +736,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
     private _renderLoadingState(): void {
         if (!this._virtualContent || !this.props.loadingTemplate) return;
         this._clearContent();
-        const loadingElement = this.props.loadingTemplate(this._state);
+        const loadingElement = this.props.loadingTemplate(this._publicState);
         this._virtualContent.controls.add(loadingElement);
     }
 
@@ -609,39 +763,56 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
     }
 
     public refresh(): Promise<void> {
-        this._state.data = [];
-        this._state.currentPage = 0;
-        this._state.isInitialized = false;
-        this._state.hasMore = true;
-        this._rebuildView();
-        return this._loadInitial();
+        return untracked(() => {
+            this._setItems([]);
+            this._state.currentPage = 0;
+            this._state.isInitialized = false;
+            this._state.hasMore = true;
+            this._rebuildView();
+            return this._loadInitial();
+        });
     }
 
-    public setData(data: T[]) { 
-        this._loadSeq++;
-        this._stopDataWatch();
-        this._state.data = data;
-        this._state.currentPage = 0;
-        this._state.totalCount = data.length;
-        this._state.hasMore = false;
-        this._state.isInitialized = true;
-        this._state.isLoading = false;
-        this._state.error = undefined;
-        this._clearContent();
-        this._rebuildView();
-        this.renderViewport();
+    public setData(data: T[]) {
+        untracked(() => {
+            this._changeView(() => {
+                this._loadSeq++;
+                this._stopDataWatch();
+                this._setItems(data);
+                this._state.currentPage = 0;
+                this._state.totalCount = data.length;
+                this._state.hasMore = false;
+                this._state.isInitialized = true;
+                this._state.isLoading = false;
+                this._state.error = undefined;
+            });
+        });
+    }
+
+    public updateHeights(): void {
+        untracked(() => {
+            if (this.isDisposed || !this._state.isInitialized) return;
+            const anchor = this._captureAnchor();
+            const top = (this.wrapper?.element as HTMLElement | undefined)?.scrollTop ?? 0;
+            if (typeof this.props.itemHeight === 'function') this._computeOffsets();
+            else this._offsets = null;
+            this._holdScroll(this._anchorTop(anchor) ?? top);
+            this.renderViewport();
+        });
     }
 
     public scrollToIndex(index: number): void {
-        if (!this.wrapper) return;
-        const total = this._view.length;
-        const i = Math.min(Math.max(0, index), Math.max(0, total - 1));
-        this.wrapper.element.scrollTop = this._offsetOf(i);
-        this.renderViewport();
+        untracked(() => {
+            if (!this.wrapper) return;
+            const total = this._view.length;
+            const i = Math.min(Math.max(0, index), Math.max(0, total - 1));
+            this.wrapper.element.scrollTop = this._offsetOf(i);
+            this.renderViewport();
+        });
     }
 
     public getState(): Readonly<VirtualizationState<T>> {
-        return { ...this._state };
+        return { ...this._publicState };
     }
 
 }
