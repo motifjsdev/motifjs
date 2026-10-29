@@ -763,6 +763,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
     }
 
     public refresh(): Promise<void> {
+        if (this.isDisposed) return Promise.resolve();
         return untracked(() => {
             this._setItems([]);
             this._state.currentPage = 0;
@@ -774,6 +775,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
     }
 
     public setData(data: T[]) {
+        if (this.isDisposed) return;
         untracked(() => {
             this._changeView(() => {
                 this._loadSeq++;
@@ -803,7 +805,7 @@ export class Virtualization<T = any> extends Component<HTMLDivElement, Virtualiz
 
     public scrollToIndex(index: number): void {
         untracked(() => {
-            if (!this.wrapper) return;
+            if (this.isDisposed || !this.wrapper) return;
             const total = this._view.length;
             const i = Math.min(Math.max(0, index), Math.max(0, total - 1));
             this.wrapper.element.scrollTop = this._offsetOf(i);
