@@ -1,3 +1,5 @@
+import type { DevtoolsReveal } from './extensions';
+
 export type DevtoolsPath = number[];
 export type DevtoolsResult = { ok: true; value?: unknown } | { ok: false; error: string };
 export type DevtoolsComponentRef = { path: DevtoolsPath | null; type: string; tag: string };
@@ -24,6 +26,10 @@ export type DevtoolsEvent =
     | { type: 'documents:changed'; payload: Record<string, never> }
     | { type: 'service:created'; payload: { scope: number; token: string; lifetime: string; source: 'class' | 'factory' | 'value'; instance: unknown } }
     | { type: 'service:disposed'; payload: { scope: number; token: string; lifetime: string; instance: unknown } }
+    | { type: 'extension:registered'; payload: { name: string } }
+    | { type: 'extension:disposed'; payload: { name: string } }
+    | { type: 'extension:changed'; payload: { name: string; source?: string } }
+    | { type: 'extension:reveal'; payload: { name: string; target: DevtoolsReveal } }
     | { type: `ext:${string}`; payload?: unknown };
 
 export type DevtoolsStoreHolder =
@@ -51,6 +57,9 @@ export interface MotifDevtools {
     getStores(): { id: number; name: string; file?: string; type: 'reactive' | 'signal' | 'computed'; value: unknown; stale?: boolean; released?: boolean; holders: DevtoolsStoreHolder[] }[];
     getExtensions(): string[];
     readExtension(name: string): unknown;
+    readExtensionPanels(name: string): DevtoolsResult;
+    readExtensionSource(name: string, panel: string, source: string, params: unknown): Promise<DevtoolsResult>;
+    callExtension(name: string, panel: string, command: string, args: unknown): Promise<DevtoolsResult>;
     readValue(path: DevtoolsPath, source: 'props' | 'functionProps' | 'fields', keys: string[]): DevtoolsResult;
     readStore(id: number, keys: string[]): DevtoolsResult;
     readService(scope: number, token: string, keys: string[]): DevtoolsResult;

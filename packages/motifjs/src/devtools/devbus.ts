@@ -1,6 +1,6 @@
 import { getTree, getElement, pathOfElement, inspect, getServices, componentAt, holdersOf, FRAMEWORK_FIELDS, signalTypeOf, documentsSource, type StoreHolder } from './inspect';
 import { getCounters, resetCounters } from './counters';
-import { getExtensions, readExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
+import { getExtensions, readExtension, readExtensionPanels, readExtensionSource, callExtension, inspectExtensions, bindExtensionEmitter } from './extensions';
 import { setClass, setAttribute, setVisible, writeModel, setProp, navigate, BLOCKED_KEYS, type WriteResult } from './writes';
 import { readValue, readFrom } from './read';
 import { getScopes, recordScopes, bindScopesEmitter, serviceInstance } from './scopes';
@@ -47,7 +47,7 @@ export function setDevtoolsEnabled(enabled: boolean) {
     try {
         const g = globalThis as any;
         if (enabled) {
-            state.exposed = { version: 2, coreVersion: __MOTIF_VERSION__, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getScopes, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readValue, readStore, readService, getDocuments, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
+            state.exposed = { version: 2, coreVersion: __MOTIF_VERSION__, on, getWarnings, getRoutes, getStores, getTree, getElement, pathOfElement, inspect: inspectWithExtensions, getServices, getScopes, getCounters, getRoute, getNavigations, getErrors, getExtensions, readExtension, readExtensionPanels, readExtensionSource, callExtension, readValue, readStore, readService, getDocuments, setClass, setAttribute, setVisible, writeModel, setProp, navigate, setStoreValue, isEnabled };
             g.__MOTIF_DEVTOOLS__ = state.exposed;
             state.documentsOff ??= documentsSource.onChange(() => { emit('documents:changed', {}); });
         } else {
