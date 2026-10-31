@@ -1,5 +1,6 @@
 import { pathOf } from './inspect';
 import type { DevtoolsResult } from './types';
+import { fail, message } from './writes';
 
 export type DevtoolsCapabilities = { read?: boolean; subscribe?: boolean; write?: boolean };
 export type DevtoolsPanel = { id: string; title: string; icon?: string; order?: number; capabilities?: DevtoolsCapabilities; [key: string]: unknown };
@@ -55,8 +56,6 @@ const safely = (fn: () => unknown): unknown => {
     try { return fn(); } catch (error) { return { error: String((error as any)?.message ?? error) }; }
 };
 
-const fail = (error: string): DevtoolsResult => ({ ok: false, error });
-const message = (error: unknown) => String((error as any)?.message ?? error);
 const own = <T>(record: Record<string, T> | undefined, key: string): T | undefined => record !== undefined && Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
 
 function panelsOf(ext: DevtoolsExtension): DevtoolsPanel[] {

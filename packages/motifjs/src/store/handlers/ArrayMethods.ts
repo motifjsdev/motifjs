@@ -1,6 +1,7 @@
 import { ReactiveEngine } from "../ReactiveEngine";
 import { ITERATE_KEY, arrayMutation, getRaw, isObject, pauseTracking, resetTracking } from "../common";
 import { scanObserved } from "../scanMonitor";
+import { watching, wrote } from "../../devtools/changes";
 
 type PatchKind = 'lookup' | 'scan' | 'fold' | 'read' | 'iterate' | 'order' | 'join' | 'structural';
 
@@ -55,6 +56,36 @@ function mapIterator<T, R>(source: Iterator<T>, convert: (value: T) => R): Itera
     return iterator;
 }
 
+type ArrayChange = { index: number; removed: unknown[]; added: unknown[] };
+
+// dizinin kendi kuralıyla: eksi başlangıç sondan sayılır, sayı verilmezse sona kadar silinir
+function arrayChange(source: unknown[], method: string, args: unknown[]): ArrayChange | null {
+    const length = source.length;
+    switch (method) {
+        case 'push': return { index: length, removed: [], added: args };
+        case 'unshift': return { index: 0, removed: [], added: args };
+        case 'pop': return length === 0 ? null : { index: length - 1, removed: [source[length - 1]], added: [] };
+        case 'shift': return length === 0 ? null : { index: 0, removed: [source[0]], added: [] };
+        case 'splice': {
+            if (args.length === 0) return null;
+            const start = Math.trunc(Number(args[0])) || 0;
+            const index = start < 0 ? Math.max(length + start, 0) : Math.min(start, length);
+            const count = args.length === 1 ? length - index : Math.min(Math.max(Math.trunc(Number(args[1])) || 0, 0), length - index);
+            return { index, removed: source.slice(index, index + count), added: args.slice(2) };
+        }
+        default: return { index: 0, removed: source.slice(), added: [] };
+    }
+}
+
+function reportArrayChange(source: unknown[], method: string, change: ArrayChange): void {
+    if (method === 'sort' || method === 'reverse') {
+        if (change.removed.every((item, i) => Object.is(item, source[i]))) return;
+        change.added = source.slice();
+    }
+    if (change.removed.length === 0 && change.added.length === 0) return;
+    wrote({ target: source, kind: 'splice', method, index: change.index, removed: change.removed, added: change.added });
+}
+
 export class ArrayMethods {
     constructor(public engine: ReactiveEngine) { }
     get: Record<string | symbol, Function> = this.createArrayMethods();
@@ -73,12 +104,15 @@ export class ArrayMethods {
     }
 
     private mutate(source: any[], proxy: unknown, name: string | symbol, args: unknown[]) {
+        /* @DEV-ONLY */ const change = watching() ? arrayChange(source, String(name), args) : null;
         const previous = arrayMutation.target;
         const previousFrom = arrayMutation.from;
         arrayMutation.target = source;
         arrayMutation.from = Infinity;
         try {
-            return source[name as any].apply(proxy, args);
+            const result = source[name as any].apply(proxy, args);
+            /* @DEV-ONLY */ if (change !== null) reportArrayChange(source, String(name), change);
+            return result;
         } finally {
             const from = arrayMutation.from;
             arrayMutation.target = previous;

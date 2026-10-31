@@ -1,6 +1,7 @@
 import { ReactiveEngine } from "../ReactiveEngine";
 import { ITERATE_KEY, arrayMutation, getRaw, hasOwn, isNumericKey, isReadonly, removeArrayStack } from "../common";
 import { trigger, triggerRange } from "../reactivity-core";
+import { watching, reportSet } from "../../devtools/changes";
 
 
 export function createSetter(engine: ReactiveEngine) {
@@ -14,6 +15,7 @@ export function createSetter(engine: ReactiveEngine) {
         const oldLength = isArray ? target.length : 0;
         const numeric = isArray && isNumericKey(p);
         const hadKey = numeric ? Number(p) < oldLength : hasOwn(target, p);
+        /* @DEV-ONLY */ const cut = isArray && p === 'length' && arrayMutation.target !== target && Number(newValue) < oldLength && watching() ? target.slice(Number(newValue)) : null;
 
         const res = Reflect.set(target, p, newValue, receiver);
 
@@ -27,6 +29,7 @@ export function createSetter(engine: ReactiveEngine) {
         if (!isArray && hadKey && Object.is(newValue, oldValue)) {
             return res;
         }
+        /* @DEV-ONLY */ if (arrayMutation.target !== target && watching()) reportSet(target, p, hadKey, oldValue, newValue, cut);
 
         trigger(target, p);
         if (!isArray && !hadKey) {

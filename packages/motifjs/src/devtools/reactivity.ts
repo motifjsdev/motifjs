@@ -1,13 +1,15 @@
 import { devtools, storeOf } from './devbus';
 import { preview, pathOf, tagOf, typeOf, effectInfoOf, ownEffect, disownEffect } from './inspect';
 import { countEffectCreated, countEffectOwned, countEffectStopped, countRun, countFlush } from './counters';
+import { currentOperation } from './operations';
 
-type Trigger = { target: any; key: string; count: number; store?: { id: number; path: string[] } };
-type Flush = { at: number; runs: number; effects: Map<object, number>; triggers: Map<string, Trigger> };
+type Trigger = { target: any; key: string; count: number; store?: { id: number; path: string[] }; operationId?: number };
+type Flush = { id: number; at: number; runs: number; effects: Map<object, number>; triggers: Map<string, Trigger> };
 
 let nextOwner: { owner: object | null; kind: string } | null = null;
 let pending = new Map<string, Trigger>();
 let current: Flush | null = null;
+let lastFlush = 0;
 
 export function effectCreated(e: object): void {
     if (devtools() === undefined) return;
@@ -71,17 +73,19 @@ export function runFinished(e: object, at: number): void {
 export function triggered(target: object, key: unknown, effects: Iterable<object>): void {
     if (devtools() === undefined) return;
     const store = storeOf(target);
-    const t: { target: any; key: string; store?: { id: number; path: string[] } } = { target: preview(target), key: store !== null && store.type !== 'reactive' ? 'value' : String(key) };
+    const t: { target: any; key: string; store?: { id: number; path: string[] }; operationId?: number } = { target: preview(target), key: store !== null && store.type !== 'reactive' ? 'value' : String(key) };
     if (store !== null) t.store = { id: store.id, path: store.path };
+    const operation = currentOperation();
+    if (operation !== null) t.operationId = operation.id;
     for (const e of effects) effectInfoOf(e).lastTrigger = t;
-    const id = t.key + '\u0000' + JSON.stringify(t.target) + '\u0000' + (store === null ? '' : store.id + '\u0000' + store.path.join('\u0000'));
+    const id = t.key + '\u0000' + JSON.stringify(t.target) + '\u0000' + (store === null ? '' : store.id + '\u0000' + store.path.join('\u0000')) + '\u0000' + (operation === null ? '' : operation.id);
     const p = pending.get(id);
     if (p) p.count++; else pending.set(id, { ...t, count: 1 });
 }
 
 export function flushStarting(): void {
     if (devtools() === undefined) return;
-    current = { at: performance.now(), runs: 0, effects: new Map(), triggers: pending };
+    current = { id: ++lastFlush, at: performance.now(), runs: 0, effects: new Map(), triggers: pending };
     pending = new Map();
 }
 
@@ -97,5 +101,7 @@ export function flushFinished(): void {
     });
     const duration = performance.now() - f.at;
     countFlush(duration, f.runs);
-    emit('reactivity:flush', { duration, runs: f.runs, triggers: [...f.triggers.values()], effects });
+    const triggers = [...f.triggers.values()];
+    const operations = [...new Set(triggers.flatMap(t => t.operationId === undefined ? [] : [t.operationId]))];
+    emit('reactivity:flush', { id: f.id, duration, runs: f.runs, triggers, effects, operations });
 }

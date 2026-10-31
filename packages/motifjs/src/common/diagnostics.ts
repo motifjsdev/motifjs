@@ -49,6 +49,7 @@ export const motifMessages = {
     MJX208: () => `An effect threw.`,
     MJX209: (count: number, limit: number, owner: string) => `An effect tracked ${count} dependencies in one run (limit ${limit})${owner ? ', owner ' + owner : ''}. It reads many values one by one, probably a reactive list item by item; look items up by key or read the list with untracked(...). useReactiveMonitor({ dependencies }) sets the limit.`,
     MJX210: (method: string, count: number, who: string) => `"${method}()" scans a reactive list of ${count} items from ${who}: a change to the fields they read reruns all of them and each rereads the list, and both numbers grow with the data. Keep a Map keyed by id in the store or a computed index and read the item from it, or read the list with untracked(...). useReactiveMonitor({ scans: false }) switches this check off.`,
+    MJX211: (id: number, kind: string, name: string) => `Operation ${id} (${kind}${name ? ' ' + name : ''}) was resumed after it ended; its writes are still recorded under it. End an operation after its last write, or use startOperation/endOperation for work that spans callbacks.`,
 
     MJX301: (outlet: string, ms: number) => `RouterView outlet '${outlet}' was not built within ${ms} ms, so the route chain cannot be mounted. Does the layout component render a <RouterView>?`,
     MJX302: (name: string) => `Named route '${name}' was not found.`,

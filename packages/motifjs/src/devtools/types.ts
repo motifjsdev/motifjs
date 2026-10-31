@@ -1,4 +1,5 @@
 import type { DevtoolsReveal } from './extensions';
+import type { DevtoolsOperation } from './operations';
 
 export type DevtoolsPath = number[];
 export type DevtoolsResult = { ok: true; value?: unknown } | { ok: false; error: string };
@@ -18,7 +19,7 @@ export type DevtoolsEvent =
     | { type: 'component:wait'; payload: DevtoolsComponentRef & { waiting: boolean } }
     | { type: 'component:disposing'; payload: DevtoolsComponentRef }
     | { type: 'component:disposed'; payload: DevtoolsComponentRef & { duration?: number } }
-    | { type: 'reactivity:flush'; payload: { duration: number; runs: number; triggers: { target: unknown; key: string; count: number; store?: { id: number; path: string[] } }[]; effects: { path: DevtoolsPath | null; type: string | null; tag: string | null; kind: string; runs: number }[] } }
+    | { type: 'reactivity:flush'; payload: { id: number; duration: number; runs: number; triggers: { target: unknown; key: string; count: number; store?: { id: number; path: string[] }; operationId?: number }[]; effects: { path: DevtoolsPath | null; type: string | null; tag: string | null; kind: string; runs: number }[]; operations: number[] } }
     | { type: 'route:navigation-start'; payload: { uri: string } }
     | { type: 'route:navigation-end'; payload: { uri: string; requested: string; outcome: 'done' | 'skipped' | 'cancelled' | 'notFound' | 'error'; reason?: string; params?: unknown; duration: number } }
     | { type: 'stores:changed'; payload: Record<string, never> }
@@ -30,6 +31,8 @@ export type DevtoolsEvent =
     | { type: 'extension:disposed'; payload: { name: string } }
     | { type: 'extension:changed'; payload: { name: string; source?: string } }
     | { type: 'extension:reveal'; payload: { name: string; target: DevtoolsReveal } }
+    | { type: 'operation:started'; payload: DevtoolsOperation }
+    | { type: 'operation:finished'; payload: { id: number; duration: number; error?: string } }
     | { type: `ext:${string}`; payload?: unknown };
 
 export type DevtoolsStoreHolder =

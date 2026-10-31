@@ -4,8 +4,8 @@ export type WriteResult = { ok: true; value?: unknown } | { ok: false; error: st
 
 export const BLOCKED_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
-const fail = (error: string): WriteResult => ({ ok: false, error });
-const message = (error: unknown) => String((error as any)?.message ?? error);
+export const fail = (error: string): WriteResult => ({ ok: false, error });
+export const message = (error: unknown) => String((error as any)?.message ?? error);
 
 function at(path: number[]): any {
     const c = componentAt(path);

@@ -2,6 +2,7 @@ import { ReactiveEngine } from "../ReactiveEngine";
 import { ITERATE_KEY, getRaw, hasOwn, isObject } from "../common";
 import { track, trigger } from "../reactivity-core";
 import { NOT_META, readMeta } from "./getter";
+import { watching, wrote } from "../../devtools/changes";
 
 type AnyCollection = Map<any, any> | Set<any>;
 
@@ -56,6 +57,7 @@ function createCollectionMethods(engine: ReactiveEngine): Record<PropertyKey, Fu
             const existed = target.has(stored);
             const previous = target.get(stored);
             target.set(stored, raw);
+            /* @DEV-ONLY */ if ((!existed || !Object.is(previous, raw)) && watching()) wrote(existed ? { target, kind: 'update', key: stored, previous, value: raw } : { target, kind: 'add', key: stored, value: raw });
             if (!existed) changed(target, stored, true);
             else if (!Object.is(previous, raw)) changed(target, stored, false);
             return this;
@@ -65,6 +67,7 @@ function createCollectionMethods(engine: ReactiveEngine): Record<PropertyKey, Fu
             const stored = lookupKey(target, value);
             if (!target.has(stored)) {
                 target.add(stored);
+                /* @DEV-ONLY */ if (watching()) wrote({ target, kind: 'add', key: stored, value: stored });
                 changed(target, stored, true);
             }
             return this;
@@ -72,7 +75,9 @@ function createCollectionMethods(engine: ReactiveEngine): Record<PropertyKey, Fu
         delete(this: AnyCollection, key: unknown) {
             const target = getRaw(this);
             const found = lookupKey(target, key);
+            /* @DEV-ONLY */ const before = watching() ? { value: target instanceof Map ? target.get(found) : found } : null;
             const removed = target.delete(found);
+            /* @DEV-ONLY */ if (removed && before !== null) wrote({ target, kind: 'delete', key: found, previous: before.value });
             if (removed) changed(target, found, true);
             return removed;
         },
@@ -80,7 +85,9 @@ function createCollectionMethods(engine: ReactiveEngine): Record<PropertyKey, Fu
             const target = getRaw(this);
             if (target.size === 0) return;
             const keys = Array.from(target.keys());
+            /* @DEV-ONLY */ const before = watching() ? (target instanceof Map ? Array.from(target.entries()) : Array.from(target.values())) : null;
             target.clear();
+            /* @DEV-ONLY */ if (before !== null) wrote({ target, kind: 'clear', removed: before });
             for (const key of keys) trigger(target, key);
             trigger(target, ITERATE_KEY);
             trigger(target, KEYS_KEY);

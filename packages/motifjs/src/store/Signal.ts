@@ -1,6 +1,7 @@
 import { track, trigger, effect, createScheduledEffect, untracked, ScheduledEffect } from "./reactivity-core";
 import { pauseTracking, resetTracking } from "./common";
 import { effectOwner } from "../devtools/reactivity";
+import { watching, wrote } from "../devtools/changes";
 const SIGNAL_TARGET = Symbol('SignalTarget');
 const SIGNAL_KEY = Symbol('SignalKey');
 
@@ -32,7 +33,9 @@ export class Signal<T> {
     set value(newValue: T) {
         if (this._disposed) return;
         if (!this._equals(this._value as any, newValue as any)) {
+            /* @DEV-ONLY */ const previous = this._value;
             this._value = newValue;
+            /* @DEV-ONLY */ if (watching()) wrote({ target: this, kind: 'update', key: 'value', previous, value: newValue });
             trigger(this._target, this._key);
         }
     }
@@ -48,6 +51,7 @@ export class Signal<T> {
     mutate(mutator: (draft: T) => void): void {
         if (this._disposed) return;
         mutator(this._value);
+        /* @DEV-ONLY */ if (watching()) wrote({ target: this, kind: 'mutate' });
         trigger(this._target, this._key);
     }
 
