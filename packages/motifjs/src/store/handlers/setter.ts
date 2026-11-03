@@ -20,13 +20,14 @@ export function createSetter(engine: ReactiveEngine) {
         const unchanged = hadKey && Object.is(value, oldValue) && (value !== undefined || hasOwn(target, p));
         /* @DEV-ONLY */ const cut = isArray && p === 'length' && arrayMutation.target !== target && Number(newValue) < oldLength && watching() ? target.slice(Number(newValue)) : null;
 
-        const res = Reflect.set(target, p, value, receiver);
+        const own = engine.ReactiveMap().get(target) === receiver;
+        const res = own && (numeric || (isArray && p === 'length')) ? Reflect.set(target, p, value) : Reflect.set(target, p, value, receiver);
 
         if (engine.onValueChanged) {
             try { engine.onValueChanged({ raw: target, proxy: receiver }, p); } catch { }
         }
 
-        if (getRaw(target) !== getRaw(receiver)) {
+        if (!own) {
             return res;
         }
         if (unchanged) {
