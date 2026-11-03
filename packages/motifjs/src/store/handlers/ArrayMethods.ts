@@ -77,6 +77,27 @@ function arrayChange(source: unknown[], method: string, args: unknown[]): ArrayC
     }
 }
 
+function changeStart(source: unknown[], method: string, args: unknown[]): number {
+    const length = source.length;
+    if (method === 'push') return length;
+    if (method === 'pop') return Math.max(length - 1, 0);
+    if (method !== 'splice') return 0;
+    if (args.length === 0) return length;
+    const start = Math.trunc(Number(args[0])) || 0;
+    return start < 0 ? Math.max(length + start, 0) : Math.min(start, length);
+}
+
+function rawItems(method: string, args: unknown[]): unknown[] {
+    const from = method === 'splice' ? 2 : method === 'push' || method === 'unshift' ? 0 : args.length;
+    if (from >= args.length) return args;
+    const items = args.slice();
+    for (let i = from; i < items.length; i++) {
+        const item = items[i];
+        if (isObject(item)) items[i] = getRaw(item);
+    }
+    return items;
+}
+
 function reportArrayChange(source: unknown[], method: string, change: ArrayChange): void {
     if (method === 'sort' || method === 'reverse') {
         if (change.removed.every((item, i) => Object.is(item, source[i]))) return;
@@ -120,6 +141,66 @@ export class ArrayMethods {
             this.engine.trigger(source, ITERATE_KEY, undefined);
             if (from !== Infinity) this.engine.triggerRange(source, from);
         }
+    }
+
+    private mutateRaw(source: any[], proxy: unknown, name: string | symbol, args: unknown[]) {
+        const method = (Array.prototype as any)[name];
+        if (typeof name !== 'string' || source[name as any] !== method) return this.mutate(source, proxy, name, args);
+        /* @DEV-ONLY */ const change = watching() ? arrayChange(source, name, args) : null;
+        const oldLength = source.length;
+        const start = changeStart(source, name, args);
+        const before = name === 'push' || name === 'pop' ? null : source.slice(start);
+        let input = rawItems(name, args);
+        if (name === 'sort' && typeof args[0] === 'function') {
+            const compare = args[0] as (a: unknown, b: unknown) => number;
+            input = [(a: unknown, b: unknown) => compare(this.wrap(a), this.wrap(b))];
+        }
+        const previous = arrayMutation.target;
+        const previousFrom = arrayMutation.from;
+        arrayMutation.target = source;
+        arrayMutation.from = Infinity;
+        let result: any;
+        try {
+            result = method.apply(source, input);
+            /* @DEV-ONLY */ if (change !== null) reportArrayChange(source, name, change);
+        } finally {
+            const nested = arrayMutation.from;
+            arrayMutation.target = previous;
+            arrayMutation.from = previousFrom;
+            const from = Math.min(nested, this.triggerChanges(source, start, before, oldLength));
+            this.engine.trigger(source, ITERATE_KEY, undefined);
+            if (from !== Infinity) this.engine.triggerRange(source, from);
+        }
+        if (name === 'shift' || name === 'pop') return this.wrap(result);
+        if (name === 'splice') return (result as unknown[]).map(value => this.wrap(value));
+        if (name === 'sort' || name === 'reverse') return proxy;
+        return result;
+    }
+
+    private triggerChanges(source: any[], start: number, before: unknown[] | null, oldLength: number): number {
+        const newLength = source.length;
+        let from = Infinity;
+        if (before === null) {
+            const low = Math.min(oldLength, newLength);
+            const high = Math.max(oldLength, newLength);
+            for (let i = low; i < high; i++) this.engine.trigger(source, String(i), undefined);
+            if (high > low) from = low;
+        } else {
+            const end = Math.max(oldLength, newLength);
+            for (let i = start; i < end; i++) {
+                const k = i - start;
+                const was = i < oldLength ? before[k] : undefined;
+                const now = i < newLength ? source[i] : undefined;
+                if (Object.is(was, now) && (was !== undefined || (i < oldLength && k in before) === (i < newLength && i in source))) continue;
+                this.engine.trigger(source, String(i), undefined);
+                if (from === Infinity) from = i;
+            }
+        }
+        if (newLength !== oldLength) {
+            this.engine.trigger(source, 'length', undefined);
+            from = Math.min(from, newLength);
+        }
+        return from;
     }
 
     private patch(name: string | symbol, kind: PatchKind): Function {
@@ -192,7 +273,7 @@ export class ArrayMethods {
                     for (let index = 0; index < size; index++) {
                         owner.engine.track(source, String(index));
                     }
-                    const sorted = owner.mutate(source, this, name, args);
+                    const sorted = owner.mutateRaw(source, this, name, args);
                     owner.engine.track(source, name as any);
                     return sorted;
                 };
@@ -205,7 +286,7 @@ export class ArrayMethods {
                     pauseTracking();
                     const source = getRaw(this) as any;
                     try {
-                        return owner.mutate(source, this, name, args);
+                        return owner.mutateRaw(source, this, name, args);
                     } finally {
                         resetTracking();
                     }
