@@ -306,6 +306,7 @@ export class controlClass<ElementType extends Element | HTMLElement | Text | Doc
             try {
                 let v = fn();
                 if (key !== undefined && typeof v === 'function') v = v();
+                if (key !== undefined && !!v === rec.set.has(key)) return;
                 next = key !== undefined ? (v ? new Set<string>([key]) : new Set<string>()) : this._normalizeToSet(v);
             } catch (error) {
                 reportError('MJX208', error);
