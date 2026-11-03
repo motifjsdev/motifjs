@@ -14,15 +14,23 @@ class EffectMark {
     constructor(public effect: Effect) { }
 }
 
+const ACTIVE = 1;
+const RUNNING = 2;
+const WARNED = 4;
+
 class Effect {
     deps: (object | string | symbol)[] = [];
-    active = true;
-    running = false;
+    flags = ACTIVE;
     runs = 0;
     mark: EffectMark | undefined = undefined;
-    warned = false;
     scheduler?: () => void;
     constructor(public fn: EffectFn, private callback?: (value: unknown) => void) { }
+    get active() { return (this.flags & ACTIVE) !== 0; }
+    set active(value: boolean) { this.flags = value ? this.flags | ACTIVE : this.flags & ~ACTIVE; }
+    get running() { return (this.flags & RUNNING) !== 0; }
+    set running(value: boolean) { this.flags = value ? this.flags | RUNNING : this.flags & ~RUNNING; }
+    get warned() { return (this.flags & WARNED) !== 0; }
+    set warned(value: boolean) { this.flags = value ? this.flags | WARNED : this.flags & ~WARNED; }
     run() {
         let value: unknown;
         let ok = false;
