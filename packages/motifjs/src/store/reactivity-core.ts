@@ -243,30 +243,43 @@ function runReported(fn: () => unknown) {
 }
 
 const MAX_EFFECT_RUNS_PER_FLUSH = 50;
+const flushBatch: Effect[] = [];
 
 function flushEffects() {
     if (isFlushing) return;
     isFlushing = true;
     Promise.resolve().then(() => {
         /* @DEV-ONLY */ flushStarting();
-        const runCounts = new Map<Effect, number>();
+        let runCounts: Map<Effect, number> | undefined;
         try {
             while (effectQueue.size > 0) {
-                const batch = Array.from(effectQueue);
+                if (runCounts === undefined && flushBatch.length > 0) {
+                    runCounts = new Map();
+                    for (const e of flushBatch) runCounts.set(e, 1);
+                }
+                flushBatch.length = 0;
+                for (const e of effectQueue) flushBatch.push(e);
                 effectQueue.clear();
-                for (const e of batch) {
-                    const runs = (runCounts.get(e) ?? 0) + 1;
-                    runCounts.set(e, runs);
-                    if (runs > MAX_EFFECT_RUNS_PER_FLUSH) {
-                        if (runs === MAX_EFFECT_RUNS_PER_FLUSH + 1) {
-                            reportWarning('MJX203', [MAX_EFFECT_RUNS_PER_FLUSH], { fn: String((e as any).fn).slice(0, 200) });
+                for (const e of flushBatch) {
+                    if (runCounts !== undefined) {
+                        const runs = (runCounts.get(e) ?? 0) + 1;
+                        runCounts.set(e, runs);
+                        if (runs > MAX_EFFECT_RUNS_PER_FLUSH) {
+                            if (runs === MAX_EFFECT_RUNS_PER_FLUSH + 1) {
+                                reportWarning('MJX203', [MAX_EFFECT_RUNS_PER_FLUSH], { fn: String((e as any).fn).slice(0, 200) });
+                            }
+                            continue;
                         }
-                        continue;
                     }
-                    runReported(() => e.run());
+                    try {
+                        e.run();
+                    } catch (error) {
+                        reportError('MJX208', error);
+                    }
                 }
             }
         } finally {
+            flushBatch.length = 0;
             effectQueue.clear();
             isFlushing = false;
             /* @DEV-ONLY */ flushFinished();
