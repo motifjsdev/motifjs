@@ -28,6 +28,8 @@ class Effect {
         let ok = false;
         if (!this.active || this.running) return;
         this.runs++;
+        const outerUnseen = unseen;
+        unseen = this.deps.length >> 1;
         effectStack.push(this);
         this.running = true;
         /* @DEV-ONLY */ const devAt = runStarting();
@@ -37,7 +39,8 @@ class Effect {
         } finally {
             effectStack.pop();
             this.running = false;
-            sweep(this);
+            if (unseen !== 0) sweep(this);
+            unseen = outerUnseen;
             /* @DEV-ONLY */ checkDependencies(this);
             /* @DEV-ONLY */ runFinished(this, devAt);
             if (ok && this.callback) {
@@ -55,6 +58,7 @@ class Effect {
 
 const depMap = new WeakMap<object, Map<string | symbol, Dep>>();
 const effectStack: Effect[] = [];
+let unseen = 0;
 const rangeMax = new WeakMap<object, Map<Effect, number>>();
 const effectQueue = new Set<Effect>();
 let isFlushing = false;
@@ -96,7 +100,10 @@ export function track(target: object, key: string | symbol) {
         const seen = dep.get(effect);
         if (seen === effect.runs) return;
         dep.set(effect, effect.runs);
-        if (seen !== undefined) return;
+        if (seen !== undefined) {
+            if (effect.running) unseen--;
+            return;
+        }
     } else {
         const mark = markOf(effect, effect.runs);
         if (dep === mark) return;
@@ -104,6 +111,7 @@ export function track(target: object, key: string | symbol) {
             deps.set(key, mark);
         } else if (ownerOf(dep) === effect) {
             deps.set(key, mark);
+            if (effect.running) unseen--;
             return;
         } else {
             deps.set(key, new Map([[ownerOf(dep), runOf(dep)], [effect, effect.runs]]));
