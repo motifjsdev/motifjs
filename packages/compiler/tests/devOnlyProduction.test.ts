@@ -265,3 +265,26 @@ describe('@DEV-ONLY-BEGIN ile @DEV-ONLY-END arası production çıktısına girm
         expect(() => vite(false).transform(src, '/app/src/load.ts')).toThrow(/@DEV-ONLY-BEGIN/);
     });
 });
+
+describe('500 KB üstü dosyada Babel notu', () => {
+    const header = CORE.slice(0, CORE.indexOf('\n') + 1);
+    const body = CORE.slice(header.length);
+    const source = header + Array.from({ length: 900 }, (_, i) => body.replace(/ControlCollection/g, `ControlCollection${i}`)).join('\n');
+
+    test.each([
+        ['npm paketi', '/app/node_modules/@motifx/core/dist/chunks/core-x.esm.js'],
+        ['bağlı paket', '/repo/packages/motifjs/dist/chunks/core-x.esm.js'],
+    ])('%s yolundan gelen dosya notsuz derlenir ve işaretli satırlar yine silinir', (_label, id) => {
+        expect(source.length).toBeGreaterThan(500000);
+        const error = jest.spyOn(console, 'error').mockImplementation(() => { });
+        try {
+            const code = vite(true).transform(source, id)?.code;
+            expect(error.mock.calls.filter((call) => String(call[0]).includes('[BABEL] Note'))).toEqual([]);
+            expect(code).toBeDefined();
+            expect(code).not.toContain('treeChanged(this.owner)');
+            expect(code).toContain('this.items.push(item)');
+        } finally {
+            error.mockRestore();
+        }
+    });
+});
