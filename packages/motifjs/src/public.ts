@@ -1,6 +1,7 @@
 export {
     Application,
     ApplicationBuilder,
+    asReadonly,
     asyncTracking,
     clearModel,
     Component,
@@ -32,6 +33,7 @@ export {
     FromService,
     inject,
     Injectable,
+    isReadonly,
     JSX,
     Lazy,
     LazyComputed,
@@ -84,6 +86,7 @@ export type {
     ComponentBaseOptions,
     CSSTransitionInfo,
     CustomParameters,
+    DeepReadonly,
     EffectFn,
     ElementType,
     Event,

@@ -26,7 +26,7 @@ export function createGetter(engine: ReactiveEngine) {
         const meta = readMeta(engine, target, p, receiver)
         if (meta !== NOT_META) return meta
 
-        if (Array.isArray(target) && !engine.isReadonly) {
+        if (Array.isArray(target)) {
             const patched = engine.arrayMethods.get
             if (hasOwn(patched, p)) {
                 const method = patched[p]
@@ -44,7 +44,7 @@ export function createGetter(engine: ReactiveEngine) {
         const value = Reflect.get(target, p, receiver)
         if (p === '__proto__' || isIntrinsicSymbol(p)) return value
 
-        if (!engine.isReadonly) track(target, p)
+        track(target, p)
         if (engine.superficial || !isObject(value)) return value
         return engine.reactive(value)
     }

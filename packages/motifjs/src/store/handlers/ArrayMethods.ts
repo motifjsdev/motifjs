@@ -2,6 +2,7 @@ import { ReactiveEngine } from "../ReactiveEngine";
 import { ITERATE_KEY, arrayMutation, getRaw, isObject, pauseTracking, resetTracking } from "../common";
 import { scanObserved } from "../scanMonitor";
 import { watching, wrote } from "../../devtools/changes";
+import { motifError } from "../../common/diagnostics";
 
 type PatchKind = 'lookup' | 'scan' | 'fold' | 'read' | 'iterate' | 'order' | 'join' | 'structural';
 
@@ -268,6 +269,7 @@ export class ArrayMethods {
                 };
             case 'order':
                 return function (this: unknown[], ...args: any[]) {
+                    if (owner.engine.isReadonly) throw motifError('MJX212', `call ${String(name)}()`);
                     const source = getRaw(this) as any;
                     const size = this.length;
                     for (let index = 0; index < size; index++) {
@@ -283,6 +285,7 @@ export class ArrayMethods {
                 };
             default:
                 return function (this: unknown[], ...args: any[]) {
+                    if (owner.engine.isReadonly) throw motifError('MJX212', `call ${String(name)}()`);
                     pauseTracking();
                     const source = getRaw(this) as any;
                     try {

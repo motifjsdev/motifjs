@@ -1,5 +1,6 @@
 import { ReactiveEngine } from "../ReactiveEngine";
 import { ITERATE_KEY, arrayMutation, getRaw, hasOwn, isNumericKey, isObject } from "../common";
+import { motifError } from "../../common/diagnostics";
 import { trigger, triggerRange } from "../reactivity-core";
 import { watching, reportSet } from "../../devtools/changes";
 
@@ -7,7 +8,7 @@ import { watching, reportSet } from "../../devtools/changes";
 export function createSetter(engine: ReactiveEngine) {
     return function (target: any, p: any, newValue: any, receiver: any) {
         if (engine.isReadonly) {
-            return false;
+            throw motifError('MJX212', `write "${String(p)}"`);
         }
 
         const isArray = Array.isArray(target);

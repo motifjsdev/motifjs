@@ -3,6 +3,7 @@ import { ITERATE_KEY, getRaw, hasOwn, isObject } from "../common";
 import { track, trigger } from "../reactivity-core";
 import { NOT_META, readMeta } from "./getter";
 import { watching, wrote } from "../../devtools/changes";
+import { motifError } from "../../common/diagnostics";
 
 type AnyCollection = Map<any, any> | Set<any>;
 
@@ -51,6 +52,7 @@ function createCollectionMethods(engine: ReactiveEngine): Record<PropertyKey, Fu
             return target.has(found);
         },
         set(this: Map<any, any>, key: unknown, value: unknown) {
+            if (engine.isReadonly) throw motifError('MJX212', 'call set()');
             const target = getRaw(this);
             const stored = lookupKey(target, key);
             const raw = getRaw(value);
@@ -63,6 +65,7 @@ function createCollectionMethods(engine: ReactiveEngine): Record<PropertyKey, Fu
             return this;
         },
         add(this: Set<any>, value: unknown) {
+            if (engine.isReadonly) throw motifError('MJX212', 'call add()');
             const target = getRaw(this);
             const stored = lookupKey(target, value);
             if (!target.has(stored)) {
@@ -73,6 +76,7 @@ function createCollectionMethods(engine: ReactiveEngine): Record<PropertyKey, Fu
             return this;
         },
         delete(this: AnyCollection, key: unknown) {
+            if (engine.isReadonly) throw motifError('MJX212', 'call delete()');
             const target = getRaw(this);
             const found = lookupKey(target, key);
             /* @DEV-ONLY */ const before = watching() ? { value: target instanceof Map ? target.get(found) : found } : null;
@@ -82,6 +86,7 @@ function createCollectionMethods(engine: ReactiveEngine): Record<PropertyKey, Fu
             return removed;
         },
         clear(this: AnyCollection) {
+            if (engine.isReadonly) throw motifError('MJX212', 'call clear()');
             const target = getRaw(this);
             if (target.size === 0) return;
             const keys = Array.from(target.keys());

@@ -111,6 +111,13 @@ type DeepState<T> = T extends OpaqueState ? T
 
 interface BoxedPrimitive<T> { value: T }
 
+export type DeepReadonly<T> = T extends (...args: any[]) => any ? T
+    : T extends Map<infer K, infer V> ? ReadonlyMap<K, DeepReadonly<V>>
+    : T extends Set<infer V> ? ReadonlySet<DeepReadonly<V>>
+    : T extends ReadonlyArray<infer V> ? ReadonlyArray<DeepReadonly<V>>
+    : T extends object ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+    : T;
+
 export type UnwrapValueRefs<T> = T extends number | string | boolean ? BoxedPrimitive<T> : DeepState<T>;
 
 

@@ -2,6 +2,7 @@ import { ReactiveEngine } from "../ReactiveEngine";
 import { ITERATE_KEY, arrayMutation, hasOwn, isIntrinsicSymbol, isNumericKey, pauseTracking, resetTracking } from "../common";
 import { track, trigger, triggerRange } from "../reactivity-core";
 import { watching, wrote } from "../../devtools/changes";
+import { motifError } from "../../common/diagnostics";
 
 export function createOwn(engine: ReactiveEngine) {
     return function ownKeys(target: any) {
@@ -23,7 +24,7 @@ export function createHas(engine: ReactiveEngine) {
 export function createDelete(engine: ReactiveEngine) {
     return function deleteProperty(target: any, p: any) {
         if (engine.isReadonly) {
-            return false;
+            throw motifError('MJX212', `delete "${String(p)}"`);
         }
         pauseTracking()
         try {

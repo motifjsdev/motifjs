@@ -1,9 +1,12 @@
 
-import { ReactiveEngine } from "./ReactiveEngine";
-import { UnwrapValueRefs } from "./common";
+import { ReactiveEngine, isReadonlyView, readonlyViewMap } from "./ReactiveEngine";
+import { DeepReadonly, UnwrapValueRefs, getRaw, isObject } from "./common";
 import { Signal, Computed, LazyComputed, KeySelection, selectionOf } from "./Signal";
 import { registerStore } from "../devtools/devbus";
 export const engine = new ReactiveEngine();
+const readonlyEngine = new ReactiveEngine();
+readonlyEngine.isReadonly = true;
+readonlyEngine.ReactiveMap = readonlyViewMap;
 
 
 export function reactiveConfig(config: {
@@ -26,6 +29,15 @@ export function reactive<T>(model: T): UnwrapValueRefs<T> {
     const result = engine.reactive<T>(model);
     /* @DEV-ONLY */ registerStore(result as object, 'reactive', 'reactive', model);
     return result;
+}
+
+export function asReadonly<T>(model: T): DeepReadonly<T> {
+    if (!isObject(model)) return model as DeepReadonly<T>;
+    return readonlyEngine.reactive(getRaw(model)) as DeepReadonly<T>;
+}
+
+export function isReadonly(value: unknown): boolean {
+    return isReadonlyView(value);
 }
 
 export function useModel<T>(model: T): UnwrapValueRefs<T> {
@@ -72,4 +84,5 @@ export { ReactiveEngine };
 export { configureReactivityLeakMonitor, track, trigger, effect, createScheduledEffect, asyncTracking, untracked } from "./reactivity-core";
 export type { EffectFn, ScheduledEffect, AsyncTrackingToken } from "./reactivity-core";
 export * from "./Signal";
+export type { DeepReadonly } from "./common";
 import { untracked } from "./reactivity-core";

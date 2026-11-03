@@ -12,6 +12,12 @@ export const ReactiveEngineMapper = new WeakSet<ReactiveEngine>();
 const AllreactiveMap: WeakMap<any, any> = new WeakMap();
 function armgetter() { return AllreactiveMap; }
 
+const ReadonlyViewMap: WeakMap<any, any> = new WeakMap();
+export function readonlyViewMap() { return ReadonlyViewMap; }
+export function isReadonlyView(value: unknown): boolean {
+    return isObject(value) && ReadonlyViewMap.get(getRaw(value)) === value;
+}
+
 
 function cloneDeep(item: any, seen: WeakMap<object, any>): any {
     if (item === null || typeof item !== 'object') return item;
@@ -100,11 +106,15 @@ export class ReactiveEngine {
             return model as any
         }
 
-        let existingProxy = AllreactiveMap.get(model)
+        const proxies = this.ReactiveMap();
+        let existingProxy = proxies.get(model)
         if (existingProxy) {
             return existingProxy as any
         }
-        existingProxy = AllreactiveMap.get(getRaw(model))
+        if (isReadonlyView(model)) {
+            return model as any
+        }
+        existingProxy = proxies.get(getRaw(model))
         if (existingProxy) {
             return existingProxy as any
         }
@@ -115,19 +125,19 @@ export class ReactiveEngine {
         // if (targetType === TargetType.INVALID) {
         if (targetType === TargetType.COLLECTION) {
             var proxy = new Proxy(model, this.collectionHandler);
-            AllreactiveMap.set(model, proxy);
+            proxies.set(model, proxy);
             return proxy;
         } else if (Array.isArray(model)) {
             var proxy = new Proxy(model, this.arrayHandler);
             // var original = Object.getPrototypeOf(proxy);
             // original["copy"] = () => { return model; }
             //     return "copied";
-            AllreactiveMap.set(model, proxy);
+            proxies.set(model, proxy);
             // try { this.startGc(); } catch { }
             return proxy;
         } else {
             var proxy = new Proxy(model, this.deepHandler);
-            AllreactiveMap.set(model, proxy);
+            proxies.set(model, proxy);
             // try { this.startGc(); } catch { }
             return proxy;
         }
