@@ -3,7 +3,6 @@
 import { ComponentBase } from "../component/componentBase";
 import type { Frame } from "../component/Frame";
 import { makeComponent, makeFragment, makeFrame } from "../component/componentSlots";
-import { quietCleanup } from "../disposable/Cleanup";
 import { dom } from "../core/dom";
 import { effect, untracked } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
@@ -15,8 +14,44 @@ import { ListBinding, ListBindingOptions } from "./ListBinding";
 import { reportError } from "../common/diagnostics";
 import { lazyBindMethods } from "../common/lazyBind";
 import { pushTight } from "../common/pushTight";
+import { IDisposable } from "../disposable/IDisposable";
 
 const STOPPED = () => { };
+
+class KeptEffect implements IDisposable {
+    stop: () => void;
+    constructor(private _owner: BindingCollection | undefined, private _start: () => () => void, private _teardown?: () => void) {
+        this.stop = _start();
+    }
+    restart(): void {
+        this.stop();
+        this.stop = this._start();
+    }
+    release(): void {
+        this.stop();
+        this._teardown?.();
+        this._owner?._forget(this);
+    }
+    dispose(): void {
+        const owner = this._owner;
+        if (owner === undefined) return;
+        this._owner = undefined;
+        try {
+            this.stop();
+            this._teardown?.();
+            owner._forget(this);
+        } catch { }
+    }
+}
+
+function placeIn(host: ComponentBase, next: ComponentBase, previous: ComponentBase | null) {
+    if (!previous) {
+        host.controls.add(next);
+        return;
+    }
+    host.controls.insert(host.controls.items.indexOf(previous), next);
+    host.controls.remove(previous);
+}
 
 function resolveValue(value: any): any {
     return typeof value === 'function' ? resolveValue(value()) : value;
@@ -32,25 +67,24 @@ export class BindingCollection implements IBindingCollection {
     constructor(component: ComponentBase) {
         this._component = component;
     }
-    private _own(stop: () => void) {
+    private _own(record: KeptEffect) {
         if (this._branchScope) {
-            this._branchScope.push(stop);
+            this._branchScope.push(() => record.release());
             return;
         }
-        this._component.motif.register(quietCleanup(stop));
+        this._component.motif.register(record);
     }
     private _keepEffect(start: () => () => void, teardown?: () => void): void {
-        const record = { stop: start(), restart: () => { record.stop(); record.stop = start(); } };
-        (this._effects ??= []).push(record);
-        this._own(() => {
-            record.stop();
-            teardown?.();
-            const list = this._effects;
-            if (list) {
-                const i = list.indexOf(record);
-                if (i >= 0) list.splice(i, 1);
-            }
-        });
+        const record = new KeptEffect(this, start, teardown);
+        pushTight(this._effects ??= [], record);
+        this._own(record);
+    }
+    _forget(record: KeptEffect): void {
+        const list = this._effects;
+        if (list) {
+            const i = list.indexOf(record);
+            if (i >= 0) list.splice(i, 1);
+        }
     }
 
     when(computeFn: () => any, renderFn: (isTrue: boolean) => any) {
@@ -177,14 +211,6 @@ export class BindingCollection implements IBindingCollection {
         const host = this._component;
         let text: ComponentBase | null = null;
         let frame: Frame | null = null;
-        const place = (next: ComponentBase, previous: ComponentBase | null) => {
-            if (!previous) {
-                host.controls.add(next);
-                return;
-            }
-            host.controls.insert(host.controls.items.indexOf(previous), next);
-            host.controls.remove(previous);
-        };
         this._keepEffect(() => {
             /* @DEV-ONLY */ effectOwner(host, 'method');
             const stop = effect(cb, (result) => {
@@ -196,14 +222,14 @@ export class BindingCollection implements IBindingCollection {
                         return;
                     }
                     text = makeComponent(dom.createTextNode(result as any));
-                    place(text, frame);
+                    placeIn(host, text, frame);
                     frame = null;
                     return;
                 }
                 if (!frame) {
                     frame = makeFrame();
                     /* @DEV-ONLY */ frameCreated(frame, 'Expression');
-                    place(frame, text);
+                    placeIn(host, frame, text);
                     text = null;
                 }
                 if (result == null) {
