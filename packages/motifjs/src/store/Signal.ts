@@ -1,5 +1,5 @@
 import { track, trigger, effect, createScheduledEffect, untracked, ScheduledEffect } from "./reactivity-core";
-import { pauseTracking, resetTracking } from "./common";
+import { getRaw, pauseTracking, resetTracking } from "./common";
 import { effectOwner } from "../devtools/reactivity";
 import { watching, wrote } from "../devtools/changes";
 const SIGNAL_TARGET = Symbol('SignalTarget');
@@ -234,4 +234,34 @@ export class LazyComputed<T> {
     toString(): string {
         return String(this.value);
     }
+}
+
+export interface KeySelection<T> {
+    (key: T): boolean;
+    dispose(): void;
+}
+
+export function selectionOf<T>(source: () => T): KeySelection<T> {
+    const target = {};
+    let current: T | undefined;
+    /* @DEV-ONLY */ effectOwner(null, 'selection');
+    let stop: (() => void) | undefined = effect(source, (value) => {
+        const previous = current;
+        current = getRaw(value);
+        if (Object.is(previous, current)) return;
+        trigger(target, previous as any);
+        trigger(target, current as any);
+    });
+    const isSelected = ((key: T) => {
+        const raw = getRaw(key);
+        track(target, raw as any);
+        return Object.is(raw, current);
+    }) as KeySelection<T>;
+    isSelected.dispose = () => {
+        if (stop === undefined) return;
+        const fn = stop;
+        stop = undefined;
+        fn();
+    };
+    return isSelected;
 }

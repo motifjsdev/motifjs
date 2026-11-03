@@ -1,7 +1,7 @@
 
 import { ReactiveEngine } from "./ReactiveEngine";
 import { UnwrapValueRefs } from "./common";
-import { Signal, Computed, LazyComputed } from "./Signal";
+import { Signal, Computed, LazyComputed, KeySelection, selectionOf } from "./Signal";
 import { registerStore } from "../devtools/devbus";
 export const engine = new ReactiveEngine();
 
@@ -62,6 +62,10 @@ export function createLazyComputed<T>(getter: () => T): LazyComputed<T> {
     const comp = new LazyComputed(getter);
     /* @DEV-ONLY */ registerStore(comp, 'computed', 'lazyComputed');
     return comp;
+}
+
+export function createSelection<T>(source: () => T): KeySelection<T> {
+    return selectionOf(source);
 }
 
 export { ReactiveEngine };
