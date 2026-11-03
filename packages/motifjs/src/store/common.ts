@@ -19,7 +19,6 @@ export const enum TargetType {
 export const ITERATE_KEY = Symbol('')
 export const RANGE_KEY = Symbol('')
 export let followTracking: boolean = true;
-export let arrayScope: { enabled: boolean, key: string } = { enabled: false, key: '' };
 export const arrayMutation: { target: object | null; from: number } = { target: null, from: Infinity };
 
 
@@ -98,23 +97,6 @@ export function resetTracking() {
     followTracking = trackingDepth > 0 ? savedTracking[--trackingDepth] : true;
 }
 
-const arrayStack: { enabled: boolean, key: string }[] = []
-
-
-export function addArrayStack(key: any) {
-    arrayStack.push(arrayScope)
-    arrayScope.enabled = true;
-    arrayScope.key = key;
-}
-export function removeArrayStack() {
-    const last = arrayStack.pop();
-    if (arrayStack.length > 0) {
-        arrayScope = last === undefined ? { enabled: false, key: '' } : last;
-    } else {
-        arrayScope = { enabled: false, key: '' }
-    }
-
-}
 
 
 declare const opaqueBrand: unique symbol

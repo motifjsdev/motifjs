@@ -1,5 +1,5 @@
 import { ReactiveEngine } from "../ReactiveEngine";
-import { ITERATE_KEY, arrayMutation, getRaw, hasOwn, isNumericKey, isObject, isReadonly, removeArrayStack } from "../common";
+import { ITERATE_KEY, arrayMutation, getRaw, hasOwn, isNumericKey, isObject, isReadonly } from "../common";
 import { trigger, triggerRange } from "../reactivity-core";
 import { watching, reportSet } from "../../devtools/changes";
 
@@ -54,7 +54,6 @@ export function createSetter(engine: ReactiveEngine) {
                 trigger(target, String(i));
             }
         }
-        removeArrayStack();
         return res;
     }
 }

@@ -1,5 +1,5 @@
 import { ReactiveEngine } from "../ReactiveEngine"
-import { Flags, addArrayStack, closeSetup, hasOwn, isIntrinsicSymbol, isObject, pauseTracking, resetTracking, setupActive } from "../common"
+import { Flags, closeSetup, hasOwn, isIntrinsicSymbol, isObject, pauseTracking, resetTracking, setupActive } from "../common"
 import { track } from "../reactivity-core"
 
 const ARRAY_MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 'reverse', 'sort'])
@@ -30,8 +30,7 @@ export function createGetter(engine: ReactiveEngine) {
             const patched = engine.arrayMethods.get
             if (hasOwn(patched, p)) {
                 const method = patched[p]
-                if (ARRAY_MUTATORS.has(p)) addArrayStack(p)
-                else track(target, p)
+                if (!ARRAY_MUTATORS.has(p)) track(target, p)
                 return method
             }
         }
