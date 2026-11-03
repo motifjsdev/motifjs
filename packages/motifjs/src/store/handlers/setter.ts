@@ -1,12 +1,12 @@
 import { ReactiveEngine } from "../ReactiveEngine";
-import { ITERATE_KEY, arrayMutation, getRaw, hasOwn, isNumericKey, isObject, isReadonly } from "../common";
+import { ITERATE_KEY, arrayMutation, getRaw, hasOwn, isNumericKey, isObject } from "../common";
 import { trigger, triggerRange } from "../reactivity-core";
 import { watching, reportSet } from "../../devtools/changes";
 
 
 export function createSetter(engine: ReactiveEngine) {
     return function (target: any, p: any, newValue: any, receiver: any) {
-        if (isReadonly(target)) {
+        if (engine.isReadonly) {
             return false;
         }
 

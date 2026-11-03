@@ -19,6 +19,18 @@ describe('data keys that look like internal reactive flags', () => {
         expect(seen).toEqual([1, 2]);
     });
 
+    it('writes to and deletes from an object carrying the motif.isReadonly registry symbol', async () => {
+        const raw: any = { a: 1, b: 1 };
+        raw[Symbol.for('motif.isReadonly')] = true;
+        const s: any = reactive(raw);
+        const seen = await watch(() => s.a);
+        s.a = 2;
+        delete s.b;
+        await tick();
+        expect(seen).toEqual([1, 2]);
+        expect('b' in raw).toBe(false);
+    });
+
     it('writes to a nested object carrying [__isReadonly__]', async () => {
         const s: any = reactive({ user: { '[__isReadonly__]': 1, name: 'a' } });
         const seen = await watch(() => s.user.name);

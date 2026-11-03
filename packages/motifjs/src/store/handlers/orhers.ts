@@ -22,6 +22,9 @@ export function createHas(engine: ReactiveEngine) {
 
 export function createDelete(engine: ReactiveEngine) {
     return function deleteProperty(target: any, p: any) {
+        if (engine.isReadonly) {
+            return false;
+        }
         pauseTracking()
         try {
             const isOwned = hasOwn(target, p);
