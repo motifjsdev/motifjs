@@ -1,5 +1,5 @@
 
-import { TargetType, UnwrapValueRefs, getRaw, getTargetType, isObject, pauseTracking, resetTracking, enableTracking } from "./common";
+import { Flags, TargetType, UnwrapValueRefs, getRaw, getTargetType, isObject, pauseTracking, resetTracking, enableTracking } from "./common";
 import { createGetter } from "./handlers/getter";
 import { createSetter } from "./handlers/setter";
 import { createDelete, createHas, createOwn } from "./handlers/orhers";
@@ -96,8 +96,7 @@ export class ReactiveEngine {
         if (!isObject(model)) {
             model = { value: model } as any;
         }
-        const targetType = getTargetType(model);
-        if (targetType === TargetType.SYSTEM) {
+        if ((model as any)[Flags.SKIP] === true) {
             return model as any
         }
 
@@ -108,6 +107,10 @@ export class ReactiveEngine {
         existingProxy = AllreactiveMap.get(getRaw(model))
         if (existingProxy) {
             return existingProxy as any
+        }
+        const targetType = getTargetType(model);
+        if (targetType === TargetType.SYSTEM) {
+            return model as any
         }
         // if (targetType === TargetType.INVALID) {
         if (targetType === TargetType.COLLECTION) {
