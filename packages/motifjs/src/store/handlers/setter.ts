@@ -1,5 +1,5 @@
 import { ReactiveEngine } from "../ReactiveEngine";
-import { ITERATE_KEY, arrayMutation, getRaw, hasOwn, isNumericKey, isReadonly, removeArrayStack } from "../common";
+import { ITERATE_KEY, arrayMutation, getRaw, hasOwn, isNumericKey, isObject, isReadonly, removeArrayStack } from "../common";
 import { trigger, triggerRange } from "../reactivity-core";
 import { watching, reportSet } from "../../devtools/changes";
 
@@ -15,9 +15,11 @@ export function createSetter(engine: ReactiveEngine) {
         const oldLength = isArray ? target.length : 0;
         const numeric = isArray && isNumericKey(p);
         const hadKey = numeric ? Number(p) < oldLength : hasOwn(target, p);
+        const value = isObject(newValue) ? getRaw(newValue) : newValue;
+        const unchanged = hadKey && Object.is(value, oldValue) && (value !== undefined || hasOwn(target, p));
         /* @DEV-ONLY */ const cut = isArray && p === 'length' && arrayMutation.target !== target && Number(newValue) < oldLength && watching() ? target.slice(Number(newValue)) : null;
 
-        const res = Reflect.set(target, p, newValue, receiver);
+        const res = Reflect.set(target, p, value, receiver);
 
         if (engine.onValueChanged) {
             try { engine.onValueChanged({ raw: target, proxy: receiver }, p); } catch { }
@@ -26,10 +28,10 @@ export function createSetter(engine: ReactiveEngine) {
         if (getRaw(target) !== getRaw(receiver)) {
             return res;
         }
-        if (!isArray && hadKey && Object.is(newValue, oldValue)) {
+        if (unchanged) {
             return res;
         }
-        /* @DEV-ONLY */ if (arrayMutation.target !== target && watching()) reportSet(target, p, hadKey, oldValue, newValue, cut);
+        /* @DEV-ONLY */ if (arrayMutation.target !== target && watching()) reportSet(target, p, hadKey, oldValue, value, cut);
 
         trigger(target, p);
         if (!isArray && !hadKey) {
