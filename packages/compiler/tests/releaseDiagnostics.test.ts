@@ -26,18 +26,7 @@ function evaluate(code: string, name: string): any {
     return new Function('_mv', `${body}\nreturn ${name};`)(() => { });
 }
 
-describe('MJX006: unsupported directives fail the build', () => {
-    test.each(['x-reload', 'x-bind', 'x-effect', 'x-focus', 'x-interrupt', 'x-to', 'x-list', 'x-loop', 'x:focus', 'x:list'])('%s', (attr) => {
-        const error = compileError(view(`<div ${attr}={this.x}></div>`));
-        expect(error.code).toBe('MJX006');
-        expect(error.message).toContain(`[motifjs] MJX006: Directive "${attr}" is not supported.`);
-        expect(error.message).toContain('x-wait');
-    });
-
-    test('a valueless unsupported directive also fails', () => {
-        expect(compileError(view('<ul x-list><li/></ul>')).code).toBe('MJX006');
-    });
-
+describe('directives', () => {
     test('supported directives and lifecycle hooks still compile', () => {
         const c = new Compiler();
         const out = c.start(view('<span x-text={() => this.x} x-html={() => "<b/>"} x-value={() => this.x} x-watch={() => this.x} x-display={this.x} x-wait={this.x} x-mounted={() => 1} x:built={() => 1} />'), 'R.tsx')!.code!;
@@ -48,22 +37,6 @@ describe('MJX006: unsupported directives fail the build', () => {
         expect(out).toContain('sender.bindings.display(');
         expect(out).toContain('sender.bindings.wait(');
         expect(c.diagnostics).toEqual([]);
-    });
-});
-
-describe('MJX007: unknown x-* attribute', () => {
-    test('warns and keeps passing it on as an on* prop', () => {
-        const c = new Compiler();
-        const out = c.start(view('<span x-checked={this.x} />'), 'R.tsx')!.code!;
-        expect(out).toContain('onchecked: this.x');
-        const warning = c.diagnostics.find(d => d.code === 'MJX007')!;
-        expect(warning.message).toContain('Unknown directive "x-checked"');
-        expect(warning.message).toContain('"onchecked"');
-    });
-
-    test.each(['x-mounted', 'x-built', 'x-config', 'x-creating', 'x-created', 'x-disposing', 'x-activated', 'x-initializecomponent'])('%s is a known hook and does not warn', (attr) => {
-        expect(warningsOf(view(`<Box ${attr}={() => 1} />`)).map(d => d.code)).not.toContain('MJX007');
-        expect(warningsOf(view(`<div ${attr}={() => 1} />`)).map(d => d.code)).not.toContain('MJX007');
     });
 });
 
@@ -113,7 +86,7 @@ describe('coded compile errors', () => {
 });
 
 describe('warning messages are English', () => {
-    test('MJX001-MJX004, MJX007 and MJX016-MJX018 contain no Turkish text', () => {
+    test('MJX001-MJX004 and MJX016-MJX018 contain no Turkish text', () => {
         const all = [
             ...warningsOf(`function A(p){ return <div>{(q) => { const etiket = 1; return p.ok ? <A t={etiket}/> : <B/>; }}</div>; }`),
             ...warningsOf(`function A(p){ return <div>{() => { switch (p.k) { case MODE: return <A/>; default: return <B/>; } }}</div>; }`),
@@ -122,9 +95,8 @@ describe('warning messages are English', () => {
             ...warningsOf(`class A { view(){ return <div>{() => this.state.rows.find(x => x.id === this.id)}</div>; } }`),
             ...warningsOf(`class A { view(){ return <div>{() => this.state.n++}</div>; } }`),
             ...warningsOf(`class A { view(){ return <div>{() => this.state.items.sort().length}</div>; } }`),
-            ...warningsOf(view('<span x-foo={this.x} />')),
         ];
-        expect(all.map(d => d.code).sort()).toEqual(['MJX001', 'MJX002', 'MJX003', 'MJX004', 'MJX007', 'MJX016', 'MJX017', 'MJX018']);
+        expect(all.map(d => d.code).sort()).toEqual(['MJX001', 'MJX002', 'MJX003', 'MJX004', 'MJX016', 'MJX017', 'MJX018']);
         for (const d of all) expect(d.message).not.toMatch(/[çğışöüÇĞİŞÖÜ]/);
     });
 });

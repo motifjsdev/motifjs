@@ -2753,6 +2753,13 @@ const LIFECYCLE_HANDLER_LISTS: Record<string, keyof LifecycleStorage> = {
         'ondisposed': '_onDisposedHandlers',
 };
 
+const CORE_X_KEYS = new Set(['wait', 'display', 'chunk', 'model', 'text', 'html', 'value', 'watch', 'style', 'ref', 'key', 'indexkey', 'inject', 'creating', 'created']);
+
+function isCoreXKey(key: string): boolean {
+        const name = key.slice(2).toLowerCase();
+        return CORE_X_KEYS.has(name) || Object.prototype.hasOwnProperty.call(LIFECYCLE_HANDLER_LISTS, 'on' + name);
+}
+
 function collectLifecycleHandlers(component: ComponentBase, lowerKey: string, value: any): boolean {
         const listName = Object.prototype.hasOwnProperty.call(LIFECYCLE_HANDLER_LISTS, lowerKey) ? LIFECYCLE_HANDLER_LISTS[lowerKey] : undefined;
         if (!listName) return false;
@@ -2788,7 +2795,7 @@ export function takeLifecycleProps(props: any): any {
                 const hook = (key == 'initializeComponent' || key.startsWith('on'))
                         && Object.prototype.hasOwnProperty.call(LIFECYCLE_HANDLER_LISTS, lowerKey)
                         && (Array.isArray(value) ? value.length > 0 && value.every(fn => typeof fn === 'function') : typeof value === 'function');
-                if (hook || key.startsWith('x-') || key.startsWith('preconfig')) {
+                if (hook || (key.startsWith('x-') && isCoreXKey(key)) || key.startsWith('preconfig')) {
                         (taken ??= {})[key] = value;
                         delete props[key];
                 }
@@ -2817,7 +2824,7 @@ export function ParseProps(props: any, component: ComponentBase): boolean {
                         } else if (key.startsWith("on")) {
 
                                 component.motif.on(key as any, props[key]);
-                        } else if (key.startsWith("x-")) {
+                        } else if (key.startsWith("x-") && isCoreXKey(key)) {
 
                                 var nkey = key.replace("x-", "on");
                                 if (key.toLowerCase() == "x-wait") {
@@ -2967,7 +2974,7 @@ export function applyPlainElementProps(props: any, component: ComponentBase): vo
         let applied: Map<string, any> | null = null;
         for (const key of keys) {
                 if (PLAIN_ELEMENT_SKIP.has(key)) continue;
-                if (key.startsWith('x-') || key.startsWith('x:') || key.startsWith('__')) continue;
+                if (((key.startsWith('x-') || key.startsWith('x:')) && isCoreXKey(key)) || key.startsWith('__')) continue;
                 let v = props[key];
                 if (v === undefined) continue;
                 if (/^on/i.test(key)) {

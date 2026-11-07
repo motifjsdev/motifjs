@@ -2,6 +2,7 @@ import * as t from '@babel/types';
 import { NodePath } from '@babel/core';
 import { warn } from './diagnostics';
 import { isCoreFactory } from './storeNames';
+import { isDirective } from './motifParser';
 
 const LOOKUP_METHODS = new Set(['find', 'findIndex', 'findLast', 'findLastIndex', 'some', 'every']);
 const ORDERING_MUTATORS = new Set(['sort', 'reverse']);
@@ -212,7 +213,7 @@ function attributeName(attr: t.JSXAttribute): string {
 
 function isGetterAttribute(name: string): boolean {
     const lower = name.toLowerCase();
-    return !lower.startsWith('on') && !lower.startsWith('x:') && !PLAIN_ATTRIBUTES.has(lower);
+    return !lower.startsWith('on') && !(lower.startsWith('x:') && isDirective(lower)) && !PLAIN_ATTRIBUTES.has(lower);
 }
 
 function reactiveFieldsOf(cls: NodePath<t.Class> | null, scope: NodePath['scope']): Set<string> {

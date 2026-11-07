@@ -86,7 +86,7 @@ compiler({
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `diagnostics` | `true` | Print compiler warnings (`MJX001`–`MJX004`, `MJX007`, `MJX015`) for patterns that compile but do not behave as they read. `MJX015` (a class component override that does not reach `super` on every path) is also checked in `.ts` / `.js` files. |
+| `diagnostics` | `true` | Print compiler warnings (`MJX001`–`MJX004`, `MJX015`) for patterns that compile but do not behave as they read. `MJX015` (a class component override that does not reach `super` on every path) is also checked in `.ts` / `.js` files. |
 | `explain` | `false` | Print what every JSX expression was lowered to. `true` for all files, or a string / `RegExp` matched against the file path. |
 | `exclude` | unset | Files the plugin leaves alone: a string matched with `includes` against the file path, a `RegExp` tested against it, or a function `(id) => boolean`. Their JSX is not compiled by MotifJS; they go through Vite's own transform. |
 | `storeNames` | on while developing | Name module-level stores for DevTools with their variable and file (relative to the Vite root). Unset, it follows Vite: on in `vite dev`, off in a production build; `true` or `false` sets it. |

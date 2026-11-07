@@ -5,7 +5,7 @@ import htmlTags from 'html-tags';
 import { htmlAttributes, htmlEvents } from './htmlAtributes';
 import svgTags from 'svg-tags';
 
-import { assertLifecycleValue, cacheGuardCalls, findIfStatements, FORM_ACTION_ATTRS, makeComponentTraps, makeDirectives, makeHtmlAttr, makeHtmlEvents, makePreDirectives, mergeHtmlAttributes, returnIfStatement, SUPPORTED_DIRECTIVES, UNSUPPORTED_DIRECTIVES, supportedDirectivesText } from './propBuilder';
+import { assertLifecycleValue, cacheGuardCalls, findIfStatements, FORM_ACTION_ATTRS, makeComponentTraps, makeDirectives, makeHtmlAttr, makeHtmlEvents, makePreDirectives, mergeHtmlAttributes, returnIfStatement, SUPPORTED_DIRECTIVES } from './propBuilder';
 import { motifComponent, motifFragment, State, motifFunctionComponent, motifReport } from './constants';
 import { warn as diagWarn, fail } from './diagnostics';
 import { noteOrigin, transferOrigin, explainAt, explainChild, describeTextNode, codeOf, DEPS, isExplaining, type ExplainReactivity } from './explain';
@@ -96,8 +96,12 @@ function cannotBeNumber(value: t.Node): boolean {
         || t.isTemplateLiteral(value) || t.isArrowFunctionExpression(value) || t.isFunctionExpression(value) || t.isJSXElement(value) || t.isJSXFragment(value);
 }
 
-function isDirective(name: string) {
-    return name.toLowerCase().startsWith("x-") || name.toLowerCase().startsWith("x:");
+const CORE_DIRECTIVES = new Set<string>([...SUPPORTED_DIRECTIVES, 'chunk', 'style', 'ref', 'key', 'indexkey', 'inject']);
+export function isDirective(name: string) {
+    const lower = name.toLowerCase();
+    if (!lower.startsWith("x-") && !lower.startsWith("x:")) return false;
+    const directive = lower.slice(2);
+    return CORE_DIRECTIVES.has(directive) || LIFECYCLE_HOOKS.has(directive) || isComponentEvent('on' + directive);
 }
 
 const LIFECYCLE_HOOKS = new Set(['built', 'building', 'mounted', 'config', 'configured', 'initializing', 'initialized', 'disposing', 'disposed', 'visibilitychanged', 'activated', 'deactivated']);
@@ -521,9 +525,6 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                     explainProp(prop, 'key', 'key', objectExpression[objectExpression.length - 1], 'n/a', 'item identity — ListBinding matches DOM nodes by it', undefined);
                 } else if (isDirective(name.toLowerCase())) {
                     const directiveName = name.toLowerCase().replace("x:", "").replace("x-", "");
-                    if (UNSUPPORTED_DIRECTIVES.has(directiveName)) {
-                        fail('MJX006', `Directive "${name}" is not supported. Supported: ${supportedDirectivesText()}.`, prop);
-                    }
                     if (directiveName === 'chunk' && value == null) {
                         const automatic = t.booleanLiteral(true);
                         setupProps.push(t.objectProperty(t.stringLiteral('x-chunk'), automatic));
@@ -617,15 +618,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                                 objectProps.push(value);
                             }
                         } else {
-                            if (!isComponentEvent('on' + clearedName) && !LIFECYCLE_HOOKS.has(clearedName) && clearedName !== 'initializecomponent') {
-                                diagWarn(
-                                    'MJX007',
-                                    `Unknown directive "${name}": it is passed on as the prop "on${clearedName}". Supported: ${supportedDirectivesText()}.`,
-                                    prop, fileName,
-                                );
-                            } else {
-                                assertLifecycleValue(prop, name, value);
-                            }
+                            assertLifecycleValue(prop, name, value);
                             if (t.isExpression(value)) {
                                 objectExpression.push(t.objectProperty(id(hookKey("on" + clearedName)), value))
                             } else {
@@ -709,7 +702,7 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
                                 tagIsComponent() ? 'DOM event on a component tag: bound as a listener on the root element, it does NOT reach this.props' : undefined);
                         }
                     }
-                } else if (!name.startsWith("x")) {
+                } else {
                     if (value != null) {
                         if (t.isExpression(value)) {
                             if (name.includes("-") || name.includes(":")) {

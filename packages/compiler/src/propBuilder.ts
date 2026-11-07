@@ -297,12 +297,8 @@ export const makeComponentTraps = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAt
 
 
 export const SUPPORTED_DIRECTIVES = ['wait', 'display', 'model', 'text', 'html', 'value', 'watch'] as const;
-export const UNSUPPORTED_DIRECTIVES = new Set(['reload', 'bind', 'effect', 'focus', 'interrupt', 'to', 'list', 'loop']);
 const directiveNames = new Set<string>(SUPPORTED_DIRECTIVES);
 
-export function supportedDirectivesText(): string {
-    return [...SUPPORTED_DIRECTIVES, 'chunk', 'style', 'ref', 'key'].map(d => 'x-' + d).join(', ') + ' and the lifecycle hooks (x-mounted, x-built, x-disposed, …)';
-}
 
 const EQUALITY = new Set(['===', '!==', '==', '!=']);
 
@@ -707,8 +703,6 @@ export const makePreDirectives = (prop: NodePath<t.JSXAttribute | t.JSXSpreadAtt
                 const getter = t.isFunctionExpression(lowered) || t.isArrowFunctionExpression(lowered) ? lowered : t.arrowFunctionExpression([], lowered);
                 result = t.expressionStatement(t.callExpression(t.identifier(callerName), [getter]));
             }
-        } else {
-            fail('MJX006', `Directive "${name}" is not supported. Supported: ${supportedDirectivesText()}.`, prop);
         }
 
     }

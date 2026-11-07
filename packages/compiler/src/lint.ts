@@ -2,6 +2,7 @@ import * as ts from 'typescript';
 import pPath from 'path';
 import type { MotifDiagnostic } from './diagnostics';
 import { analyzeModule, mayHaveSuperOverrides, parseModule, superCallMessage } from './superCalls';
+import { isDirective } from './motifParser';
 
 
 export interface LintOptions {
@@ -85,7 +86,7 @@ export function lintProgram(program: ts.Program, files?: string[]): MotifDiagnos
 
         const check = (attr: ts.JsxAttribute, expr: ts.ConditionalExpression, opening: ts.JsxOpeningLikeElement): void => {
             const propName = ts.isIdentifier(attr.name) ? attr.name.text : attr.name.getText();
-            if (propName === 'key' || propName === 'indexkey' || /^x[-:]/i.test(propName) || /^on[-:_]/i.test(propName)) return;
+            if (propName === 'key' || propName === 'indexkey' || isDirective(propName) || /^on[-:_]/i.test(propName)) return;
 
             let type: ts.Type | undefined;
             try {

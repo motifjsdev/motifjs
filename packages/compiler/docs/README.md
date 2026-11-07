@@ -21,7 +21,7 @@ Options:
 
 | Option | Type | Default | Effect |
 | --- | --- | --- | --- |
-| `diagnostics` | `boolean` | `true` | Prints compile-time warnings (`MJX001`–`MJX004`, `MJX007`) with file and line. |
+| `diagnostics` | `boolean` | `true` | Prints compile-time warnings (`MJX001`–`MJX004`) with file and line. |
 | `explain` | `boolean \| string \| RegExp` | off | Prints what each JSX expression was compiled into, for every file or for matching files. |
 
 ## Command-line tools
