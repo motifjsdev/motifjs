@@ -125,32 +125,6 @@ function hookKey(name: string): string {
     return name;
 }
 
-function missingListKey(mapper: t.Node | null | undefined): boolean {
-    if (!mapper) return false;
-    if (!t.isArrowFunctionExpression(mapper) && !t.isFunctionExpression(mapper)) return false;
-
-    let body: t.Node | null | undefined = (mapper as any).body;
-    if (t.isBlockStatement(body as any)) {
-        const ret = (body as t.BlockStatement).body.find(st => t.isReturnStatement(st)) as t.ReturnStatement | undefined;
-        body = ret?.argument;
-    }
-    while (body && t.isParenthesizedExpression(body as any)) body = (body as any).expression;
-
-    if (!body || !t.isCallExpression(body)) return false;
-    if (!t.isIdentifier(body.callee) || body.callee.name !== motifComponent()) return false;
-
-    const propsArg = body.arguments.length > 1 ? body.arguments[1] : body.arguments[0];
-    if (!propsArg || !t.isObjectExpression(propsArg)) return false;
-    if (propsArg.properties.some(p => t.isSpreadElement(p))) return false;
-
-    const hasKey = propsArg.properties.some(p => {
-        if (!t.isObjectProperty(p)) return false;
-        const n = t.isIdentifier(p.key) ? p.key.name : (t.isStringLiteral(p.key) ? p.key.value : '');
-        return n === 'indexkey' || n === 'key';
-    });
-    return !hasKey;
-}
-
 
 function startAttr(v: string) {
     if (v.includes("-")) {
@@ -1008,14 +982,6 @@ export const getChildren = (
                     if (t.isMemberExpression(expression.callee)) {
                         if (t.isIdentifier(expression.callee.property)) {
                             if (expression.callee.property.name === 'map' || expression.callee.property.name === 'forEach') {
-                                if (missingListKey(b[0])) {
-                                    diagWarn(
-                                        'MJX003',
-                                        'List item has no "key". Rows are matched by the item object (primitive items by value), not by key, so a key does not change DOM reuse; a stable key such as `key={item.id}` is checked for duplicates (MJX202).',
-                                        path, String(state.get('filename') ?? ''),
-                                    );
-                                }
-
                                 state.set('loop-waiter', expression.callee.object);
                                 return t.callExpression(id('sender.repeater'), [expression.callee.object, ...b]);
                             }

@@ -152,34 +152,11 @@ describe('MJX002: bileşen etiketinde camelCase DOM olay adı', () => {
     });
 });
 
-describe('MJX003: anahtarsız liste', () => {
-    test('key\'siz .map uyarır', () => {
-        expect(codesOf(`function A(p){ return <ul>{p.a.map(x => <li>{x.t}</li>)}</ul>; }`)).toContain('MJX003');
-    });
-
-    test('key verilmişse uyarı YOK', () => {
-        expect(codesOf(`function A(p){ return <ul>{p.a.map(x => <li key={x.id}>{x.t}</li>)}</ul>; }`)).not.toContain('MJX003');
-    });
-
-    test('blok gövdeli mapper + key: uyarı YOK', () => {
-        expect(codesOf(`function A(p){ return <ul>{p.a.map(x => { return <li key={x.id}/>; })}</ul>; }`)).not.toContain('MJX003');
-    });
-
-    test('blok gövdeli mapper, key YOK: uyarır', () => {
-        expect(codesOf(`function A(p){ return <ul>{p.a.map(x => { return <li/>; })}</ul>; }`)).toContain('MJX003');
-    });
-
-    test('yayılımlı öğe kökünde karar verilmez (key spread içinde olabilir)', () => {
-        expect(codesOf(`function A(p){ return <ul>{p.a.map(x => <li {...x}/>)}</ul>; }`)).not.toContain('MJX003');
-    });
-
-    test('bileşen öğesinde de çalışır', () => {
-        expect(codesOf(`function A(p){ return <ul>{p.a.map(x => <Row item={x}/>)}</ul>; }`)).toContain('MJX003');
-        expect(codesOf(`function A(p){ return <ul>{p.a.map(x => <Row key={x.id} item={x}/>)}</ul>; }`)).not.toContain('MJX003');
-    });
-
-    test('filter().map() zincirinde de çalışır', () => {
-        expect(codesOf(`function A(p){ return <ul>{p.a.filter(x => x.on).map(x => <li/>)}</ul>; }`)).toContain('MJX003');
+describe("key'siz liste", () => {
+    test("key'siz .map uyarı vermez", () => {
+        expect(codesOf(`function A(p){ return <ul>{p.a.map(x => <li>{x.t}</li>)}</ul>; }`)).toEqual([]);
+        expect(codesOf(`function A(p){ return <ul>{p.a.map(x => <Row item={x}/>)}</ul>; }`)).toEqual([]);
+        expect(codesOf(`function A(p){ return <ul>{p.a.filter(x => x.on).map(x => { return <li/>; })}</ul>; }`)).toEqual([]);
     });
 });
 
