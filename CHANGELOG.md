@@ -69,6 +69,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 - Tooling: rollup ^4.64.12, rollup-plugin-typescript2 ^0.37, @rollup/plugin-terser ^1.0; eslint moved to devDependencies; `argparse` is pinned to 2 under `js-yaml` so the test toolchain no longer pulls in `sprintf-js`; the stale `yarn.lock` was dropped.
 - A navigation scope that a component still holds (a page being disposed, a `keepAlive` page, a stack-kept page, a detached component) closes when that component has been disposed, so its `onDisposing` and `onDisposed` see live `scoped` services. The stack disposes the pages it drops after the new page is painted, and the content a left page sent with `TransportTo` leaves its slot at once.
 - `setState()` and `reState()` match a list's rows to its items again, as a reactive update does, instead of disposing and rebuilding every row: the row of an item still in the list stays and re-reads its own bindings, a new item gets one new row, a removed item's row is disposed and a new order moves the rows.
+- Compiler: a `.map()` item without `key` no longer warns, and `MJX003` is gone. Rows are matched by the item object, so `key` is optional; when given it is checked for duplicates (`MJX202`).
 
 ### Fixed
 
