@@ -957,7 +957,7 @@ export class RoutingEngine {
                 const outlet = this.findRouterView(container, outletName);
 
                 if (!outlet || !container.isBuilt) {
-                    this._waitForOutlet(container, instances, chain, index, navVersion, outletName);
+                    this._waitForOutlet(container, instances, chain, index, navVersion, outletName, !!outlet);
                     return;
                 }
                 outlet._router = this;
@@ -1010,7 +1010,7 @@ export class RoutingEngine {
         return created;
     }
 
-    private _waitForOutlet(container: ComponentBase, instances: any[], chain: any[], start: number, navVersion: number, outletName: string): void {
+    private _waitForOutlet(container: ComponentBase, instances: any[], chain: any[], start: number, navVersion: number, outletName: string, outletFound: boolean = false): void {
   
         const oldCleanup = this.pendingListeners.get(container);
         if (oldCleanup) {
@@ -1020,9 +1020,11 @@ export class RoutingEngine {
 
         let done = false;
         let warnTimer: any = undefined;
+        const event: any = outletFound ? 'x:built' : RouterViewBuilt;
 
         const handler = async (_s: any, _e: any) => {
             if (done) return;
+            if (!outletFound && !this.findRouterView(container, outletName)) return;
             cleanup(); 
             if (navVersion !== this._navVersion) return;
             try {
@@ -1036,14 +1038,14 @@ export class RoutingEngine {
             if (done) return;
             done = true;
             this.pendingListeners.delete(container);
-            try { (container as any).motif?.off?.(RouterViewBuilt as any, handler); } catch { }
+            try { (container as any).motif?.off?.(event, handler); } catch { }
             if (warnTimer !== undefined) {
                 try { clearTimeout(warnTimer); } catch { }
                 warnTimer = undefined;
             }
         };
 
-        container.motif.on(RouterViewBuilt as any, handler);
+        container.motif.on(event, handler);
         this.pendingListeners.set(container, cleanup);
 
         if (errorHandler.isDevelopment()) {
