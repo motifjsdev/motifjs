@@ -1,4 +1,9 @@
-# MotifJS
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://motifjs.com/brand/wordmark-dark.svg">
+    <img src="https://motifjs.com/brand/wordmark.svg" alt="MotifJS" width="320">
+  </picture>
+</h1>
 
 A UI framework for JavaScript and TypeScript: components written as classes, functions or options objects, fine-grained reactivity without a virtual DOM, routing and dependency injection. JSX is compiled at build time into direct DOM bindings.
 

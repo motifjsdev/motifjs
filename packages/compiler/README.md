@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://motifjs.com/brand/wordmark-dark.svg">
+  <img src="https://motifjs.com/brand/wordmark.svg" alt="MotifJS" width="240">
+</picture>
+
 # @motifx/compiler
 
 The JSX compiler for [MotifJS](https://www.npmjs.com/package/@motifx/core). It lowers JSX at build time into fine-grained reactive bindings on real DOM nodes: `{state.name}` becomes a binding on that one text node, not a re-rendered tree.
