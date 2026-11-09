@@ -37,6 +37,10 @@ export class ComponentMotif<TSelf extends ComponentBase = ComponentBase, TProps 
                 return this._component['_trigger'](event, ev);
         }
 
+        public isEventFrom(ev: Event): boolean {
+                return this._component['_isEventFrom'](ev);
+        }
+
         public addHandler(event: any, handler: (sender: ComponentBase, e: EventArgs) => void): void {
                 this._component['_addHandler'](event, handler);
         }

@@ -1368,6 +1368,18 @@ function stopEvent(ev: any): void {
         if (typeof ev?.stopPropagation === 'function') ev.stopPropagation();
 }
 
+function isEventInside(el: any, ev: any): boolean {
+        const target = ev.target;
+        let node = target;
+        while (node) {
+                if (el === node || el.contains(node)) return true;
+                const root = node.getRootNode();
+                node = root.nodeType === Node.DOCUMENT_FRAGMENT_NODE ? root.host : undefined;
+        }
+        if (el.getRootNode() === target.getRootNode()) return false;
+        return typeof ev.composedPath === 'function' && ev.composedPath().indexOf(el) > -1;
+}
+
 function addEventRecord(c: any, record: EventRecord): void {
         let last: EventRecord | undefined = c._eventHandlers;
         if (last === undefined) {
@@ -2402,6 +2414,25 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                 if (eventDispatchDepth === 0) compactEventRecords(this);
                 return this;
         }
+        private _isEventFrom(ev: Event): boolean {
+                if (this.isDisposed || !this.element) {
+                        return false;
+                }
+                const target: any = ev ? ev.target : null;
+                if (!target || typeof target.nodeType !== 'number') {
+                        return false;
+                }
+                if (!isContentOwner(this)) {
+                        return isEventInside(this.element, ev);
+                }
+                for (const el of contentElements(this)) {
+                        if (isEventInside(el, ev)) {
+                                return true;
+                        }
+                }
+                return false;
+        }
+
         private async _off<K extends keyof HtmlElementEvents>(event: K, cb: (sender: ComponentBase | this, ev: HtmlElementEvents[K]) => any): Promise<this> {
                 if (this.isDisposed || !this.element) {
                         return this;
