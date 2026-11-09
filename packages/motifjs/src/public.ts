@@ -95,6 +95,7 @@ export type {
     Group,
     HtmlElementEvents,
     IAttribute,
+    IBaseBinding,
     IBaseProp,
     IClass,
     IDisposable,

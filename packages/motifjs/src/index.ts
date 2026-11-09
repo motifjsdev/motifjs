@@ -18,6 +18,7 @@ export * from "./application";
 export * from "./dependencyInjection/decorators";
 export * from "./routing";
 export type * from "./jsx-runtime";
+export type { IBaseBinding } from "./bindings/IBaseBinding";
 export * from "./common/Resilience";
 // export * from "./router/scanner";
 // export * from "./router/RouteItem";
