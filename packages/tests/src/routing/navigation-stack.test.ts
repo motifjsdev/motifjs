@@ -516,6 +516,12 @@ describe('Navigation stack', () => {
             return mid;
         };
 
+        const withClock = (run: (pass: (ms: number) => void) => void) => {
+            let now = Date.now();
+            const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+            try { run(ms => { now += ms; }); } finally { clock.mockRestore(); }
+        };
+
         it('dragging far enough from the edge goes back', async () => {
             await start({ retain: true, swipeBack: true });
             await app.navigate('/a');
@@ -544,7 +550,7 @@ describe('Navigation stack', () => {
             await tick();
             const b = live('b')[0];
 
-            drag(100);
+            withClock(() => drag(100));
             await tick();
 
             expect(app.router.uri).toBe('/b');
@@ -559,14 +565,16 @@ describe('Navigation stack', () => {
             await tick();
 
             const before = popCount;
-            touch('touchstart', 5);
-            await new Promise(r => setTimeout(r, 20));
-            touch('touchmove', 40);
-            await new Promise(r => setTimeout(r, 20));
-            touch('touchmove', 120);
-            await new Promise(r => setTimeout(r, 20));
-            touch('touchmove', 200);
-            touch('touchend', 200);
+            withClock(pass => {
+                touch('touchstart', 5);
+                pass(20);
+                touch('touchmove', 40);
+                pass(20);
+                touch('touchmove', 120);
+                pass(20);
+                touch('touchmove', 200);
+                touch('touchend', 200);
+            });
             await waitFor(() => popCount > before);
             await tick();
 
