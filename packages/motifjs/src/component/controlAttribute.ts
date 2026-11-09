@@ -7,6 +7,8 @@ import { IBaseBinding } from "../bindings/IBaseBinding";
 import { isComponentLike } from "./componentBase";
 import { reportError } from "../common/diagnostics";
 import { isDomElement } from "../common/functions";
+import { IDisposable } from "../disposable/IDisposable";
+import { addHold, attrHolds, holdsKey, keepOwn, NO_OWN, NO_RECORD, OWN_BELOW } from "./attrHold";
 
 export type ElementTypes = Node | Element | HTMLElement | Text | DocumentFragment | Comment | HTMLDivElement;
 
@@ -99,6 +101,7 @@ function callDocumentMethod(doc: Document | null, name: string) {
 }
 
 const PROPERTY_FIRST = new Set<string>(['checked', 'selected', 'muted', 'indeterminate', 'srcObject']);
+const PROPERTY_VALUES = new Set<string>(['value', 'textContent', 'innerText', 'innerHTML']);
 
 export class controlAttribute<ElementType extends ElementTypes> implements IAttribute<ComponentBase<ElementType, any>> {
     private _parent: ComponentBase<ElementType, any>;
@@ -108,7 +111,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
     constructor(parent: ComponentBase<ElementType, any>) {
         this._parent = parent;
     }
-    private get _attrMap(): Map<string | symbol, any> { return this._attrMapStore ??= new Map(); }
+    private get _attrMap(): Map<string | symbol, any> { return attrHolds.writer === this ? NO_RECORD : (this._attrMapStore ??= new Map()); }
     private get _watchers(): Map<string | symbol, { stop: () => void, binding?: IBaseBinding }> { return this._watchersStore ??= new Map(); }
 
     /** @deprecated Tek kaynak `_attrMap`; geriye dönük okuma için türetilmiş görünüm. */
@@ -126,6 +129,12 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
 
     };
     remove(key: string): ComponentBase<ElementType, any> {
+        if (attrHolds.live !== 0 && holdsKey(this, key)) {
+            this._release(key);
+            this._attrMapStore?.delete(key);
+            keepOwn(this, key, undefined);
+            return this._parent;
+        }
         this._release(key);
         this._attrMap.delete(key);
         const el = this._getElement();
@@ -147,8 +156,22 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
             const v = el.getAttribute(key);
             if (v != null) return v;
         }
+        if (attrHolds.live !== 0 && holdsKey(this, key)) return null;
         const val = this._attrMap.get(key);
         return val == null ? null : String(val);
+    };
+
+    hold(attribute: object): IDisposable {
+        const bag = attribute as Record<string | symbol, any>;
+        const keys = attribute !== null && typeof attribute === 'object' && !Array.isArray(attribute) ? Reflect.ownKeys(bag) : [];
+        const slots = new Array(keys.length * 3);
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            slots[i * 3] = key;
+            slots[i * 3 + 1] = bag[key];
+            slots[i * 3 + 2] = holdsKey(this, key) ? OWN_BELOW : this._ownValue(key);
+        }
+        return addHold(this, slots);
     };
 
     parse(values: any, key: any) {
@@ -182,6 +205,7 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
 
     private _applyValue(key: string | symbol, raw: any) {
         if (!key) return;
+        if (attrHolds.live !== 0 && attrHolds.writer !== this && keepOwn(this, key, raw)) return;
         const el = this._getElement();
 
         if (typeof key === 'string' && FORM_ACTION_ATTRS.has(key.toLowerCase())) {
@@ -468,8 +492,22 @@ export class controlAttribute<ElementType extends ElementTypes> implements IAttr
         this._watchersStore!.delete(key);
     }
 
+    private _ownValue(key: string | symbol): any {
+        const el = this._getElement();
+        if (!el || typeof key !== 'string') return undefined;
+        if (FORM_ACTION_ATTRS.has(key.toLowerCase())) {
+            const entry = formActions.get(el);
+            if (entry) return entry.handler;
+        }
+        if (METHOD_ATTRS.has(key) && (DOCUMENT_METHODS.has(key) || typeof (el as any)[key] === 'function')) return NO_OWN;
+        if (PROPERTY_FIRST.has(key) || PROPERTY_VALUES.has(key)) return (el as any)[key];
+        const value = el.getAttribute(key);
+        return value === null ? undefined : value;
+    }
+
     private _forgetFormAction(key: string | symbol) {
         if (typeof key !== 'string' || !FORM_ACTION_ATTRS.has(key.toLowerCase())) return;
+        if (attrHolds.live !== 0 && attrHolds.writer !== this && holdsKey(this, key)) return;
         const el = this._formActionElement ?? this._getElement();
         if (el) formActions.delete(el);
         this._formActionElement = undefined;

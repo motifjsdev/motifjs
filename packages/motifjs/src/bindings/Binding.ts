@@ -1,5 +1,6 @@
 
 import { ComponentBase } from "../component/componentBase";
+import { attrHolds, keepOwnProperty } from "../component/attrHold";
 import { effect } from "../store/reactivity-core";
 import { effectOwner } from "../devtools/reactivity";
 import { BindingFormatInfo, IBaseBinding } from "./IBaseBinding";
@@ -233,6 +234,7 @@ export class Binding implements IBaseBinding {
                 if (this.propertyName === 'value' && 'value' in this._component) {
                     (this._component as any).value = value;
                 } else if (this._component.element && this.propertyName in this._component.element) {
+                    if (attrHolds.live !== 0 && keepOwnProperty(this._component, this.propertyName, value)) break;
                     (this._component.element as any)[this.propertyName] = value;
                 } else if (this.propertyName in this._component) {
                     (this._component as any)[this.propertyName] = value;

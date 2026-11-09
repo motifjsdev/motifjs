@@ -14,6 +14,7 @@ import { IBaseBinding } from "../bindings/IBaseBinding";
 import { effect } from "../store/reactivity-core";
 import { ComponentEmiter } from "./ComponentEmiter";
 import { controlAttribute, FORM_ACTION_ATTRS } from "./controlAttribute";
+import { attrHolds, forgetHolds } from "./attrHold";
 import { controlClass } from "./controlClass";
 import { ComponentBaseOptions, ElementType, EventArgs, HtmlElementEvents, OptionalParams, RouterClassingSettings, shimAnimation, VisibilityChangedEventArgs } from "./types";
 import { Flags, UnwrapValueRefs } from "../store/common";
@@ -997,6 +998,7 @@ function disposeShallow(c: any): void {
         c.motif.stopAnimations();
 
         deactivateBindings(c);
+        if (attrHolds.live !== 0) forgetHolds(c._baseCtx?._attr);
         if (childrenOf(c).length) {
                 for (const child of c._controls.items) {
                         try {
@@ -1131,6 +1133,7 @@ function disposePrefix(c: any, options: IDisposeOptions, asChild: boolean): void
         safeCall(() => { ComponentHelper.callDisposing.call(c, c); }, ctx + '.callDisposing');
         offAll(c, asChild && c._keepElementOnDispose !== true && (c.element as Node | null)?.isConnected === false);
         deactivateBindings(c);
+        if (attrHolds.live !== 0) forgetHolds(c._baseCtx?._attr);
         safeCall(() => { c.parent?.controls?.silentDetach?.(c, true); }, ctx + '.silentDetach');
 }
 

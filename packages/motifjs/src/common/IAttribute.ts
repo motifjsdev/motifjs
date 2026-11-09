@@ -1,3 +1,4 @@
+import { IDisposable } from "../disposable/IDisposable";
 
 export interface IAttribute<BaseType> {
 
@@ -5,6 +6,7 @@ export interface IAttribute<BaseType> {
     remove(key: string): BaseType;
     has(key: string): boolean;
     get(key: string): string | null;
+    hold(attribute: object): IDisposable;
 }
 
 
