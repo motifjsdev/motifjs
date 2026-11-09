@@ -138,6 +138,9 @@ export function recordService(owner: object, token: any): void {
 }
 export function setScopeResolver(fn: (owner: object) => any): void { scopeResolver = fn; }
 
+let holdsResolver: ((attr: object) => any[]) | null = null;
+export function setHoldsResolver(fn: (attr: object) => any[]): void { holdsResolver = fn; }
+
 export function rootProvider(): any { return root?.provider ?? null; }
 const isServiceProvider = (v: any): boolean => !!v && typeof v._getFor === 'function' && typeof v.createScope === 'function';
 
@@ -220,8 +223,18 @@ function classesOf(c: any) {
 function attributesOf(c: any) {
     const a = c._baseCtx?._attr;
     const map: Map<any, any> | undefined = a?._attrMapStore;
-    if (!map) return [];
-    return [...map].map(([name, value]) => ({ name: String(name), value: preview(value), reactive: !!a._watchersStore?.has(name) }));
+    const held: any[] = a && holdsResolver ? holdsResolver(a) : [];
+    if (!map && held.length === 0) return [];
+    const list: any[] = map ? [...map].map(([name, value]) => ({ name: String(name), value: preview(value), reactive: !!a._watchersStore?.has(name) })) : [];
+    for (let i = 0; i < held.length; i += 4) {
+        const name = String(held[i]);
+        let item = list.find(x => x.name === name);
+        if (!item) list.push(item = { name, value: preview(held[i + 3]), reactive: !!a._watchersStore?.has(held[i]) });
+        else if (held[i + 2]) item.value = preview(held[i + 3]);
+        item.held = true;
+        item.heldValue = preview(held[i + 1]);
+    }
+    return list;
 }
 
 function providerOf(c: any): any {

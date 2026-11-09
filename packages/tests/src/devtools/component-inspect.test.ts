@@ -117,6 +117,29 @@ describe('devtools component inspection', () => {
         expect(attrs.find((a: any) => a.name === 'title')).toMatchObject({ reactive: true });
     });
 
+    test('a held attribute is marked and listed with the held value next to the component\'s own', async () => {
+        const s = reactive({ t: 'own' });
+        const c = new Component('div');
+        c.attr.add({ role: 'note', title: () => s.t });
+        run(c);
+        const find = (name: string) => hook().inspect([0, 0, 0]).attributes.find((a: any) => a.name === name);
+        const held = c.attr.hold({ title: 'held', tabindex: -1 });
+        expect(find('title')).toEqual({ name: 'title', value: 'own', reactive: true, held: true, heldValue: 'held' });
+        expect(find('tabindex')).toEqual({ name: 'tabindex', value: undefined, reactive: false, held: true, heldValue: -1 });
+        expect(find('role')).toEqual({ name: 'role', value: 'note', reactive: false });
+
+        s.t = 'next';
+        await new Promise(r => setTimeout(r, 0));
+        expect(find('title')).toMatchObject({ value: 'next', held: true, heldValue: 'held' });
+
+        const newer = c.attr.hold({ title: 'newer' });
+        expect(find('title')).toMatchObject({ value: 'next', heldValue: 'newer' });
+        newer.dispose();
+        held.dispose();
+        expect(find('title')).toEqual({ name: 'title', value: 'next', reactive: true });
+        expect(find('tabindex')).toBeUndefined();
+    });
+
     test('services asked through getService are listed with the scope', () => {
         const c = new Component('div');
         run(c);

@@ -1,4 +1,5 @@
 import { IDisposable } from "../disposable/IDisposable";
+import { setHoldsResolver } from "../devtools/inspect";
 
 export const attrHolds: { live: number, writer: object | undefined } = { live: 0, writer: undefined };
 
@@ -43,6 +44,7 @@ export class HoldRecord implements IDisposable {
 
 const holds = new WeakMap<object, HoldRecord | HoldRecord[]>();
 const NO_HOLDS: HoldRecord[] = [];
+const NO_VALUES: any[] = [];
 const ATTR_KEYS = new Map<string, string>([
     ['className', 'class'],
     ['htmlFor', 'for'],
@@ -237,3 +239,31 @@ export function forgetHolds(attr: object | undefined): void {
     holds.delete(attr);
     attrHolds.live--;
 }
+
+export function holdsOf(attr: object): any[] {
+    const held = holds.get(attr);
+    if (held === undefined) {
+        return NO_VALUES;
+    }
+    const out: any[] = [];
+    const list = Array.isArray(held) ? held : [held];
+    for (const hold of list) {
+        const slots = hold.slots;
+        for (let i = 0; i < slots.length; i += 3) {
+            let at = 0;
+            while (at < out.length && out[at] !== slots[i]) {
+                at += 4;
+            }
+            if (at < out.length) {
+                out[at + 1] = slots[i + 1];
+                continue;
+            }
+            const own = slots[i + 2];
+            const written = own instanceof OwnWrite || own instanceof OwnProperty;
+            out.push(slots[i], slots[i + 1], written, written ? own.value : own === NO_OWN || own === OWN_BELOW ? undefined : own);
+        }
+    }
+    return out;
+}
+
+/* @DEV-ONLY */ setHoldsResolver(holdsOf);
