@@ -1,7 +1,7 @@
 {
   "private": false,
   "name": "@motifx/compiler",
-  "version": "1.2.0-rc.26",
+  "version": "1.2.0-rc.27",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/motifjsdev/motifjs.git",
