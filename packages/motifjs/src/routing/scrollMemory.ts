@@ -5,6 +5,8 @@ export interface ScrollViewport {
     scrollTop(): number;
     scrollTo(top: number, left?: number, behavior?: ScrollBehavior): void;
     scrollToAnchor(id: string, follow?: boolean): boolean;
+    /** Calls `moved` on each scroll of the viewport; returns what stops it. A viewport without it is scrolled to the top on every arrival. */
+    onScroll?(moved: () => void): () => void;
 }
 
 const DEFAULT_LIMIT = 60;
@@ -21,6 +23,13 @@ export class ScrollMemory {
     private currentPath: string | null = null;
 
     private visited = false;
+    /**
+     * The viewport stood at its top when the last page was left (a document loaded fresh starts there) and nothing has
+     * scrolled it since: a page that starts from its top is then arrived at without a scroll. Scrolling there anyway
+     * would only make the browser lay the new page out at once, right after it was written.
+     */
+    private atTop = true;
+    private stopMoves: (() => void) | null = null;
     private restoring = false;
     private cancelFrame: (() => void) | null = null;
     private disarmAbort: (() => void) | null = null;
@@ -34,6 +43,7 @@ export class ScrollMemory {
         this.options = options;
         this.viewport = viewport ?? (options.container ? containerViewport(options.container) : windowViewport());
         this.onSave = onSave ?? null;
+        this.watchMoves();
 
         try {
             if (typeof history !== 'undefined' && 'scrollRestoration' in history) {
@@ -52,7 +62,11 @@ export class ScrollMemory {
     public leaving(): void {
         this.cancelRestore();
         if (!this.visited) return;
-        this.remember(this.currentKey, this.viewport.scrollTop());
+        // Read as the page is left, before the next one is written: nothing is laid out again for it.
+        const top = this.viewport.scrollTop();
+        this.remember(this.currentKey, top);
+        this.atTop = top <= 0;
+        this.watchMoves();
         this.onSave?.(this.snapshot());
     }
 
@@ -68,6 +82,11 @@ export class ScrollMemory {
         return out;
     }
 
+    /** A router restarted in the same page took over: the page may be scrolled anywhere. */
+    public handedOver(): void {
+        this.atTop = false;
+    }
+
     public adopt(positions: Record<string, number> | null | undefined): void {
         if (!positions || typeof positions !== 'object') return;
         for (const key of Object.keys(positions)) {
@@ -77,13 +96,17 @@ export class ScrollMemory {
     }
 
     public arrived(uri: string, direction?: NavigationDirection, restore: boolean = true): void {
+        const atTop = this.atTop;
+        this.stopMoves?.();
+        this.stopMoves = null;
+        this.atTop = false;
         this.visited = true;
         const { path, hash } = splitUri(uri);
         const inPage = !!hash && path === this.currentPath && (direction === 'push' || direction === 'replace' || direction === 'traverse');
         this.currentPath = path;
         this.currentKey = this.keyOf(path);
         if (!restore) { this.cancelRestore(); return; }
-        this.restore(this.currentKey, this.options.anchor === false ? '' : hash || (this.locationAnchor ? locationHash() : ''), inPage);
+        this.restore(this.currentKey, this.options.anchor === false ? '' : hash || (this.locationAnchor ? locationHash() : ''), inPage, atTop);
     }
 
     public scrollTo(top: number, left?: number, behavior: ScrollBehavior = 'auto'): void {
@@ -97,6 +120,8 @@ export class ScrollMemory {
 
     public dispose(save: boolean = false): void {
         this.cancelRestore();
+        this.stopMoves?.();
+        this.stopMoves = null;
         if (save) this.save();
         for (const off of this.offs.splice(0)) off();
         this.positions.clear();
@@ -119,13 +144,14 @@ export class ScrollMemory {
         }
     }
 
-    private restore(key: string, anchor: string, follow: boolean): void {
+    private restore(key: string, anchor: string, follow: boolean, atTop: boolean = false): void {
         this.cancelRestore();
 
         const target = this.positions.get(key) ?? 0;
 
         if (!anchor && target <= 0) {
-            if (this.options.top !== false) this.viewport.scrollTo(0);
+            // At its top already, as the last page was left (see `atTop`): nothing to scroll.
+            if (this.options.top !== false && !atTop) this.viewport.scrollTo(0);
             return;
         }
 
@@ -166,6 +192,22 @@ export class ScrollMemory {
         this.disarmAbort = null;
         this.restoring = false;
     }
+    /** From now until the next arrival, a scroll of the viewport means it is no longer known to be at its top. */
+    private watchMoves(): void {
+        this.stopMoves?.();
+        this.stopMoves = null;
+        if (!this.viewport.onScroll) {
+            this.atTop = false;
+            return;
+        }
+        if (!this.atTop) return;
+        this.stopMoves = this.viewport.onScroll(() => {
+            this.atTop = false;
+            this.stopMoves?.();
+            this.stopMoves = null;
+        });
+    }
+
     private rememberCurrent(): void {
         if (this.visited && !this.restoring) {
             this.remember(this.currentKey, this.viewport.scrollTop());
@@ -195,6 +237,7 @@ function windowViewport(): ScrollViewport {
                 return true;
             } catch { return false; }
         },
+        onScroll: (moved) => listen(window, 'scroll', moved, { passive: true }),
     };
 }
 
@@ -220,6 +263,10 @@ function containerViewport(container: NonNullable<ScrollMemoryOptions['container
             catch { try { el.scrollTop = top; if (left !== undefined) el.scrollLeft = left; } catch { } }
         },
         scrollToAnchor: (id, follow) => fallback.scrollToAnchor(id, follow),
+        onScroll: (moved) => {
+            const el = resolve();
+            return el ? listen(el, 'scroll', moved, { passive: true }) : fallback.onScroll!(moved);
+        },
     };
 }
 

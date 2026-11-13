@@ -69,6 +69,7 @@ export class UrlRoutingModule {
         this.routingEngine.register(this.mainApp, this.application, this);
         this.routingEngine.adopt(handover);
         this._scroll?.adopt(handover?.scroll);
+        if (handover) this._scroll?.handedOver();
         const current = this._routerOptions.mode === 'shell' ? '/' : this._getCurrentUri();
         this._seedHistoryIndex();
         this._suppressMiddlewaresOnce = true;

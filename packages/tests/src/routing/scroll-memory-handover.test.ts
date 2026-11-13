@@ -68,6 +68,17 @@ describe('scroll memory lives in memory: restart handover and the save/restore A
         expect(sessionStorage.length).toBe(0);
     });
 
+    test('a restart takes over a page scrolled anywhere: a page not seen yet starts from its top', async () => {
+        start();
+        await app.router.navigate('/uzun');
+        view.state.top = 700;
+
+        await app.restartRouter('/kisa');
+        view.tick();
+
+        expect(view.state.top).toBe(0);
+    });
+
     test('a restart at the shown address keeps that page where it was', async () => {
         start();
         await app.router.navigate('/uzun');

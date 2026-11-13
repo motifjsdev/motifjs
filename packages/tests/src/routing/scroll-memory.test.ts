@@ -98,6 +98,37 @@ describe('Scroll memory', () => {
         expect(view.state.top).toBe(1200);
     });
 
+    it('scrolls to the top only when the window is not there: a fresh document, a page left at its top', async () => {
+        app.useRouter({ routes: routes(), mode: 'history', scrollMemory: true });
+        run();
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // A document loaded fresh is at its top: scrolling it there would only lay the page out at once.
+        expect(view.scrollTo).not.toHaveBeenCalled();
+        // Left at its top: the next page starts there without a scroll.
+        await app.router.navigate('/uzun');
+        expect(view.scrollTo).not.toHaveBeenCalled();
+        // Left scrolled: the next page is scrolled to its top.
+        view.state.top = 300;
+        await app.router.navigate('/kisa');
+        expect(view.scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'instant' });
+        expect(view.state.top).toBe(0);
+    });
+
+    it('scrolls to the top when the window scrolled before the page arrived', async () => {
+        app.useRouter({ routes: routes(), mode: 'history', scrollMemory: true });
+        run();
+        // A scroll while the first page is on its way: the window is no longer known to be at its top.
+        view.state.top = 120;
+        window.dispatchEvent(new Event('scroll'));
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(view.scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'instant' });
+        expect(view.state.top).toBe(0);
+    });
+
     it('ziyaret edilen yola dönünce kaldığı yere kaydırır', async () => {
         app.useRouter({ routes: routes(), mode: 'history', scrollMemory: true });
         run();
