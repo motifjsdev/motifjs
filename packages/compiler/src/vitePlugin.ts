@@ -130,11 +130,12 @@ function excludeMatches(opt: string | RegExp | ((id: string) => boolean) | undef
 export default function vitePlugin(options: MotifVitePluginOptions = {}) {
   const showDiagnostics = options.diagnostics !== false;
   const usesLegacyDecorators = legacyDecoratorsChecker();
-  let context: any = null;
+  /** The bundler's `resolve` from the last transform: the super-call check follows imports with it. */
+  let resolve: ((source: string, importer: string, options: { skipSelf: boolean }) => Promise<any>) | null = null;
   const makeResolver = () => createComponentResolver(
     async (source, importer) => {
-      if (!context?.resolve) return null;
-      const r = await context.resolve(source, importer, { skipSelf: true });
+      if (!resolve) return null;
+      const r = await resolve(source, importer, { skipSelf: true });
       if (!r || r.external) return null;
       return sourceFile(r.id);
     },
@@ -175,7 +176,7 @@ export default function vitePlugin(options: MotifVitePluginOptions = {}) {
     },
     transform(this: any, src: string, id: string) {
       if (showDiagnostics && shouldCheckSuperCalls(id, src)) {
-        context = this;
+        resolve = typeof this?.resolve === 'function' ? this.resolve.bind(this) : null;
         const check = checkSuperCalls(src, sourceFile(id)!, isComponentBase)
           .then(found => { if (found.length > 0) printDiagnostics(found); }, () => { })
           .finally(() => { pending.delete(check); });
