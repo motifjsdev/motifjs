@@ -197,11 +197,17 @@ const isMotifCall = (e: t.Node): boolean =>
 const hasMarkupBranch = (node: t.Node): boolean =>
     t.isConditionalExpression(node) ? hasMarkupBranch(node.consequent) || hasMarkupBranch(node.alternate) : isMotifCall(node);
 
+const isPlacedBranch = (node: t.Node): boolean =>
+    t.isNewExpression(node) || t.isArrayExpression(node);
+
 function lowerTernary(expression: t.ConditionalExpression, state: State, scope: any = null): t.CallExpression {
     const frameId = t.identifier('frame');
 
     const normalize = (e: t.Expression): t.Expression => {
         if (isMotifCall(e)) return e;
+        if (isPlacedBranch(e)) return e;
+        var fragment = makeBranchFragment(e, state);
+        if (fragment) return fragment;
         return mkText(e, state);
     };
 
@@ -1479,6 +1485,40 @@ const mkText = (exp: t.Expression, state: State) => {
     return t.callExpression(id(motifComponent()), [t.stringLiteral('text'), body]);
 }
  
+const makeBranchChild = (exp: t.Expression, state: State): t.Expression | null => {
+    if (t.isCallExpression(exp) && t.isMemberExpression(exp.callee) && t.isIdentifier(exp.callee.property) && (exp.callee.property.name === 'map' || exp.callee.property.name === 'forEach')) {
+        var items = exp.callee.object as t.Expression;
+        return t.callExpression(id('sender.bindings.list'), [listSource(items), listRender([items, ...exp.arguments] as t.CallExpression['arguments'])]);
+    }
+    if (t.isCallExpression(exp) || t.isOptionalCallExpression(exp)) return makeMemberCallChild(exp as t.CallExpression, state);
+    if (t.isArrowFunctionExpression(exp) && isPlacedResult(findArrowResult(exp))) return t.callExpression(id('sender.bindings.method'), [exp]);
+    if (isFallbackLogical(exp)) return makeFallbackChild(exp as t.LogicalExpression, state);
+    return null;
+};
+
+const findArrowResult = (arrow: t.ArrowFunctionExpression): t.Node | null => {
+    if (!t.isBlockStatement(arrow.body)) return arrow.body;
+    var ret = arrow.body.body.find(s => t.isReturnStatement(s)) as t.ReturnStatement | undefined;
+    return ret && ret.argument ? ret.argument : null;
+};
+
+const isPlacedResult = (node: t.Node | null): boolean => {
+    if (!node) return false;
+    if (t.isConditionalExpression(node)) return isPlacedResult(node.consequent) || isPlacedResult(node.alternate);
+    if (t.isLogicalExpression(node)) return isPlacedResult(node.left) || isPlacedResult(node.right);
+    return isMotifCall(node) || isPlacedBranch(node) || t.isCallExpression(node) || t.isOptionalCallExpression(node);
+};
+
+const makeBranchFragment = (exp: t.Expression, state: State): t.CallExpression | null => {
+    var child = makeBranchChild(exp, state);
+    if (child) {
+        var setup = t.arrowFunctionExpression([id('sender')], t.blockStatement([t.expressionStatement(child)]));
+        return t.callExpression(id(motifFragment()), [t.objectExpression([t.objectProperty(id('initializeComponent'), setup)])]);
+    }
+    if (t.isLogicalExpression(exp)) return t.callExpression(id(motifFragment()), [mkText(exp, state).arguments[1] as t.ObjectExpression]);
+    return null;
+};
+
 /** `sender.bindings.*` çağrısı olarak gelen çocuk (ternary, switchCase, method, list…). */
 function explainBindingCall(cx: t.CallExpression, fileName: string, where?: string): void {
     const name = t.isIdentifier(cx.callee) ? cx.callee.name.replace(/^sender\.bindings\./, '') : '';

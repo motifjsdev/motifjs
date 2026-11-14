@@ -2,6 +2,8 @@ import { ComponentBase, IDisposeOptions } from "./componentBase";
 import { resolveComponent } from "./resolveComponent";
 import { Lazy } from "./Lazy";
 import { reportError } from "../common/diagnostics";
+import { makeComponent } from "./componentSlots";
+import { dom } from "../core/dom";
 
 export interface NavigationHost extends ComponentBase {
     current: ComponentBase | ComponentBase[] | null;
@@ -72,6 +74,19 @@ export function afterNextPaint(run: () => void): void {
     }
 }
 
+function isTextValue(value: any): boolean {
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint';
+}
+
+function toNavigationTarget(value: any): any {
+    if (Array.isArray(value)) {
+        if (!value.some(item => typeof item === 'function' || isTextValue(item))) return value;
+        return value.map(item => toNavigationTarget(resolveComponent(item)));
+    }
+    if (isTextValue(value)) return makeComponent(dom.createTextNode(value), null as any);
+    return value;
+}
+
 export async function disposeNavigationTarget(target: ComponentBase | ComponentBase[] | null, options: IDisposeOptions = { deep: true }): Promise<void> {
     if (!target) return;
     const list = Array.isArray(target) ? target : [target];
@@ -95,7 +110,7 @@ export async function navigateHost(host: NavigationHost, page: ComponentBase | C
     const complete = (value: any) => {
         if (host.isDisposed) return;
         if (navigateId !== host._latestNavigateId) return;
-        const xP = resolveComponent(value);
+        const xP = toNavigationTarget(resolveComponent(value));
         host.current = xP;
         try {
             if (Array.isArray(xP)) {
