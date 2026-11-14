@@ -38,6 +38,7 @@ export const motifMessages = {
             : `${cls} replaces '${member}', which MotifJS created for the component (a class field or an assignment with that name). Rename your member.`,
     MJX129: (callback: 'onfulfilled' | 'onrejected') => `The ${callback} callback given to using threw.`,
     MJX130: () => `Building a chunked child failed.`,
+    MJX131: () => `A component that is already disposed was given to a Frame and was not placed. A ternary, && or switch branch releases its content when the branch is left, so a ready instance kept in a variable or in this.childs does not come back. Keep it with x-wait or x-display, or create it inside the branch.`,
 
     MJX201: () => `ListBinding: renderFn must return a component instance, a component class, or a factory function.`,
     MJX202: (key: unknown, index: number) => `ListBinding: duplicate key "${String(key)}" at index ${index}. Rows are matched by the item object, not by key, so rendering is not affected; keep keys unique so they identify items.`,

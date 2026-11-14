@@ -137,6 +137,78 @@ describe('a non-markup ternary branch behaves as the same expression written alo
     });
 });
 
+describe('a ready instance in a branch is released when the branch is left, and development mode says so', () => {
+    const boxes = `
+        class TernaryBox extends Component { view() { return <>{s.on ? this.childs : null}</>; } }
+        class AndBox extends Component { view() { return <>{s.on && this.childs}</>; } }
+        class DisplayBox extends Component { view() { return <div class="kept" x-display={() => s.on}>{this.childs}</div>; } }
+        class VariableTernary extends Component { view() { const part = <b>child</b>; return <>{s.on ? part : null}</>; } }
+        class VariableSwitch extends Component { view() { const part = <b>child</b>; return <>{() => { switch (s.on) { case true: return part; default: return null; } }}</>; } }`;
+
+    let app: any;
+    let warn: jest.SpyInstance;
+    const lines = () => warn.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('MJX131'));
+
+    async function toggle(tag: string, development: boolean) {
+        if (development) app.useDevelopment(true);
+        const s = reactive({ on: true });
+        const { Probe } = evalJsx(`${boxes}
+            class Probe extends Component { view() { return <section><${tag}><b>child</b></${tag}></section>; } }`, ['Probe'], { s });
+        const host = mount(new Probe());
+        await settle();
+        const steps = [shown(host)];
+        for (const on of [false, true, false, true]) {
+            s.on = on;
+            await settle();
+            steps.push(shown(host));
+        }
+        return steps;
+    }
+
+    beforeEach(() => {
+        app = (motif as any).Application.CreateBuilder().build();
+        warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
+    });
+    afterEach(() => {
+        warn.mockRestore();
+        app.useDevelopment(false);
+        app.dispose();
+        delete (globalThis as any).__MOTIF_DEV__;
+        document.body.innerHTML = '';
+    });
+
+    test.each([
+        ['this.childs in a ternary', 'TernaryBox'],
+        ['this.childs after &&', 'AndBox'],
+        ['a variable in a ternary', 'VariableTernary'],
+        ['a variable in a switch', 'VariableSwitch'],
+    ])('%s is shown once, then a single MJX131 warning explains why it does not come back', async (_label, tag) => {
+        const steps = await toggle(tag, true);
+        expect(steps).toEqual(['<b>child</b>', '', '', '', '']);
+        expect(lines()).toHaveLength(1);
+        expect(lines()[0]).toContain('x-wait or x-display');
+    });
+
+    test('x-display keeps the same children and warns nothing', async () => {
+        const steps = await toggle('DisplayBox', true);
+        expect(steps).toEqual(['<div class="kept"><b>child</b></div>', '', '<div class="kept"><b>child</b></div>', '', '<div class="kept"><b>child</b></div>']);
+        expect(lines()).toEqual([]);
+    });
+
+    test('without development mode nothing is written', async () => {
+        const steps = await toggle('TernaryBox', false);
+        expect(steps).toEqual(['<b>child</b>', '', '', '', '']);
+        expect(lines()).toEqual([]);
+    });
+
+    test('a branch built fresh on every entry warns nothing', async () => {
+        app.useDevelopment(true);
+        const r = await walk(`{s.on ? this.notice('a') : null}`);
+        expect(r.back).toBe('<div class="n">a</div>');
+        expect(lines()).toEqual([]);
+    });
+});
+
 describe('a switch branch that is text is released when the branch is left', () => {
     afterEach(() => { document.body.innerHTML = ''; });
 

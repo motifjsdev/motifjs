@@ -1,4 +1,4 @@
-import { Component, ComponentBase, Frame, reactive } from '@motifx/core';
+import { Application, Component, ComponentBase, Frame, reactive } from '@motifx/core';
 
 const settle = async () => {
     for (let i = 0; i < 4; i++) {
@@ -89,6 +89,29 @@ describe('Frame.navigate with text releases it like any other page', () => {
         await settle();
         expect(shown(host)).toBe('<span>a</span><span>b</span>');
         expect(frame.current).toBe(page);
+    });
+
+    test('a disposed component is not placed, and development mode warns once with MJX131', async () => {
+        const app = Application.CreateBuilder().build();
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => { });
+        try {
+            app.useDevelopment(true);
+            const { host, frame } = mount();
+            const old = span('eski');
+            await old.dispose();
+            await frame.navigate(old);
+            await frame.navigate(span('yeni'));
+            await frame.navigate(old);
+            await settle();
+            expect(shown(host)).toBe('');
+            const lines = warn.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('MJX131'));
+            expect(lines).toHaveLength(1);
+        } finally {
+            warn.mockRestore();
+            app.useDevelopment(false);
+            app.dispose();
+            delete (globalThis as any).__MOTIF_DEV__;
+        }
     });
 
     test('a when binding whose content is text does not leave it behind', async () => {

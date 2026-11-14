@@ -1,7 +1,7 @@
 import { ComponentBase, IDisposeOptions } from "./componentBase";
 import { resolveComponent } from "./resolveComponent";
 import { Lazy } from "./Lazy";
-import { reportError } from "../common/diagnostics";
+import { reportError, reportWarning } from "../common/diagnostics";
 import { makeComponent } from "./componentSlots";
 import { dom } from "../core/dom";
 
@@ -87,6 +87,17 @@ function toNavigationTarget(value: any): any {
     return value;
 }
 
+const _disposedTargetWarned = new WeakSet<object>();
+
+function warnDisposedTarget(target: any): void {
+    const list = Array.isArray(target) ? target : [target];
+    for (const item of list) {
+        if (!item || !item.isDisposed || _disposedTargetWarned.has(item)) continue;
+        _disposedTargetWarned.add(item);
+        reportWarning('MJX131', [], { component: (item.constructor && item.constructor.name) || 'Component' });
+    }
+}
+
 export async function disposeNavigationTarget(target: ComponentBase | ComponentBase[] | null, options: IDisposeOptions = { deep: true }): Promise<void> {
     if (!target) return;
     const list = Array.isArray(target) ? target : [target];
@@ -111,6 +122,7 @@ export async function navigateHost(host: NavigationHost, page: ComponentBase | C
         if (host.isDisposed) return;
         if (navigateId !== host._latestNavigateId) return;
         const xP = toNavigationTarget(resolveComponent(value));
+        /* @DEV-ONLY */ warnDisposedTarget(xP);
         host.current = xP;
         try {
             if (Array.isArray(xP)) {
