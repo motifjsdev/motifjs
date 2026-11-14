@@ -747,6 +747,9 @@ const ComponentHelper = {
                                 appendableElement?.element.appendChild(controlElement!);
                         }
                         if (ownTrace && ownTrace.parentNode) ownTrace.parentNode.removeChild(ownTrace);
+                        // A hidden component placed here by its trace: show finds it here, not where it was hidden.
+                        const opts: any = c.motif.options;
+                        if (controlElement === opts.placeholder && opts.traceHolder !== undefined) opts.traceHolder = parentNode;
                         placed(c);
                 }
                 if (c.isVisible && !ownerHidden) {
@@ -898,6 +901,8 @@ function placeTrace(owner: ComponentBase, c: ComponentBase): void {
         const trace: Node = opts.placeholder ?? (opts.placeholder = dom.createComment("h"));
         if (trace.parentNode === host) return;
         host.insertBefore(trace, followingAnchor(owner, childIndex(owner, c) + 1, host));
+        // The trace moved with the component: show finds it where it is now, not where it was hidden.
+        if (opts.traceHolder !== undefined) opts.traceHolder = host;
 }
 
 function removeComponentDom(c: any, node: Node, alsoPlaceholder: boolean): void {
@@ -1918,6 +1923,8 @@ export abstract class ComponentBase<TElement extends ElementType = any, TProps e
                                         if (keepsTrace(element)) {
                                                 const opts: any = element.motif.options;
                                                 (building ? ph : target as any).appendChild(opts.placeholder ?? (opts.placeholder = dom.createComment("h")));
+                                                // Placed here with its parent: where it was hidden before no longer holds it.
+                                                if (opts.traceHolder !== undefined) opts.traceHolder = isFragment ? undefined : this.element;
                                         }
                                         continue;
                                 }

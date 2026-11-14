@@ -78,6 +78,7 @@ All notable changes to `@motifx/core`, `@motifx/compiler` and `@motifx-community
 
 ### Fixed
 
+- A hidden component moved to another parent (a list, a manager moving a panel) keeps the trace where it is now: shown again, it takes its place there instead of being rebuilt with `MJX106`. Moving a trace (`controls.add`, a move, a parent built later) left the record of where it was hidden pointing at the old parent. A trace moved by hand outside the component tree still rebuilds the component, as before.
 - Compiler: production builds no longer print Babel's "The code generator has deoptimised the styling of … core-….esm.js as it exceeds the max of 500KB" note for the core file, whether the core comes from npm or from a linked or workspace package; the output is unchanged.
 - `controls.add` and `controls.insert` take tens of thousands of children, in one array or spread, without overflowing the call stack; arrays are opened and skipped entries are dropped as before.
 - Application: a disposed application starts again with `run()`: `Application.main` is filled again, services are created anew on demand, a fresh router is built from the configuration, the `useTransitions` mode is applied again, a layer read in between moves after the host and `dispose()` runs again; `run()` throws `MJX405` when a newer application was built in between. `dispose()` called again on a disposed application releases what was created since (the layer, windows, connected documents, recreated services) without touching the address or the transition mode.
