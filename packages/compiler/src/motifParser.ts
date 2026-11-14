@@ -269,7 +269,8 @@ export function getTag(element: NodePath<t.JSXElement>): t.Identifier | t.CallEx
 const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path: NodePath<t.JSXElement>, state: State) => {
 
     const objectProps: t.ObjectMethod[] = [];
-    const objectExpression: t.ObjectProperty[] = [];
+    // On a component tag the spreads stand among the props in source order: what is written later wins, as in JSX.
+    const objectExpression: (t.ObjectProperty | t.SpreadElement)[] = [];
     const eventProps: t.ExpressionStatement[] = [];
     const directives: t.ExpressionStatement[] = [];
     const preDirectives: t.ExpressionStatement[] = [];
@@ -392,7 +393,10 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
     let userInit: t.Expression | null = null;
 
     const refEntries: { prop: NodePath<t.JSXAttribute>; lowered: t.Expression }[] = [];
+    /** Where the last ref was written among the props: the merged ref stands there on a component tag. */
+    let refAt = -1;
     const pushRef = (prop: NodePath<t.JSXAttribute>, value: t.Expression | t.ObjectMethod) => {
+        refAt = objectExpression.length;
         if (t.isIdentifier(value) || t.isMemberExpression(value)) {
             const kind = refTargetKind(prop, value);
             const callTarget = t.expressionStatement(t.callExpression(t.cloneNode(value), [t.identifier('sender')]));
@@ -433,8 +437,10 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
             } else if (prop.isJSXSpreadChild()) {
                 spreadProps.push(prop);
             } else if (prop.isJSXSpreadAttribute()) {
-               
-                spreadProps.push(t.spreadElement(prop.node.argument));
+                const spread = t.spreadElement(prop.node.argument);
+                // An element applies its explicit attributes after the spread (initializeComponent): it stays last there.
+                if (plainTag) spreadProps.push(spread);
+                else objectExpression.push(spread);
             }
             else if (prop.isJSXAttribute()) {
                 let name = getAttributeName(prop);
@@ -705,7 +711,8 @@ const getProps = (props: NodePath<t.JSXAttribute | t.JSXSpreadAttribute>[], path
 
     if (refEntries.length > 0) {
         const refProp = t.objectProperty(id('ref'), refEntries.length === 1 ? refEntries[0].lowered : t.arrayExpression(refEntries.map(e => e.lowered)));
-        objectExpression.push(refProp);
+        if (plainTag) objectExpression.push(refProp);
+        else objectExpression.splice(refAt, 0, refProp);
         refEntries.forEach(e => explainProp(e.prop, 'prop', 'ref', refProp, 'n/a', DEPS.none,
             refEntries.length === 1
                 ? 'the tag\'s component is passed to the ref once, while it is being built'

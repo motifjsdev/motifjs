@@ -52,3 +52,39 @@ describe('S6: spread sözleşmesi (derleyici)', () => {
         expect(out).toMatch(/_mc\(Card,\s*\{\s*\.\.\.props/);
     });
 });
+
+describe('a spread on a component tag keeps its place among the props, as in JSX', () => {
+    const propsOf = (code: string) => {
+        const out = compile(code).replace(/\s+/g, ' ');
+        const at = out.indexOf('_mc(Box, {');
+        return out.slice(at + '_mc(Box, {'.length, out.indexOf(', runover:', at)).trim();
+    };
+
+    test('props written after the spread win over it', () => {
+        expect(propsOf(`function A(p){ return <Box {...p} type="date" readOnly={true} />; }`)).toBe('...p, type: "date", readOnly: true');
+    });
+
+    test('the spread written last wins over the props before it', () => {
+        expect(propsOf(`function A(p){ return <Box type="date" {...p} />; }`)).toBe('type: "date", ...p');
+    });
+
+    test('several spreads between props stay where they are written', () => {
+        expect(propsOf(`function A(p, q){ return <Box a="1" {...p} b="2" {...q} c="3" />; }`)).toBe('a: "1", ...p, b: "2", ...q, c: "3"');
+    });
+
+    test('a value-less prop after the spread wins over it', () => {
+        expect(propsOf(`function A(p){ return <Box {...p} disabled />; }`)).toBe('...p, disabled: true');
+    });
+
+    test('the ref stands where it is written', () => {
+        expect(propsOf(`function A(p, r){ return <Box ref={r} {...p} />; }`)).toMatch(/^ref: .*, \.\.\.p$/);
+        expect(propsOf(`function A(p, r){ return <Box {...p} ref={r} />; }`)).toMatch(/^\.\.\.p, ref: /);
+    });
+
+    test('an element still applies its explicit attributes after the spread', () => {
+        const before = compile(`function A(p){ return <input {...p} type="date" />; }`);
+        const after = compile(`function A(p){ return <input type="date" {...p} />; }`);
+        expect(before).toBe(after);
+        expect(before).toMatch(/_mc\("input",\s*\{\s*\.\.\.p,\s*initializeComponent:/);
+    });
+});
